@@ -1,4 +1,7 @@
 #pragma once
+#include <string>
+#include <cmath>
+#include <algorithm>
 
 namespace ActFunc
 {
@@ -16,7 +19,7 @@ namespace ActFunc
 
 		static constexpr const char* k_name{ "None" };
 
-		virtual std::string GetName() const
+		virtual std::string GetName() const override
 		{
 			return k_name;
 		}
@@ -38,7 +41,7 @@ namespace ActFunc
 
 		static constexpr const char* k_name{ "Sigmoid" };
 
-		virtual std::string GetName() const
+		virtual std::string GetName() const override
 		{
 			return k_name;
 		}
@@ -61,7 +64,7 @@ namespace ActFunc
 
 		static constexpr const char* k_name{ "ReLU" };
 
-		virtual std::string GetName() const
+		virtual std::string GetName() const override
 		{
 			return k_name;
 		}
@@ -73,7 +76,7 @@ namespace ActFunc
 
 		virtual float ExecuteDerivative(float x) const override
 		{
-			return x > 0;
+			return x > 0.0f ? 1.0f : 0.0f;
 		}
 	};
 
@@ -84,7 +87,7 @@ namespace ActFunc
 
 		static constexpr const char* k_name{ "LeakyReLU" };
 
-		virtual std::string GetName() const
+		virtual std::string GetName() const override
 		{
 			return k_name;
 		}
@@ -99,13 +102,11 @@ namespace ActFunc
 			{
 				return x * k_leakySlope;
 			}
-
-			return std::max(0.0f, x);
 		}
 
 		virtual float ExecuteDerivative(float x) const override
 		{
-			return x >= 0 ? 1 : k_leakySlope;
+			return x >= 0.0f ? 1.0f : k_leakySlope;
 		}
 	};
 }

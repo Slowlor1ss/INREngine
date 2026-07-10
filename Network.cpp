@@ -2,14 +2,24 @@
 #include "Layer.h"
 #include "ActFuncDataBase.h"
 
-Network::Network(std::vector<size_t> neuronsPerLayer, bool zeroInit)
+Network::Network(const std::vector<size_t>& neuronsPerLayer, bool zeroInit)
 {
 	m_layers.push_back(std::make_unique<InitialLayer>(neuronsPerLayer[0]));
 	m_storedDelta.push_back(Parameters{ m_layers.front()->GetNumNeurons(), m_layers.front()->GetNumWeightsToPrevious(), true });
 
 	for (size_t i = 1; i < neuronsPerLayer.size(); i++)
 	{
-		ActFunc::Base* actFunc = ActFunc::DataBase::FindActFunc<ActFunc::Sigmoid>();
+		ActFunc::Base* actFunc;
+
+		if (i == neuronsPerLayer.size() - 1)
+		{
+			actFunc = ActFunc::DataBase::FindActFunc<ActFunc::Sigmoid>();
+		}
+		else
+		{
+			actFunc = ActFunc::DataBase::FindActFunc<ActFunc::Sigmoid>();
+		}
+
 		m_layers.push_back(std::make_unique<Layer>(neuronsPerLayer[i], actFunc, m_layers.back().get()));
 		m_storedDelta.push_back(Parameters{ m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious() ,true });
 	}
@@ -47,7 +57,7 @@ void Network::ConsumeDelta(float learningRate)
 				// apply learning rate
 				// negative because we want to substract. (inverse of the gradient)
 
-				m_storedDelta[i] *= -1.0f*(learningRate / m_numStored);
+				m_storedDelta[i] *= -1.0f * (learningRate / m_numStored);
 				m_layers[i]->m_params += m_storedDelta[i];
 				m_storedDelta[i].Clear();
 			}
@@ -98,7 +108,7 @@ float Network::BackPropagate(std::vector<float> inputActivation, std::vector<flo
 	// create empty network with same dimensions to store deltas. 
 	std::vector<Parameters> deltaParameters;
 	deltaParameters.resize(m_layers.size());
-	deltaParameters.front() = Parameters{GetInitialLayer().GetNumNeurons(), GetInitialLayer().GetNumWeightsToPrevious(), true };
+	deltaParameters.front() = Parameters{ GetInitialLayer().GetNumNeurons(), GetInitialLayer().GetNumWeightsToPrevious(), true };
 
 	// propagate backwards
 	Layer* layer = m_layers.back().get();

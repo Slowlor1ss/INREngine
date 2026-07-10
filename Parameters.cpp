@@ -1,6 +1,7 @@
 #include "Parameters.h"
 #include <sstream>
 #include <cassert>
+#include <cmath> // For sqrtf
 
 
 Parameters::Parameters(size_t numBiases, size_t numWeights, bool zeroInit)
@@ -12,22 +13,24 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, bool zeroInit)
 	{
 		for (size_t i = 0; i < numBiases; i++)
 		{
-			biases[i] = 0.1f;
+			biases[i] = 0.0f; // Biases are safer to initialize as straight 0
 		}
 
-		// RANDOM
+		// XAVIER INITIALIZATION
+		// Deduce fanIn (connections coming into each neuron in this layer)
+		//size_t fanIn = (numBiases > 0) ? (numWeights / numBiases) : 1;
+
+		// The Xavier Uniform limit
+		//float limit = sqrtf(6.0f / (float)(fanIn + numBiases));
+
 		for (size_t i = 0; i < numWeights; i++)
 		{
-			weights[i] = (((rand() % 2000) / 1000.f) - 1.0f);
+			// Generate cleaner random float between -1.0 and 1.0
+			float normalizedRandom = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+
+			// Apply Xavier limit scaling to prevent vanishing/exploding outputs
+			weights[i] = normalizedRandom;// *limit;
 		}
-
-		// XAVIER
-
-
-		// HE
-		
-		
-		// ...
 	}
 }
 
@@ -92,7 +95,7 @@ std::string Parameters::Serialize()
 	{
 		out << weights[i] << delim;
 	}
-	
+
 	out << "end";
 
 	return out.str();

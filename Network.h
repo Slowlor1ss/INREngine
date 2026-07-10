@@ -8,7 +8,7 @@
 class Network : public Serializable
 {
 public:
-	Network(std::vector<size_t> neuronsPerLayer, bool zeroInit = false);
+	Network(const std::vector<size_t>& neuronsPerLayer, bool zeroInit = false);
 	Network(Network&) = delete;
 	Network(Network&&) = delete;
 	Network& operator=(Network&) = delete;
