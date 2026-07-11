@@ -108,15 +108,15 @@ int main()
 
 	//MNISTCheck(images, labels);
 
-	std::vector<size_t> layerDims{28*28,16,16,10};
+	std::vector<size_t> layerDims{28*28,64,32,10};
 	Network network{ layerDims };
 
 
 	// train
 
 	float cost = 1.0f;
-	size_t batchSize = 10;
-	size_t printEveryNBatches = 100;
+	size_t batchSize = 32;
+	size_t printEveryNBatches = 64;
 	float learningRate = 1.0f;
 
 	size_t currentImage = 0;
@@ -128,17 +128,13 @@ int main()
 		{
 			for (size_t i = 0; i < batchSize; i++)
 			{
-				//std::vector<float> in;
-				//std::vector<float> out;
-				//GenerateRandom(in, out);
-
 				float c = network.BackPropagate(images[currentImage], labels[currentImage]);
 				cost += c;
 
 				currentImage = (currentImage + 1) % images.size();
 			}
 			network.ConsumeDelta(learningRate);
-			learningRate = std::max(0.00001f, learningRate * powf(0.99999f, batchSize));
+			//learningRate = std::max(0.00001f, learningRate * powf(0.99999f, batchSize));
 		}
 
 
@@ -151,15 +147,36 @@ int main()
 	}
 
 	// evaluate:
+	float correct = 0;
 	float resultCost = 0.0f;
 	for (size_t i = 0; i < test_images.size(); i++)
 	{
+		auto result = network.Propagate(test_images[i]);
 		float c = network.BackPropagate(test_images[i], test_labels[i]);
+
+
+		size_t maxI = 0;
+		for (size_t i = 1; i < 10; i++)
+		{
+			if (result[i] >= result[maxI])
+			{
+				maxI = i;
+			}
+		}
+		if (test_labels[i][maxI] == 1)
+		{
+			correct += 1.0f;
+		}
+
+
 		resultCost += c;
 	}
+	correct /= test_images.size();
 	resultCost /= test_images.size();
 	std::cout << "RESULT COST: "
 		<< resultCost
+		<< " ACCURACY: "
+		<< correct
 		<< '\n';
 	
 	// print first image in console:
@@ -180,6 +197,7 @@ int main()
 			std::cout << '\n';
 		}
 		auto result = network.Propagate(test_images[imageidx]);
+
 
 		for (size_t i = 0; i < 10; i++)
 		{
