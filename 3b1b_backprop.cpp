@@ -59,19 +59,68 @@ void GenerateRandom(std::vector<float>& input, std::vector<float>& result)
 	input.push_back(y);
 }
 
-int main()
+#include "Gemini/MNISTReader.h"
+
+void MNISTCheck(const std::vector<std::vector<float>>& images, const std::vector<std::vector<float>>& labels)
 {
+	// print first image in console:
+	while (true) {
+		int imageidx;
+		std::cin >> imageidx;
+		imageidx %= images.size();
+
+		for (size_t y = 0; y < 28; y++)
+		{
+			for (size_t x = 0; x < 28; x++)
+			{
+				char c = ' ';
+				float value = images[imageidx][y * 28 + x] * 10;
+				if (value > 0.1f) c = 'X';
+				std::cout << c << " ";
+			}
+			std::cout << '\n';
+		}
+
+		for (size_t i = 0; i < 10; i++)
+		{
+			std::cout << (labels[imageidx][i]) << ' ';
+		}
+		std::cout << std::endl;
+	}
+}
+
+int main()
+{	
 	auto count = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 	srand((uint32_t)count);
 
-	Network network{ {2, 4, 1} };
+	std::string image_path = "DATA/train-images.idx3-ubyte";
+	std::string label_path = "DATA/train-labels.idx1-ubyte";
+	std::string test_image_path = "DATA/t10k-images.idx3-ubyte";
+	std::string test_label_path = "DATA/t10k-labels.idx1-ubyte";
+	std::cout << "Loading MNIST dataset..." << std::endl;
+
+	std::vector<std::vector<float>> images = read_mnist_images(image_path, true);
+	std::vector<std::vector<float>> labels = read_mnist_labels(label_path);
+
+	std::vector<std::vector<float>> test_images = read_mnist_images(test_image_path, true);
+	std::vector<std::vector<float>> test_labels = read_mnist_labels(test_label_path);
+
+	//MNISTCheck(images, labels);
+
+	std::vector<size_t> layerDims{28*28,16,16,10};
+	Network network{ layerDims };
+
+
+	// train
 
 	float cost = 1.0f;
-	size_t batchSize = 1000;
+	size_t batchSize = 10;
 	size_t printEveryNBatches = 100;
 	float learningRate = 1.0f;
 
-	while (cost > 0.005f)
+	size_t currentImage = 0;
+	while (cost > 0.08f)
 	{
 		cost = 0.0f;
 
@@ -79,15 +128,17 @@ int main()
 		{
 			for (size_t i = 0; i < batchSize; i++)
 			{
-				std::vector<float> in;
-				std::vector<float> out;
-				GenerateRandom(in, out);
+				//std::vector<float> in;
+				//std::vector<float> out;
+				//GenerateRandom(in, out);
 
-				float c = network.BackPropagate(in, out);
+				float c = network.BackPropagate(images[currentImage], labels[currentImage]);
 				cost += c;
+
+				currentImage = (currentImage + 1) % images.size();
 			}
 			network.ConsumeDelta(learningRate);
-			learningRate = std::max(0.01f, learningRate * 0.99999f);
+			learningRate = std::max(0.00001f, learningRate * powf(0.99999f, batchSize));
 		}
 
 
@@ -99,20 +150,62 @@ int main()
 			<< '\n';
 	}
 
-	//network.Serialize();
-
-	while (true)
+	// evaluate:
+	float resultCost = 0.0f;
+	for (size_t i = 0; i < test_images.size(); i++)
 	{
-		float x;
-		float y;
-		std::cin >> x >> y;
+		float c = network.BackPropagate(test_images[i], test_labels[i]);
+		resultCost += c;
+	}
+	resultCost /= test_images.size();
+	std::cout << "RESULT COST: "
+		<< resultCost
+		<< '\n';
+	
+	// print first image in console:
+	while (true) {
+		int imageidx;
+		std::cin >> imageidx;
+		imageidx %= images.size();
 
-		auto result = network.Propagate({ float(x),float(y) });
-		
-		for (float activation : result)
+		for (size_t y = 0; y < 28; y++)
 		{
-			std::cout << activation << " ";
+			for (size_t x = 0; x < 28; x++)
+			{
+				char c = ' ';
+				float value = test_images[imageidx][y * 28 + x] * 10;
+				if (value > 0.1f) c = 'X';
+				std::cout << c << " ";
+			}
+			std::cout << '\n';
+		}
+		auto result = network.Propagate(test_images[imageidx]);
+
+		for (size_t i = 0; i < 10; i++)
+		{
+			std::cout << i << '\t' << (test_labels[imageidx][i]) << '\t' << result[i] << '\n';
 		}
 		std::cout << std::endl;
+
 	}
+
+	////network.Serialize();
+
+	//while (true)
+	//{
+	//	std::vector<float> inputs;
+	//	inputs.resize(layerDims[0]);
+	//	for (size_t i = 0; i < inputs.size(); i++)
+	//	{
+	//		std::cin >> inputs[i];
+	//	}
+
+	//	auto result = network.Propagate(inputs);
+	//	
+	//	for (float activation : result)
+	//	{
+	//		std::cout << activation << " ";
+	//	}
+	//	std::cout << std::endl;
+	//}
 }

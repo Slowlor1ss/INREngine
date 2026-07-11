@@ -14,11 +14,11 @@ public:
 	Network& operator=(Network&) = delete;
 	Network& operator=(Network&&) = delete;
 
-	float CalculateCost(std::vector<float> inputActivation, std::vector<float> preferredOutput);
-	std::vector<float> Propagate(std::vector<float> inputActivation);
+	float CalculateCost(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput);
+	std::vector<float> Propagate(const std::vector<float>& inputActivation);
 
 	
-	float BackPropagate(std::vector<float> inputActivation, std::vector<float> preferredOutput);
+	float BackPropagate(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput);
 
 	void ConsumeDelta(float learningRate);
 

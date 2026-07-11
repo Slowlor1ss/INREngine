@@ -77,7 +77,7 @@ void Network::Deserialize(const std::string& inString)
 
 }
 
-float Network::CalculateCost(std::vector<float> inputActivation, std::vector<float> preferredOutput)
+float Network::CalculateCost(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput)
 {
 	const std::vector<float>& result = Propagate(inputActivation);
 
@@ -94,13 +94,13 @@ float Network::CalculateCost(std::vector<float> inputActivation, std::vector<flo
 	return std::numeric_limits<float>().infinity();
 }
 
-std::vector<float> Network::Propagate(std::vector<float> inputActivation)
+std::vector<float> Network::Propagate(const std::vector<float>& inputActivation)
 {
 	GetInitialLayer().StartPropagation(inputActivation);
 	return m_layers.back()->m_activations;
 }
 
-float Network::BackPropagate(std::vector<float> inputActivation, std::vector<float> preferredOutput)
+float Network::BackPropagate(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput)
 {
 	// propagate forwards
 	float cost = CalculateCost(inputActivation, preferredOutput);

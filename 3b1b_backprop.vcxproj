@@ -148,6 +148,7 @@
   <ItemGroup>
     <ClInclude Include="ActFuncDataBase.h" />
     <ClInclude Include="ActivationFunctions.h" />
+    <ClInclude Include="Gemini\MNISTReader.h" />
     <ClInclude Include="Layer.h" />
     <ClInclude Include="Network.h" />
     <ClInclude Include="Parameters.h" />
