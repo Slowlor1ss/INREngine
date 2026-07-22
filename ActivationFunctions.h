@@ -2,6 +2,7 @@
 #include <string>
 #include <cmath>
 #include <algorithm>
+#include <random>
 
 namespace ActFunc
 {
@@ -11,6 +12,8 @@ namespace ActFunc
 		virtual std::string GetName() const = 0;
 		virtual float Execute(float x) const = 0;
 		virtual float ExecuteDerivative(float x) const = 0;
+		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut) const = 0;
+		virtual float GetLearningRateMultiplier() const { return 1.0f; }
 	};
 
 	class None : public Base
@@ -32,6 +35,11 @@ namespace ActFunc
 		virtual float ExecuteDerivative(float x) const override
 		{
 			return 1;
+		}
+
+		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut) const override
+		{
+			return 0;
 		}
 	};
 
@@ -56,6 +64,18 @@ namespace ActFunc
 			float s = Execute(x);
 			return s * (1.0f - s);
 		}
+
+		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut) const override
+		{
+			//// random value between -1 and 1 -- works but outdated
+			return ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+		
+			// Xavier/Glorot better here: (but fanout is still wrong , todo)
+			//float stddev = std::sqrt(2.0f / (fanIn + fanOut));
+			//std::normal_distribution<float> distribution(0.0f, stddev);
+			//return distribution(generator);
+		}
+
 	};
 
 	class ReLU : public Base
@@ -78,6 +98,16 @@ namespace ActFunc
 		{
 			return x > 0.0f ? 1.0f : 0.0f;
 		}
+
+		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut) const override
+		{
+			// He initialization
+			float stddev = std::sqrt(2.0f / fanIn);
+			std::normal_distribution<float> distribution(0.0f, stddev);
+			return distribution(generator);
+		}
+
+		virtual float GetLearningRateMultiplier() const override { return 0.01f; }
 	};
 
 	class LeakyReLU : public Base
@@ -108,5 +138,15 @@ namespace ActFunc
 		{
 			return x >= 0.0f ? 1.0f : k_leakySlope;
 		}
+
+		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut) const override
+		{
+			// He initialization
+			float stddev = std::sqrt(2.0f / fanIn);
+			std::normal_distribution<float> distribution(0.0f, stddev);
+			return distribution(generator);
+		}
+
+		virtual float GetLearningRateMultiplier() const override { return 0.01f; }
 	};
 }

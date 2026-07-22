@@ -23,8 +23,8 @@ public:
 	void ConsumeDelta(float learningRate);
 
 	// Inherited via Serializable
-	virtual std::string Serialize() override;
-	virtual void Deserialize(const std::string& inString) override;
+	virtual void Serialize(std::ostream& out) override;
+	virtual void Deserialize(std::istream& in) override {};
 
 private:
 	void StoreDelta(const std::vector<Parameters>& other);

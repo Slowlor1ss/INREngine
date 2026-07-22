@@ -5,122 +5,57 @@
 #include <iostream>
 #include <chrono>
 
-void Generate(size_t& n1, size_t& n2)
-{
-	//static size_t callCount = 0;
-	//size_t numBits = 2;
-
-	//n1 = callCount % (1u << numBits);
-	//n2 = callCount % (1u << numBits);
-	//callCount++;
-
-	//size_t numBits = 2;
-
-	//size_t n1, n2;
-	//Generate(n1, n2);
-	//size_t r = n1 + n2;
-
-	//for (size_t i = 0; i < (numBits + 1); i++)
-	//{
-	//	input.push_back(float(n1 & 0b1));
-	//	n1 = n1 >> 1;
-	//}
-
-	//for (size_t i = 0; i < (numBits + 1); i++)
-	//{
-	//	input.push_back(float(n2 & 0b1));
-	//	n2 = n2 >> 1;
-	//}
-
-
-	//for (size_t i = 0; i < (numBits + 1); i++)
-	//{
-	//	result.push_back(float(r & 0b1));
-	//	r = r >> 1;
-	//}
-}
-
-void GenerateRandom(std::vector<float>& input, std::vector<float>& result)
-{
-	int x = (rand() % 2);
-	int y = (rand() % 2);
-
-	if ((x ^ y))
-	{
-		result.push_back(1);
-		//result.push_back(1);
-	}
-	else
-	{
-		result.push_back(0);
-		//result.push_back(0);
-	}
-	input.push_back(x);
-	input.push_back(y);
-}
+// TODO: don't see the ponit for the database, just use them directly? to have a single instance? does that matter?
+// seems to be to use the inheritance more easily >> convert to template instead?
+// 
+// TODO: Relu needs HE initializtoin: make it so that happens automatically when selecting relu, and not when selecting sigmoid for a layer.
+// TODO: serialization
+// TOOD: better interface / forntend.
 
 #include "Gemini/MNISTReader.h"
-
-void MNISTCheck(const std::vector<std::vector<float>>& images, const std::vector<std::vector<float>>& labels)
-{
-	// print first image in console:
-	while (true) {
-		int imageidx;
-		std::cin >> imageidx;
-		imageidx %= images.size();
-
-		for (size_t y = 0; y < 28; y++)
-		{
-			for (size_t x = 0; x < 28; x++)
-			{
-				char c = ' ';
-				float value = images[imageidx][y * 28 + x] * 10;
-				if (value > 0.1f) c = 'X';
-				std::cout << c << " ";
-			}
-			std::cout << '\n';
-		}
-
-		for (size_t i = 0; i < 10; i++)
-		{
-			std::cout << (labels[imageidx][i]) << ' ';
-		}
-		std::cout << std::endl;
-	}
-}
+#include "Gemini/CustomFileReader.h"
 
 int main()
-{	
+{
 	auto count = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 	srand((uint32_t)count);
 
-	std::string image_path = "DATA/train-images.idx3-ubyte";
-	std::string label_path = "DATA/train-labels.idx1-ubyte";
-	std::string test_image_path = "DATA/t10k-images.idx3-ubyte";
-	std::string test_label_path = "DATA/t10k-labels.idx1-ubyte";
-	std::cout << "Loading MNIST dataset..." << std::endl;
+	//std::string image_path = "DATA/fashion/train-images.idx3-ubyte";
+	//std::string label_path = "DATA/fashion/train-labels.idx1-ubyte";
+	//std::string test_image_path = "DATA/fashion/t10k-images.idx3-ubyte";
+	//std::string test_label_path = "DATA/fashion/t10k-labels.idx1-ubyte";
+	//std::cout << "Loading MNIST dataset..." << std::endl;
 
-	std::vector<std::vector<float>> images = read_mnist_images(image_path, true);
-	std::vector<std::vector<float>> labels = read_mnist_labels(label_path);
+	//std::vector<std::vector<float>> images = read_mnist_images(image_path, true);
+	//std::vector<std::vector<float>> labels = read_mnist_labels(label_path);
 
-	std::vector<std::vector<float>> test_images = read_mnist_images(test_image_path, true);
-	std::vector<std::vector<float>> test_labels = read_mnist_labels(test_label_path);
+	//std::vector<std::vector<float>> test_images = read_mnist_images(test_image_path, true);
+	//std::vector<std::vector<float>> test_labels = read_mnist_labels(test_label_path);
 
-	//MNISTCheck(images, labels);
+	ParsedData data;
+	ParseBinaryData("C:\\Github\\TRP\\TempleRunPreprocess\\myoutput.bin", data);
 
-	std::vector<size_t> layerDims{28*28,64,32,10};
+	std::vector<std::vector<float>> images = data.inputs;
+	std::vector<std::vector<float>> labels = data.outputs;
+
+	std::vector<std::vector<float>> test_images = images;
+	std::vector<std::vector<float>> test_labels = labels;
+
+	std::vector<size_t> layerDims{ 12,24,9 };
 	Network network{ layerDims };
 
 
-	// train
+	// trainzl
 
 	float cost = 1.0f;
-	size_t batchSize = 32;
-	size_t printEveryNBatches = 64;
-	float learningRate = 1.0f;
+	size_t batchSize = 4096 * 4;
+	size_t printEveryNBatches = 16;
+	float learningRate = 10.0f; // usually would be alot lower
 
 	size_t currentImage = 0;
-	while (cost > 0.08f)
+
+	int writebackCtr = 0;
+	while (cost > 0.01f)
 	{
 		cost = 0.0f;
 
@@ -131,12 +66,14 @@ int main()
 				float c = network.BackPropagate(images[currentImage], labels[currentImage]);
 				cost += c;
 
-				currentImage = (currentImage + 1) % images.size();
+				currentImage = rand() % images.size(); // (currentImage + 1) % images.size();
 			}
+
 			network.ConsumeDelta(learningRate);
-			//learningRate = std::max(0.00001f, learningRate * powf(0.99999f, batchSize));
+			learningRate = learningRate * pow(0.99999999, batchSize);
 		}
 
+		// batchSize = (batchSize + 1) % 128;
 
 		cost /= (batchSize * printEveryNBatches);
 		std::cout << "COST: "
@@ -144,8 +81,17 @@ int main()
 			<< " LR: "
 			<< learningRate
 			<< '\n';
+
+		writebackCtr++;
+		if (writebackCtr % 20 == 0)
+		{
+			std::ofstream file{ "weights_biases.csv" };
+			network.Serialize(file);
+			std::cout << "writeback completed\n";
+		}
 	}
 
+#if 0
 	// evaluate:
 	float correct = 0;
 	float resultCost = 0.0f;
@@ -178,7 +124,7 @@ int main()
 		<< " ACCURACY: "
 		<< correct
 		<< '\n';
-	
+
 	// print first image in console:
 	while (true) {
 		int imageidx;
@@ -206,8 +152,10 @@ int main()
 		std::cout << std::endl;
 
 	}
+#endif
 
-	////network.Serialize();
+	std::ofstream file{"weights_biases.csv"};
+	network.Serialize(file);
 
 	//while (true)
 	//{

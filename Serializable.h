@@ -1,10 +1,10 @@
 #pragma once
 
-#include <string>
+#include <sstream>
 
 class Serializable
 {
 public:
-	virtual std::string Serialize() = 0;
-	virtual void Deserialize(const std::string&) = 0;
+	virtual void Serialize(std::ostream& out) = 0;
+	virtual void Deserialize(std::istream& in) = 0;
 };

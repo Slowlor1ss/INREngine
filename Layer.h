@@ -4,10 +4,10 @@
 #include "Parameters.h"
 #include "ActivationFunctions.h"
 
-class Layer
+class Layer : public Serializable
 {
 public:
-	Layer(size_t numNeurons, ActFunc::Base* func, Layer* previousLayer = nullptr);
+	Layer(size_t numNeurons, ActFunc::Base* func, size_t layerIdx, Layer* previousLayer = nullptr);
 	virtual ~Layer() = default;
 
 	void SetParams(const Parameters& params);
@@ -22,6 +22,10 @@ public:
 		return m_params.weights.size();
 	}
 
+	// Inherited via Serializable
+	virtual void Serialize(std::ostream& out) override;
+	virtual void Deserialize(std::istream& in) override {};
+
 protected:
 	void Propagate();
 
@@ -31,10 +35,16 @@ protected:
 	Layer* m_nextLayer = nullptr;
 	Layer* m_previousLayer = nullptr;
 
+	size_t m_layerIdx;
+
 	Parameters m_params;
 
 	size_t m_numNeurons;
+
+	// actiavtion before the activationfunction applies
 	std::vector<float> m_preProcessedActivations;
+
+	// final activation
 	std::vector<float> m_activations;
 
 	friend class Network;

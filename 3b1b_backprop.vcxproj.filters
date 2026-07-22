@@ -53,5 +53,8 @@
     <ClInclude Include="Gemini\MNISTReader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Gemini\CustomFileReader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -1,9 +1,10 @@
 #include "Layer.h"
 
-Layer::Layer(size_t numNeurons, ActFunc::Base* func, Layer* previousLayer)
+Layer::Layer(size_t numNeurons, ActFunc::Base* func, size_t layerIdx, Layer* previousLayer)
 	: m_numNeurons{numNeurons}
 	, m_activationFunction{func}
 	, m_previousLayer{previousLayer}
+	, m_layerIdx{layerIdx}
 {
 	m_preProcessedActivations.resize(numNeurons);
 	m_activations.resize(numNeurons);
@@ -15,13 +16,18 @@ Layer::Layer(size_t numNeurons, ActFunc::Base* func, Layer* previousLayer)
 		numWeightsToEachNeuron = previousLayer->m_numNeurons;
 	}
 
-	m_params = Parameters{ numNeurons, numWeightsToEachNeuron * numNeurons, false };
+	m_params = Parameters{ numNeurons, numWeightsToEachNeuron * numNeurons, func, layerIdx };
 }
 
 void Layer::SetParams(const Parameters& params)
 {
 	// check num neurons and weights
 	m_params = params;
+}
+
+void Layer::Serialize(std::ostream& out)
+{
+	m_params.Serialize(out);
 }
 
 void Layer::Propagate()
@@ -62,7 +68,7 @@ void Layer::Propagate()
 }
 
 InitialLayer::InitialLayer(size_t numNeurons)
-	:Layer{numNeurons, nullptr}
+	:Layer{numNeurons, ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0, nullptr}
 {
 }
 

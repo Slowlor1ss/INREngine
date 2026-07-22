@@ -1,13 +1,12 @@
 #pragma once
 #include <vector>
 #include "Serializable.h"
-
+#include "ActFuncDataBase.h"
 
 struct Parameters : public Serializable
 {
 	Parameters() = default;
-	Parameters(size_t numBiases, size_t numWeights, bool zeroInit = true);
-	Parameters(std::string serializedParams);
+	Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFunc, size_t layerIdx);
 	Parameters& operator+=(const Parameters& other);
 	Parameters& operator*=(float other);
 	
@@ -15,10 +14,10 @@ struct Parameters : public Serializable
 	std::vector<float> weights;
 	std::vector<float> biases;
 
-
+	size_t layerIdx;
 
 	// Inherited via Serializable
-	virtual std::string Serialize() override;
-	virtual void Deserialize(const std::string& inString) override;
+	virtual void Serialize(std::ostream& out) override;
+	virtual void Deserialize(std::istream& in) override;
 };
 
