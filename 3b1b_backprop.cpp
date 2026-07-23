@@ -48,9 +48,9 @@ int main()
 	// trainzl
 
 	float cost = 1.0f;
-	size_t batchSize = 4096 * 4;
-	size_t printEveryNBatches = 16;
-	float learningRate = 10.0f; // usually would be alot lower
+	size_t batchSize = 256;
+	size_t printEveryNBatches = 256;
+	float learningRate = 1.0f; // usually would be alot lower
 
 	size_t currentImage = 0;
 
