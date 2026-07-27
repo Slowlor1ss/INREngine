@@ -66,72 +66,42 @@ void Parameters::Clear()
 	(*this) *= 0.0f;
 }
 
-// Inherited via Serializable
-void Parameters::Deserialize(std::istream& in) {};
-
-//
-void Parameters::Serialize(std::ostream& out)
+void Parameters::Deserialize(std::istream& in)
 {
-	char delim[3] = ", ";
-
-	out << "const int num_biases_l" << layerIdx << " = " << biases.size() << ";";
-
-	if (layerIdx != 0)
+	size_t numBiases = 0;
+	if (in >> numBiases)
 	{
-		out << "const float biases_l" << layerIdx << "[num_biases_l" << layerIdx << "] = float[](";
-		for (size_t i = 0; i < biases.size(); i++)
+		biases.resize(numBiases);
+		for (size_t i = 0; i < numBiases; ++i)
 		{
-			if (i > 0) out << delim;
-
-			out << biases[i];
+			in >> biases[i];
 		}
-		out << ");\n";
 	}
 
-	out << "const int num_weights_l" << layerIdx << " = " << weights.size() << ";";
-	if (layerIdx != 0)
+	size_t numWeights = 0;
+	if (in >> numWeights)
 	{
-		out << "const float weights_l" << layerIdx << "[num_weights_l" << layerIdx << "] = float[](";
-		for (size_t i = 0; i < weights.size(); i++)
+		weights.resize(numWeights);
+		for (size_t i = 0; i < numWeights; ++i)
 		{
-			if (i > 0) out << delim;
-
-			out << weights[i];
+			in >> weights[i];
 		}
-		out << ");\n";
 	}
 }
 
+void Parameters::Serialize(std::ostream& out)
+{
+	out << biases.size() << "\n";
+	for (size_t i = 0; i < biases.size(); i++)
+	{
+		out << biases[i] << (i + 1 == biases.size() ? "" : " ");
+	}
+	out << "\n";
 
-//
-//void Parameters::Deserialize(const std::string& inString)
-//{
-//	std::istringstream input{ inString };
-//
-//	size_t numBiases;
-//	input >> numBiases;
-//
-//	biases.clear();
-//	for (size_t i = 0; i < numBiases; i++)
-//	{
-//		float bias;
-//		input >> bias;
-//		biases.push_back(bias);
-//	}
-//
-//	size_t numWeights;
-//	input >> numWeights;
-//
-//	weights.clear();
-//	for (size_t i = 0; i < numWeights; i++)
-//	{
-//		float weight;
-//		input >> weight;
-//		weights.push_back(weight);
-//	}
-//
-//	std::string end;
-//	input >> end;
-//
-//	assert(end == "end");
-//}
+	out << weights.size() << "\n";
+	for (size_t i = 0; i < weights.size(); i++)
+	{
+		out << weights[i] << (i + 1 == weights.size() ? "" : " ");
+	}
+	out << "\n";
+}

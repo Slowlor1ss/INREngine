@@ -74,7 +74,14 @@ void Network::Serialize(std::ostream& out)
 	for (const auto& l : m_layers)
 	{
 		l->Serialize(out);
-		out << '\n';
+	}
+}
+
+void Network::Deserialize(std::istream& in)
+{
+	for (auto& l : m_layers)
+	{
+		l->Deserialize(in);
 	}
 }
 

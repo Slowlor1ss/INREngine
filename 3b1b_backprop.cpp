@@ -3,6 +3,7 @@
 #include "Network.h"
 
 #include <iostream>
+#include <fstream>
 #include <chrono>
 
 #include <windows.h>
@@ -17,6 +18,7 @@
 #include "Gemini/MNISTReader.h"
 #include "Gemini/BMPParser.h"
 #include "Gemini/CustomFileReader.h"
+#include "WindowRenderer.h" // <-- Included our new renderer
 
 #include <conio.h> // For _kbhit() and _getch()
 
@@ -25,20 +27,9 @@ int main()
 	auto count = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 	srand((uint32_t)count);
 
-	//std::string image_path = "DATA/fashion/train-images.idx3-ubyte";
-	//std::string label_path = "DATA/fashion/train-labels.idx1-ubyte";
-	//std::string test_image_path = "DATA/fashion/t10k-images.idx3-ubyte";
-	//std::string test_label_path = "DATA/fashion/t10k-labels.idx1-ubyte";
-	//std::cout << "Loading MNIST dataset..." << std::endl;
-
-	//std::vector<std::vector<float>> images = read_mnist_images(image_path, true);
-	//std::vector<std::vector<float>> labels = read_mnist_labels(label_path);
-
-	//std::vector<std::vector<float>> test_images = read_mnist_images(test_image_path, true);
-	//std::vector<std::vector<float>> test_labels = read_mnist_labels(test_label_path);
-
 	BMPParsedData data;
-	ParseBMPData("light_on.bmp", data);
+	//ParseBMPData("light_on.bmp", data);
+	ParseBMPData("SarahDoYouHaveAnyGamesOnYoPhone.bmp", data);
 
 	std::vector<std::vector<float>> images = data.inputs;
 	std::vector<std::vector<float>> labels = data.outputs;
@@ -46,11 +37,27 @@ int main()
 	std::vector<std::vector<float>> test_images = images;
 	std::vector<std::vector<float>> test_labels = labels;
 
-	std::vector<size_t> layerDims{ 2,32,32,32,32,32,32,32,3 };
+	std::vector<size_t> layerDims{ 2,32,32,32,32,32,32,32,32,32,32,32,3 };
 	Network network{ layerDims };
 
+	// Create our visualizer window
+	ImageWindow rendererWindow(data.width, data.height);
 
-	std::cout << "Training started. Press Ctrl+C at any time to interrupt and save a snapshot." << std::endl;
+	// Try loading pre-existing checkpoint if available
+	{
+		std::ifstream inFile{ "weights_biases.csv" };
+		if (inFile.is_open())
+		{
+			network.Deserialize(inFile);
+			std::cout << "Loaded existing weights and biases checkpoint.\n";
+		}
+	}
+
+	std::cout << "Training started.\n";
+	std::cout << " [Q/ESC] - Stop training\n";
+	std::cout << " [W]     - Save weights\n";
+	std::cout << " [E]     - Save image to disk\n";
+	std::cout << " [V]     - Update live viewer window\n";
 
 	float cost = 1.0f;
 	size_t batchSize = 32;
@@ -60,8 +67,12 @@ int main()
 	size_t currentImage = 0;
 
 	int writebackCtr = 0;
+	bool liveUpdateWindow = true;
 	while (true)
 	{
+		// Pump Windows messages so our renderer window doesn't freeze
+		rendererWindow.ProcessMessages();
+
 		// --- THE NEW INTERRUPT CHECK ---
 		// _kbhit() returns true instantly if a key is waiting in the buffer
 		if (_kbhit())
@@ -73,16 +84,16 @@ int main()
 				break; // Exit the while loop
 			}
 
-			if (ch == 'w' || ch == 'W') // 27 is the ASCII code for ESC
+			if (ch == 'w' || ch == 'W')
 			{
 				std::ofstream file{ "weights_biases.csv" };
 				network.Serialize(file);
+				std::cout << "Weights saved to disk!" << std::endl;
 			}
 
-			if (ch == 'e' || ch == 'E') // 27 is the ASCII code for ESC
+			if (ch == 'e' || ch == 'E' || ch == 'v' || ch == 'V') 
 			{
-				// Save the image
-					// Allocate space for the image we are going to write
+				// Allocate space for the image we are going to write
 				std::vector<float> reconstructed_image(data.width * data.height * 3);
 
 				// Loop through every (X, Y) coordinate and ask the network what color it thinks it is
@@ -100,14 +111,25 @@ int main()
 					}
 				}
 
-				saveBMP("network_output.bmp", data.width, data.height, reconstructed_image);
-				std::cout << "Successfully saved network_output.bmp!" << std::endl;
+				if (ch == 'e' || ch == 'E') 
+				{
+					saveBMP("network_output.bmp", data.width, data.height, reconstructed_image);
+					std::cout << "Successfully saved network_output.bmp!" << std::endl;
+				} 
+				else if (ch == 'v' || ch == 'V') 
+				{
+					liveUpdateWindow = true;
+					//rendererWindow.Update(reconstructed_image);
+					liveUpdateWindow ? 
+					std::cout << "Start live viewer window!" << '\n'
+					:
+					std::cout << "Stop live viewer window!" << '\n';
+				}
 			}
+			
 		}
 		// -------------------------------
-
-
-
+		
 		cost = 0.0f;
 
 		for (size_t j = 0; j < printEveryNBatches; j++)
@@ -123,8 +145,29 @@ int main()
 			network.ConsumeDelta(learningRate);
 			learningRate = learningRate * pow(0.99999999, batchSize);
 		}
+		
+		if (liveUpdateWindow)
+		{
+			// Allocate space for the image we are going to write
+			std::vector<float> reconstructed_image(data.width * data.height * 3);
 
-		// batchSize = (batchSize + 1) % 128;
+			// Loop through every (X, Y) coordinate and ask the network what color it thinks it is
+			for (int y = 0; y < data.height; ++y) {
+				for (int x = 0; x < data.width; ++x) {
+
+					// Normalize X and Y exactly like in training
+					std::vector<float> input = { x / float(data.width), y / float(data.height) };
+					std::vector<float> output = network.Propagate(input);
+
+					int pixel_index = (y * data.width + x) * 3;
+					reconstructed_image[pixel_index + 0] = output[0]; // R
+					reconstructed_image[pixel_index + 1] = output[1]; // G
+					reconstructed_image[pixel_index + 2] = output[2]; // B
+				}
+			}
+			
+			rendererWindow.Update(reconstructed_image);
+		}
 
 		cost /= (batchSize * printEveryNBatches);
 		std::cout << "COST: "
@@ -154,6 +197,9 @@ int main()
 		}
 	}
 
+	// Update the viewer one last time before saving
+	rendererWindow.Update(reconstructed_image);
+
 	// Save the image
 	saveBMP("network_output.bmp", data.width, data.height, reconstructed_image);
 	std::cout << "Successfully saved network_output.bmp!" << std::endl;
@@ -162,88 +208,4 @@ int main()
 	std::ofstream file{ "weights_biases.csv" };
 	network.Serialize(file);
 	std::cout << "Final weights_biases.csv saved." << std::endl;
-
-
-#if 0
-	// evaluate:
-	float correct = 0;
-	float resultCost = 0.0f;
-	for (size_t i = 0; i < test_images.size(); i++)
-	{
-		auto result = network.Propagate(test_images[i]);
-		float c = network.BackPropagate(test_images[i], test_labels[i]);
-
-
-		size_t maxI = 0;
-		for (size_t i = 1; i < 10; i++)
-		{
-			if (result[i] >= result[maxI])
-			{
-				maxI = i;
-			}
-		}
-		if (test_labels[i][maxI] == 1)
-		{
-			correct += 1.0f;
-		}
-
-
-		resultCost += c;
-	}
-	correct /= test_images.size();
-	resultCost /= test_images.size();
-	std::cout << "RESULT COST: "
-		<< resultCost
-		<< " ACCURACY: "
-		<< correct
-		<< '\n';
-
-	// print first image in console:
-	while (true) {
-		int imageidx;
-		std::cin >> imageidx;
-		imageidx %= images.size();
-
-		for (size_t y = 0; y < 28; y++)
-		{
-			for (size_t x = 0; x < 28; x++)
-			{
-				char c = ' ';
-				float value = test_images[imageidx][y * 28 + x] * 10;
-				if (value > 0.1f) c = 'X';
-				std::cout << c << " ";
-			}
-			std::cout << '\n';
-		}
-		auto result = network.Propagate(test_images[imageidx]);
-
-
-		for (size_t i = 0; i < 10; i++)
-		{
-			std::cout << i << '\t' << (test_labels[imageidx][i]) << '\t' << result[i] << '\n';
-		}
-		std::cout << std::endl;
-
-	}
-#endif
-
-
-
-	//while (true)
-	//{
-	//	std::vector<float> inputs;
-	//	inputs.resize(layerDims[0]);
-	//	for (size_t i = 0; i < inputs.size(); i++)
-	//	{
-	//		std::cin >> inputs[i];
-	//	}
-
-	//	auto result = network.Propagate(inputs);
-	//	
-	//	for (float activation : result)
-	//	{
-	//		std::cout << activation << " ";
-	//	}
-	//	std::cout << std::endl;
-	//}
 }
