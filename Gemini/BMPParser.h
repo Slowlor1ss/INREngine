@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <cstdint>
+#include <algorithm>
 
 // Struct to hold our image data
 struct Image {
@@ -87,13 +88,18 @@ Image loadBMP(const std::string& filename) {
 }
 
 struct BMPParsedData {
-    std::vector<std::vector<float>> inputs; 
+    int width = 0;
+    int height = 0;
+    std::vector<std::vector<float>> inputs;
     std::vector<std::vector<float>> outputs;
 };
 
 bool ParseBMPData(const char* filename, BMPParsedData& outData) {
-
     Image img = loadBMP(filename);
+
+    // Save dimensions for later
+    outData.width = img.width;
+    outData.height = img.height;
 
     for (size_t y = 0; y < img.height; y++)
     {
@@ -107,6 +113,57 @@ bool ParseBMPData(const char* filename, BMPParsedData& outData) {
             outData.outputs.push_back({ c1,c2,c3 });
         }
     }
-
     return true;
+}
+
+float clamp(float v, float l, float h) {
+    if (v > h) return h;
+    if (v < l) return l;
+    return v;
+}
+
+void saveBMP(const std::string& filename, int width, int height, const std::vector<float>& data) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file) {
+        std::cerr << "Error: Could not open " << filename << " for writing.\n";
+        return;
+    }
+
+    int row_padded = (width * 3 + 3) & (~3);
+    int fileSize = 54 + row_padded * height;
+
+    // Standard 54-byte BMP header
+    uint8_t header[54] = {
+        'B','M', // Magic number
+        static_cast<uint8_t>(fileSize), static_cast<uint8_t>(fileSize >> 8), static_cast<uint8_t>(fileSize >> 16), static_cast<uint8_t>(fileSize >> 24),
+        0,0,0,0,
+        54,0,0,0, // Data offset
+        40,0,0,0, // Info header size
+        static_cast<uint8_t>(width), static_cast<uint8_t>(width >> 8), static_cast<uint8_t>(width >> 16), static_cast<uint8_t>(width >> 24),
+        static_cast<uint8_t>(height), static_cast<uint8_t>(height >> 8), static_cast<uint8_t>(height >> 16), static_cast<uint8_t>(height >> 24),
+        1,0,      // Planes
+        24,0,     // Bits per pixel (24-bit RGB)
+        0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0
+    };
+    file.write(reinterpret_cast<char*>(header), 54);
+
+    std::vector<uint8_t> row_data(row_padded, 0);
+
+    // Write pixels (BMPs are naturally written bottom-to-top)
+    for (int y = height - 1; y >= 0; --y) {
+        for (int x = 0; x < width; ++x) {
+            int idx = (y * width + x) * 3;
+
+            // NN outputs might slightly exceed bounds; clamp them safely
+            float r = clamp(data[idx + 0], 0, 1);
+            float g = clamp(data[idx + 1], 0, 1);
+            float b = clamp(data[idx + 2], 0, 1);
+
+            // BMPs store pixels in BGR order
+            row_data[x * 3 + 0] = static_cast<uint8_t>(b * 255.0f);
+            row_data[x * 3 + 1] = static_cast<uint8_t>(g * 255.0f);
+            row_data[x * 3 + 2] = static_cast<uint8_t>(r * 255.0f);
+        }
+        file.write(reinterpret_cast<char*>(row_data.data()), row_padded);
+    }
 }

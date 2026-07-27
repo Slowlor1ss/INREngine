@@ -5,6 +5,8 @@
 #include <iostream>
 #include <chrono>
 
+#include <windows.h>
+
 // TODO: don't see the ponit for the database, just use them directly? to have a single instance? does that matter?
 // seems to be to use the inheritance more easily >> convert to template instead?
 // 
@@ -15,6 +17,8 @@
 #include "Gemini/MNISTReader.h"
 #include "Gemini/BMPParser.h"
 #include "Gemini/CustomFileReader.h"
+
+#include <conio.h> // For _kbhit() and _getch()
 
 int main()
 {
@@ -42,22 +46,68 @@ int main()
 	std::vector<std::vector<float>> test_images = images;
 	std::vector<std::vector<float>> test_labels = labels;
 
-	std::vector<size_t> layerDims{ 2,8,16,16,16,16,16,8,3 };
+	std::vector<size_t> layerDims{ 2,32,32,32,32,32,32,32,3 };
 	Network network{ layerDims };
 
 
-	// trainzl
+	std::cout << "Training started. Press Ctrl+C at any time to interrupt and save a snapshot." << std::endl;
 
 	float cost = 1.0f;
-	size_t batchSize = 256;
+	size_t batchSize = 32;
 	size_t printEveryNBatches = 256;
 	float learningRate = 1.0f; // usually would be alot lower
 
 	size_t currentImage = 0;
 
 	int writebackCtr = 0;
-	while (cost > 0.01f)
+	while (true)
 	{
+		// --- THE NEW INTERRUPT CHECK ---
+		// _kbhit() returns true instantly if a key is waiting in the buffer
+		if (_kbhit())
+		{
+			int ch = _getch(); // Read the key
+			if (ch == 'q' || ch == 'Q' || ch == 27) // 27 is the ASCII code for ESC
+			{
+				std::cout << "\n[Interrupt Received] Stopping training...\n";
+				break; // Exit the while loop
+			}
+
+			if (ch == 'w' || ch == 'W') // 27 is the ASCII code for ESC
+			{
+				std::ofstream file{ "weights_biases.csv" };
+				network.Serialize(file);
+			}
+
+			if (ch == 'e' || ch == 'E') // 27 is the ASCII code for ESC
+			{
+				// Save the image
+					// Allocate space for the image we are going to write
+				std::vector<float> reconstructed_image(data.width * data.height * 3);
+
+				// Loop through every (X, Y) coordinate and ask the network what color it thinks it is
+				for (int y = 0; y < data.height; ++y) {
+					for (int x = 0; x < data.width; ++x) {
+
+						// Normalize X and Y exactly like in training
+						std::vector<float> input = { x / float(data.width), y / float(data.height) };
+						std::vector<float> output = network.Propagate(input);
+
+						int pixel_index = (y * data.width + x) * 3;
+						reconstructed_image[pixel_index + 0] = output[0]; // R
+						reconstructed_image[pixel_index + 1] = output[1]; // G
+						reconstructed_image[pixel_index + 2] = output[2]; // B
+					}
+				}
+
+				saveBMP("network_output.bmp", data.width, data.height, reconstructed_image);
+				std::cout << "Successfully saved network_output.bmp!" << std::endl;
+			}
+		}
+		// -------------------------------
+
+
+
 		cost = 0.0f;
 
 		for (size_t j = 0; j < printEveryNBatches; j++)
@@ -82,15 +132,37 @@ int main()
 			<< " LR: "
 			<< learningRate
 			<< '\n';
+	}
 
-		writebackCtr++;
-		if (writebackCtr % 20 == 0)
-		{
-			std::ofstream file{ "weights_biases.csv" };
-			network.Serialize(file);
-			std::cout << "writeback completed\n";
+	std::cout << "Generating output image from network state...\n";
+
+	// Allocate space for the image we are going to write
+	std::vector<float> reconstructed_image(data.width * data.height * 3);
+
+	// Loop through every (X, Y) coordinate and ask the network what color it thinks it is
+	for (int y = 0; y < data.height; ++y) {
+		for (int x = 0; x < data.width; ++x) {
+
+			// Normalize X and Y exactly like in training
+			std::vector<float> input = { x / float(data.width), y / float(data.height) };
+			std::vector<float> output = network.Propagate(input);
+
+			int pixel_index = (y * data.width + x) * 3;
+			reconstructed_image[pixel_index + 0] = output[0]; // R
+			reconstructed_image[pixel_index + 1] = output[1]; // G
+			reconstructed_image[pixel_index + 2] = output[2]; // B
 		}
 	}
+
+	// Save the image
+	saveBMP("network_output.bmp", data.width, data.height, reconstructed_image);
+	std::cout << "Successfully saved network_output.bmp!" << std::endl;
+
+	// Final network serialization
+	std::ofstream file{ "weights_biases.csv" };
+	network.Serialize(file);
+	std::cout << "Final weights_biases.csv saved." << std::endl;
+
 
 #if 0
 	// evaluate:
@@ -155,8 +227,7 @@ int main()
 	}
 #endif
 
-	std::ofstream file{"weights_biases.csv"};
-	network.Serialize(file);
+
 
 	//while (true)
 	//{
