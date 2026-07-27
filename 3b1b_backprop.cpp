@@ -38,7 +38,7 @@ int main()
 	//std::vector<std::vector<float>> test_labels = read_mnist_labels(test_label_path);
 
 	BMPParsedData data;
-	ParseBMPData("light_on.bmp", data);
+	ParseBMPData("Sarah_large.bmp", data);
 
 	std::vector<std::vector<float>> images = data.inputs;
 	std::vector<std::vector<float>> labels = data.outputs;
@@ -46,15 +46,12 @@ int main()
 	std::vector<std::vector<float>> test_images = images;
 	std::vector<std::vector<float>> test_labels = labels;
 
-	std::vector<size_t> layerDims{ 2,32,32,32,32,32,32,32,3 };
+	std::vector<size_t> layerDims{ 2,64,128,512,128,64,3 };
 	Network network{ layerDims };
 
-
-	std::cout << "Training started. Press Ctrl+C at any time to interrupt and save a snapshot." << std::endl;
-
 	float cost = 1.0f;
-	size_t batchSize = 32;
-	size_t printEveryNBatches = 256;
+	size_t batchSize = 4096;
+	size_t printEveryNBatches = 1;
 	float learningRate = 1.0f; // usually would be alot lower
 
 	size_t currentImage = 0;
@@ -121,7 +118,7 @@ int main()
 			}
 
 			network.ConsumeDelta(learningRate);
-			learningRate = learningRate * pow(0.99999999, batchSize);
+			learningRate = learningRate * pow(0.9999999, batchSize);
 		}
 
 		// batchSize = (batchSize + 1) % 128;
