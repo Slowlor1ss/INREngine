@@ -28,8 +28,8 @@ int main()
 	srand((uint32_t)count);
 
 	BMPParsedData data;
-	//ParseBMPData("light_on.bmp", data);
-	ParseBMPData("SarahDoYouHaveAnyGamesOnYoPhone.bmp", data);
+
+	ParseBMPData("Sarah_large.bmp", data);
 
 	std::vector<std::vector<float>> images = data.inputs;
 	std::vector<std::vector<float>> labels = data.outputs;
@@ -60,8 +60,8 @@ int main()
 	std::cout << " [V]     - Update live viewer window\n";
 
 	float cost = 1.0f;
-	size_t batchSize = 32;
-	size_t printEveryNBatches = 256;
+	size_t batchSize = 4096;
+	size_t printEveryNBatches = 1;
 	float learningRate = 1.0f; // usually would be alot lower
 
 	size_t currentImage = 0;
@@ -143,7 +143,7 @@ int main()
 			}
 
 			network.ConsumeDelta(learningRate);
-			learningRate = learningRate * pow(0.99999999, batchSize);
+			learningRate = learningRate * pow(0.9999999, batchSize);
 		}
 		
 		if (liveUpdateWindow)

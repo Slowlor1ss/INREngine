@@ -40,11 +40,7 @@ Image loadBMP(const std::string& filename) {
     img.height = header[22] | (header[23] << 8) | (header[24] << 16) | (header[25] << 24);
     int bpp = header[28] | (header[29] << 8);
 
-    // We are only handling standard 24-bit BMPs for simplicity
-    if (bpp != 24) {
-        std::cerr << "Error: Only 24-bit BMPs are supported\n";
-        return img;
-    }
+    int bytesperPixel = bpp / 8;
 
     // BMP images are traditionally stored bottom-to-top.
     // If height is negative, it's stored top-to-bottom.
@@ -58,7 +54,7 @@ Image loadBMP(const std::string& filename) {
     img.data.resize(img.width * img.height * 3);
 
     // BMP rows are padded to be a multiple of 4 bytes.
-    int row_padded = (img.width * 3 + 3) & (~3);
+    int row_padded = (img.width * bytesperPixel + 3) & (~3);
     std::vector<uint8_t> row_data(row_padded);
 
     // Jump to the start of the pixel data
@@ -72,9 +68,9 @@ Image loadBMP(const std::string& filename) {
 
         for (int j = 0; j < img.width; ++j) {
             // BMPs store pixels in BGR order, not RGB
-            uint8_t b = row_data[j * 3 + 0];
-            uint8_t g = row_data[j * 3 + 1];
-            uint8_t r = row_data[j * 3 + 2];
+            uint8_t b = row_data[j * bytesperPixel + 0];
+            uint8_t g = row_data[j * bytesperPixel + 1];
+            uint8_t r = row_data[j * bytesperPixel + 2];
 
             // Normalize bytes (0-255) to floats (0.0 - 1.0)
             int pixel_index = (row * img.width + j) * 3;
