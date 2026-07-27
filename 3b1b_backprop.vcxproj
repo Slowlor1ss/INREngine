@@ -141,6 +141,8 @@
   <ItemGroup>
     <ClCompile Include="3b1b_backprop.cpp" />
     <ClCompile Include="ActFuncDataBase.cpp" />
+    <ClCompile Include="CostFuncDataBase.cpp" />
+    <ClCompile Include="ImageGenerator.cpp" />
     <ClCompile Include="Layer.cpp" />
     <ClCompile Include="Network.cpp" />
     <ClCompile Include="Parameters.cpp" />
@@ -149,9 +151,12 @@
   <ItemGroup>
     <ClInclude Include="ActFuncDataBase.h" />
     <ClInclude Include="ActivationFunctions.h" />
+    <ClInclude Include="CostFuncDataBase.h" />
+    <ClInclude Include="CostFunctions.h" />
     <ClInclude Include="Gemini\BMPParser.h" />
     <ClInclude Include="Gemini\CustomFileReader.h" />
     <ClInclude Include="Gemini\MNISTReader.h" />
+    <ClInclude Include="ImageGenerator.h" />
     <ClInclude Include="Layer.h" />
     <ClInclude Include="Network.h" />
     <ClInclude Include="Parameters.h" />

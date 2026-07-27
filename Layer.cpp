@@ -77,12 +77,12 @@ InitialLayer::InitialLayer(size_t numNeurons)
 {
 }
 
-void InitialLayer::StartPropagation(std::vector<float> inputActivation)
+void InitialLayer::StartPropagation(const std::vector<float>& inputActivation)
 {
 	if (inputActivation.size() == m_numNeurons)
 	{
-		m_activations = std::move(inputActivation);
-		m_preProcessedActivations = m_activations;
+		std::copy(inputActivation.begin(), inputActivation.end(), m_activations.begin());
+		std::copy(inputActivation.begin(), inputActivation.end(), m_preProcessedActivations.begin());
 		Propagate();
 	}
 }

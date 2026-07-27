@@ -397,3 +397,11 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 /.idea
+network_output.bmp
+network_output.bmp
+weights_biases.csv
+weights_biases_laurens.csv
+weights_biases_light_on.csv
+weights_biases_Sarah.csv
+weights_biases_SarahDoYouHaveAnyGamesOnYoPhone.csv
+*.csv

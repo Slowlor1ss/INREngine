@@ -14,6 +14,7 @@ namespace ActFunc
 			instance.m_map.emplace(Sigmoid::k_name, std::make_unique<Sigmoid>());
 			instance.m_map.emplace(ReLU::k_name, std::make_unique<ReLU>());
 			instance.m_map.emplace(LeakyReLU::k_name, std::make_unique<LeakyReLU>());
+
 		}
 
 		return m_instance;

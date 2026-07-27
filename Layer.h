@@ -22,6 +22,9 @@ public:
 		return m_params.weights.size();
 	}
 
+	const Parameters& GetParams() const { return m_params; }
+	ActFunc::Base* GetActivationFunction() const { return m_activationFunction; }
+
 	// Inherited via Serializable
 	virtual void Serialize(std::ostream& out) override;
 	virtual void Deserialize(std::istream& in) override;
@@ -55,5 +58,5 @@ class InitialLayer : public Layer
 public:
 	InitialLayer(size_t numNeurons);
 	virtual ~InitialLayer() = default;
-	void StartPropagation(std::vector<float> inputActivation);
+	void StartPropagation(const std::vector<float>& inputActivation);
 };

@@ -1,11 +1,15 @@
 #include "Network.h"
 #include "Layer.h"
 #include "ActFuncDataBase.h"
+#include "iostream"
 
-Network::Network(const std::vector<size_t>& neuronsPerLayer, bool zeroInit)
+Network::Network(const std::vector<size_t>& neuronsPerLayer, CostFunc::Base* costFunc, bool zeroInit)
 {
+	m_costFunction = (costFunc != nullptr) ? costFunc : CostFunc::DataBase::FindCostFunc<CostFunc::L1>();
+
 	m_layers.push_back(std::make_unique<InitialLayer>(neuronsPerLayer[0]));
 	m_storedDelta.push_back(Parameters{ m_layers.front()->GetNumNeurons(), m_layers.front()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0 });
+	m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[0], 0.0f));
 
 	for (size_t i = 1; i < neuronsPerLayer.size(); i++)
 	{
@@ -23,6 +27,7 @@ Network::Network(const std::vector<size_t>& neuronsPerLayer, bool zeroInit)
 
 		m_layers.push_back(std::make_unique<Layer>(neuronsPerLayer[i], actFunc, i, m_layers.back().get()));
 		m_storedDelta.push_back(Parameters{ m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), i });
+		m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[i], 0.0f));
 	}
 }
 
@@ -47,7 +52,7 @@ InitialLayer& Network::GetInitialLayer()
 
 void Network::ConsumeDelta(float learningRate)
 {
-	if (m_layers.size() == m_storedDelta.size())
+	if (m_layers.size() == m_storedDelta.size() && m_numStored > 0)
 	{
 		for (size_t i = 1; i < m_layers.size(); i++)
 		{
@@ -79,9 +84,32 @@ void Network::Serialize(std::ostream& out)
 
 void Network::Deserialize(std::istream& in)
 {
-	for (auto& l : m_layers)
+	std::vector<Parameters> loadedParams(m_layers.size());
+	for (size_t i = 0; i < m_layers.size(); ++i)
 	{
-		l->Deserialize(in);
+		loadedParams[i].Deserialize(in);
+		if (in.fail() && !in.eof() && i < m_layers.size() - 1)
+		{
+			std::cout << "[Checkpoint Warning] Failed reading checkpoint stream at layer " << i << ". Retaining new weights.\n";
+			return;
+		}
+
+		size_t expectedBiases = m_layers[i]->GetNumNeurons();
+		size_t expectedWeights = m_layers[i]->GetNumWeightsToPrevious();
+
+		if (loadedParams[i].biases.size() != expectedBiases || loadedParams[i].weights.size() != expectedWeights)
+		{
+			std::cout << "[Checkpoint Mismatch] Checkpoint layer " << i << " dimensions do not match current network topology!\n"
+				<< "  - File:    biases=" << loadedParams[i].biases.size() << ", weights=" << loadedParams[i].weights.size() << "\n"
+				<< "  - Network: biases=" << expectedBiases << ", weights=" << expectedWeights << "\n"
+				<< "Discarding loaded checkpoint; initializing fresh random weights.\n";
+			return;
+		}
+	}
+
+	for (size_t i = 0; i < m_layers.size(); ++i)
+	{
+		m_layers[i]->SetParams(loadedParams[i]);
 	}
 }
 
@@ -92,20 +120,11 @@ float Network::CalculateCost(const std::vector<float>& inputActivation,const std
 	float cost = 0.0f;
 	if (result.size() == preferredOutput.size())
 	{
-		// MSE
-		//for (size_t i = 0; i < result.size(); i++)
-		//{
-		//	cost += powf(result[i] - preferredOutput[i], 2.0f);
-		//}
-		//return cost;
-
-		// L1 Loss
 		for (size_t i = 0; i < result.size(); i++)
 		{
-			cost += abs(result[i] - preferredOutput[i]);
+			cost += m_costFunction->Execute(result[i], preferredOutput[i]);
 		}
 		return cost / result.size();
-
 	}
 
 	return std::numeric_limits<float>().infinity();
@@ -117,44 +136,72 @@ std::vector<float> Network::Propagate(const std::vector<float>& inputActivation)
 	return m_layers.back()->m_activations;
 }
 
-float Network::BackPropagate(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput)
+const std::vector<float>& Network::PropagateThreadSafe(const std::vector<float>& inputActivation, std::vector<std::vector<float>>& threadBuffers) const
+{
+	if (threadBuffers.size() != m_layers.size())
+	{
+		threadBuffers.resize(m_layers.size());
+		for (size_t i = 0; i < m_layers.size(); ++i)
+		{
+			threadBuffers[i].resize(m_layers[i]->GetNumNeurons());
+		}
+	}
+
+	std::copy(inputActivation.begin(), inputActivation.end(), threadBuffers[0].begin());
+
+	for (size_t l = 1; l < m_layers.size(); ++l)
+	{
+		const Layer* layer = m_layers[l].get();
+		const std::vector<float>& prevAct = threadBuffers[l - 1];
+		std::vector<float>& currentAct = threadBuffers[l];
+
+		const size_t numNeurons = layer->GetNumNeurons();
+		const size_t weightsPerNeuron = prevAct.size();
+		const auto& weights = layer->GetParams().weights;
+		const auto& biases = layer->GetParams().biases;
+		ActFunc::Base* func = layer->GetActivationFunction();
+
+		for (size_t i = 0; i < numNeurons; ++i)
+		{
+			float z = biases[i];
+			size_t weightStart = i * weightsPerNeuron;
+			for (size_t j = 0; j < weightsPerNeuron; ++j)
+			{
+				z += weights[weightStart + j] * prevAct[j];
+			}
+
+			currentAct[i] = func ? func->Execute(z) : z;
+		}
+	}
+
+	return threadBuffers.back();
+}
+
+float Network::BackPropagate(const std::vector<float>& inputActivation, const std::vector<float>& preferredOutput)
 {
 	// propagate forwards
 	float cost = CalculateCost(inputActivation, preferredOutput);
 
 	// create empty network with same dimensions to store deltas. 
-	std::vector<Parameters> deltaParameters;
-	deltaParameters.resize(m_layers.size());
-	deltaParameters.front() = Parameters{ GetInitialLayer().GetNumNeurons(), GetInitialLayer().GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0 };
-
 	// propagate backwards
 	Layer* layer = m_layers.back().get();
+	size_t layerIndex = m_layers.size() - 1;
 
-	std::vector<float> prevLayerCostDeltas;
-	prevLayerCostDeltas.resize(layer->m_numNeurons);
+	std::vector<float>& prevLayerCostDeltas = m_costDeltas[layerIndex];
 	for (size_t i = 0; i < layer->m_numNeurons; i++)
 	{
-
 		float act = layer->m_activations[i];
 		float y = preferredOutput[i];
 
-		// the derivative of the cost function (act - y)^2
+		// the derivative of the cost function
 		// a.k.a direction to push our activation to decrease cost ?
-		
-		// MSE
-		prevLayerCostDeltas[i] = 2 * (act - y);
-
-		// derivative of l1 loss cost function
-		prevLayerCostDeltas[i] = y > act ? -1.0f : 1.0f;
-
+		prevLayerCostDeltas[i] = m_costFunction->ExecuteDerivative(act, y);
 	}
 
-	size_t layerIndex = m_layers.size() - 1;
 	while (layer->m_previousLayer != nullptr)
 	{
-		Parameters& deltaLayer = deltaParameters[layerIndex] = Parameters(layer->GetNumNeurons(), layer->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), layer->m_layerIdx);
-
-		std::vector<float> currentCostDeltas = prevLayerCostDeltas;
+		Parameters& deltaLayer = m_storedDelta[layerIndex];
+		const std::vector<float>& currentCostDeltas = m_costDeltas[layerIndex];
 
 		for (size_t i = 0; i < layer->m_numNeurons; i++)
 		{
@@ -162,7 +209,7 @@ float Network::BackPropagate(const std::vector<float>& inputActivation,const std
 			float z = layer->m_preProcessedActivations[i];
 			float actFuncDeriv = layer->m_activationFunction->ExecuteDerivative(z);
 
-			deltaLayer.biases[i] = actFuncDeriv * currentCostDeltas[i];
+			deltaLayer.biases[i] += actFuncDeriv * currentCostDeltas[i];
 
 			//calc weight nudge (bias nudge * A(L-1)) for each weight
 			size_t weightsPerNeuron = layer->m_previousLayer->m_numNeurons;
@@ -172,33 +219,40 @@ float Network::BackPropagate(const std::vector<float>& inputActivation,const std
 			// might not always be the case.
 			for (size_t j = 0; j < layer->m_previousLayer->m_numNeurons; j++)
 			{
-				deltaLayer.weights[weightIndexStart + j] = layer->m_previousLayer->m_activations[j] * actFuncDeriv * currentCostDeltas[i];
+				deltaLayer.weights[weightIndexStart + j] += layer->m_previousLayer->m_activations[j] * actFuncDeriv * currentCostDeltas[i];
 			}
 		}
 
 		// setup for next layer
-		prevLayerCostDeltas.clear();
-		prevLayerCostDeltas.resize(layer->m_previousLayer->m_numNeurons, 0.0f);
-
-		for (size_t i = 0; i < layer->m_previousLayer->m_numNeurons; i++)
+		if (layerIndex > 1)
 		{
-			// for each outgoing weight from neuron[j]
-			// calc weight * weightDestNeuron.biasDelta;
-			// sum it. save in prevLayerCostDeltas[j]
-			size_t relevantWeightIndex = i;
-			size_t weightsPerNeuron = layer->m_previousLayer->m_numNeurons;
-			for (size_t j = 0; j < layer->m_numNeurons; j++)
+			std::vector<float>& nextCostDeltas = m_costDeltas[layerIndex - 1];
+			std::fill(nextCostDeltas.begin(), nextCostDeltas.end(), 0.0f);
+
+			for (size_t i = 0; i < layer->m_previousLayer->m_numNeurons; i++)
 			{
-				size_t weightIdx = weightsPerNeuron * j + relevantWeightIndex;
-				prevLayerCostDeltas[i] += layer->m_params.weights[weightIdx] * deltaLayer.biases[j]; // deltaLayer.biases[j] == actFuncDeriv * currentCostDeltas[i];
+				// for each outgoing weight from neuron[j]
+				// calc weight * weightDestNeuron.biasDelta;
+				// sum it. save in prevLayerCostDeltas[j]
+				size_t relevantWeightIndex = i;
+				size_t weightsPerNeuron = layer->m_previousLayer->m_numNeurons;
+				for (size_t j = 0; j < layer->m_numNeurons; j++)
+				{
+					size_t weightIdx = weightsPerNeuron * j + relevantWeightIndex;
+					float z = layer->m_preProcessedActivations[j];
+					float actFuncDeriv = layer->m_activationFunction->ExecuteDerivative(z);
+					float biasDelta = actFuncDeriv * currentCostDeltas[j];
+					nextCostDeltas[i] += layer->m_params.weights[weightIdx] * biasDelta; // deltaLayer.biases[j] == actFuncDeriv * currentCostDeltas[i];
+				}
 			}
 		}
+
 		layer = layer->m_previousLayer;
 		layerIndex--;
 	}
 
 	// update weights and biases
-	StoreDelta(deltaParameters);
+	m_numStored++;
 
 	return cost;
 }
