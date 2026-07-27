@@ -24,7 +24,7 @@ public:
 
 	// Inherited via Serializable
 	virtual void Serialize(std::ostream& out) override;
-	virtual void Deserialize(std::istream& in) override {};
+	virtual void Deserialize(std::istream& in) override;
 
 protected:
 	void Propagate();

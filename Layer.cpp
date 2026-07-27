@@ -30,6 +30,11 @@ void Layer::Serialize(std::ostream& out)
 	m_params.Serialize(out);
 }
 
+void Layer::Deserialize(std::istream& in)
+{
+	m_params.Deserialize(in);
+}
+
 void Layer::Propagate()
 {
 	// We need previousLayer to work

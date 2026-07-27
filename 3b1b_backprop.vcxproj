@@ -144,6 +144,7 @@
     <ClCompile Include="Layer.cpp" />
     <ClCompile Include="Network.cpp" />
     <ClCompile Include="Parameters.cpp" />
+    <ClCompile Include="WindowRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ActFuncDataBase.h" />
@@ -155,6 +156,7 @@
     <ClInclude Include="Network.h" />
     <ClInclude Include="Parameters.h" />
     <ClInclude Include="Serializable.h" />
+    <ClInclude Include="WindowRenderer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
