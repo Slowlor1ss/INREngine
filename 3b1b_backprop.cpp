@@ -13,6 +13,7 @@
 // TOOD: better interface / forntend.
 
 #include "Gemini/MNISTReader.h"
+#include "Gemini/BMPParser.h"
 #include "Gemini/CustomFileReader.h"
 
 int main()
@@ -32,8 +33,8 @@ int main()
 	//std::vector<std::vector<float>> test_images = read_mnist_images(test_image_path, true);
 	//std::vector<std::vector<float>> test_labels = read_mnist_labels(test_label_path);
 
-	ParsedData data;
-	ParseBinaryData("C:\\Github\\TRP\\TempleRunPreprocess\\myoutput.bin", data);
+	BMPParsedData data;
+	ParseBMPData("light_on.bmp", data);
 
 	std::vector<std::vector<float>> images = data.inputs;
 	std::vector<std::vector<float>> labels = data.outputs;
@@ -41,7 +42,7 @@ int main()
 	std::vector<std::vector<float>> test_images = images;
 	std::vector<std::vector<float>> test_labels = labels;
 
-	std::vector<size_t> layerDims{ 12,24,9 };
+	std::vector<size_t> layerDims{ 2,8,16,16,16,16,16,8,3 };
 	Network network{ layerDims };
 
 

@@ -56,5 +56,8 @@
     <ClInclude Include="Gemini\CustomFileReader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Gemini\BMPParser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

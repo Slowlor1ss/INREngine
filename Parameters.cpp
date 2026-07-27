@@ -74,27 +74,31 @@ void Parameters::Serialize(std::ostream& out)
 {
 	char delim[3] = ", ";
 
-	out << "static const uint num_biases_l" << layerIdx << " = " << biases.size() << ";";
+	out << "const int num_biases_l" << layerIdx << " = " << biases.size() << ";";
 
 	if (layerIdx != 0)
 	{
-		out << "float biases_l" << layerIdx << "[num_biases_l" << layerIdx << "] = {";
+		out << "const float biases_l" << layerIdx << "[num_biases_l" << layerIdx << "] = float[](";
 		for (size_t i = 0; i < biases.size(); i++)
 		{
-			out << biases[i] << delim;
+			if (i > 0) out << delim;
+
+			out << biases[i];
 		}
-		out << "};\n";
+		out << ");\n";
 	}
 
-	out << "static const uint num_weights_l" << layerIdx << " = " << weights.size() << ";";
+	out << "const int num_weights_l" << layerIdx << " = " << weights.size() << ";";
 	if (layerIdx != 0)
 	{
-		out << "float weights_l" << layerIdx << "[num_weights_l" << layerIdx << "] = {";
+		out << "const float weights_l" << layerIdx << "[num_weights_l" << layerIdx << "] = float[](";
 		for (size_t i = 0; i < weights.size(); i++)
 		{
-			out << weights[i] << delim;
+			if (i > 0) out << delim;
+
+			out << weights[i];
 		}
-		out << "};\n";
+		out << ");\n";
 	}
 }
 
