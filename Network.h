@@ -32,7 +32,7 @@ public:
 	
 	float BackPropagate(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput);
 
-	void ConsumeDelta(float learningRate);
+	void ConsumeDelta(double learningRate, float momentum);
 
 	// Inherited via Serializable
 	virtual void Serialize(std::ostream& out) override;

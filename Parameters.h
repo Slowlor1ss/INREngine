@@ -7,7 +7,7 @@ struct Parameters : public Serializable
 {
 	Parameters() = default;
 	Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFunc, size_t layerIdx);
-	void Update(const Parameters& gradient, double learningRate);
+	void Update(const Parameters& gradient, double learningRate, float momentum);
 	Parameters& operator*=(float other);
 	Parameters& operator+=(const Parameters& other);
 	

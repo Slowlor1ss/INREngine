@@ -44,7 +44,7 @@ inline void NeuralImageRecreator()
 
 	std::vector<Network::LayerInfo> layerDims{
 		{inputLayerSize, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
-		{8, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{8, ActFunc::DataBase::FindActFunc<ActFunc::Empty>()},
 		{16, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
 		{32, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
 		{32, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},

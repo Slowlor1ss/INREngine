@@ -298,7 +298,8 @@ inline float RunTrainingEpoch(Network& network,
                               size_t& currentImageIdx,
                               const size_t printEveryNBatches,
                               const size_t batchSize,
-                              float& learningRate)
+							  double learningRate,
+							  float momentum = 0)
 {
 	float totalCost = 0.0f;
 
@@ -312,8 +313,8 @@ inline float RunTrainingEpoch(Network& network,
 			currentImageIdx = GetRandomImageIndex(images.size());
 		}
 
-		network.ConsumeDelta(learningRate);
-		learningRate *= static_cast<float>(std::pow(0.9999999, batchSize));
+		network.ConsumeDelta(learningRate, momentum);
+		learningRate *= static_cast<double>(std::pow(0.9999999, batchSize));
 	}
 
 	return totalCost / static_cast<float>(batchSize * printEveryNBatches);

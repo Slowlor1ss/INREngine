@@ -12,14 +12,13 @@ inline void RunMNISTAutoencoder()
 
 		std::vector<Network::LayerInfo> layerDims{
 			{2, ActFunc::DataBase::FindActFunc<ActFunc::Empty>()},
-			{16, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
 			{128, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
 			{256, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
 			{28 * 28, ActFunc::DataBase::FindActFunc<ActFunc::Sigmoid>()} };
 
 		Network network{ layerDims, CostFunc::DataBase::FindCostFunc<CostFunc::L1>() };
 
-		LoadCheckpoint(network, "mnist_decoder.csv");
+		LoadCheckpoint(network, "mnist_wb/decode.csv");
 
 		int scale = 10;
 		ImageWindow rendererWindow(28 * scale, 28 * scale);
@@ -79,11 +78,17 @@ inline void RunMNISTAutoencoder()
 			{28 * 28, ActFunc::DataBase::FindActFunc<ActFunc::Empty>()},
 			{256, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
 			{128, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
-			{2, ActFunc::DataBase::FindActFunc<ActFunc::None>()},
+			{16, ActFunc::DataBase::FindActFunc<ActFunc::None>()},
 			{128, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
 			{256, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
 			{28 * 28, ActFunc::DataBase::FindActFunc<ActFunc::Sigmoid>()}
 		};
+
+		// 6. Hyperparameters & Training State
+		size_t batchSize = 3;
+		size_t printEveryNBatches = 128;
+		double learningRate = 0.01f;
+		float momentum = 0.0f;
 		Network network{ layerDims, CostFunc::DataBase::FindCostFunc<CostFunc::L1>() };
 
 		ImageWindow rendererWindow(28 * 2, 28);
@@ -94,10 +99,7 @@ inline void RunMNISTAutoencoder()
 		// 5. Display Interactive Controls
 		PrintControls();
 
-		// 6. Hyperparameters & Training State
-		const size_t batchSize = 32;
-		const size_t printEveryNBatches = 5;
-		float learningRate = 0.001f;
+
 
 		size_t currentImage = 0;
 		bool liveUpdateWindow = true;
@@ -115,7 +117,7 @@ inline void RunMNISTAutoencoder()
 			}
 
 			// Perform batch training step
-			float cost = RunTrainingEpoch(network, images, labels, currentImage, printEveryNBatches, batchSize, learningRate);
+			float cost = RunTrainingEpoch(network, images, labels, currentImage, printEveryNBatches, batchSize, learningRate, momentum);
 
 			// Live viewer update
 			if (liveUpdateWindow)

@@ -39,7 +39,7 @@ InitialLayer& Network::GetInitialLayer()
 	return *static_cast<InitialLayer*>(m_layers.front().get());
 }
 
-void Network::ConsumeDelta(float learningRate)
+void Network::ConsumeDelta(double learningRate, float momentum)
 {
 	if (m_layers.size() == m_storedDelta.size() && m_numStored > 0)
 	{
@@ -54,7 +54,7 @@ void Network::ConsumeDelta(float learningRate)
 				// negative because we want to substract. (inverse of the gradient)
 
 				//m_storedDelta[i] *= -1.0f * (lr / m_numStored);
-				m_layers[i]->m_params.Update(m_storedDelta[i], lr/ m_numStored);
+				m_layers[i]->m_params.Update(m_storedDelta[i], lr / m_numStored, momentum);
 				m_storedDelta[i].Clear();
 			}
 		}
