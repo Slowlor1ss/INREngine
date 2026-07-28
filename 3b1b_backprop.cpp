@@ -15,6 +15,7 @@
 #include <string>
 #include <cmath>
 #include <conio.h> // For _kbhit() and _getch()
+#include <thread>
 
 // TODO: don't see the point for the database, just use them directly? to have a single instance? does that matter?
 // seems to be to use the inheritance more easily >> convert to template instead?
@@ -67,7 +68,6 @@ static void LoadCustomBinaryData(const char* filename, ParsedData& outData)
 enum class UserAction {
 	None,
 	SaveWeights,
-	ExportImage,
 	ToggleViewer,
 	Quit
 };
@@ -133,8 +133,6 @@ static UserAction PollUserAction()
 			return UserAction::Quit;
 		case 'w': case 'W':
 			return UserAction::SaveWeights;
-		case 'e': case 'E':
-			return UserAction::ExportImage;
 		case 'v': case 'V':
 			return UserAction::ToggleViewer;
 		default:
@@ -143,7 +141,7 @@ static UserAction PollUserAction()
 }
 
 // Handles user actions outside the main training loop; returns false to break loop.
-static bool HandleUserAction(UserAction action, Network& network, const BMPParsedData& data, const std::string& weightsFile, bool& liveUpdateWindow)
+static bool HandleUserAction(UserAction action, Network& network, const std::string& weightsFile, bool& liveUpdateWindow)
 {
 	switch (action)
 	{
@@ -154,21 +152,13 @@ static bool HandleUserAction(UserAction action, Network& network, const BMPParse
 		case UserAction::SaveWeights:
 			SaveCheckpoint(network, weightsFile);
 			break;
-
-		case UserAction::ExportImage:
-		{
-			std::vector<float> reconstructedImage = GenerateReconstructedImage(network, data.width, data.height);
-			saveBMP("network_output.bmp", data.width, data.height, reconstructedImage);
-			std::cout << "Successfully saved network_output.bmp!\n";
-			break;
-		}
-
 		case UserAction::ToggleViewer:
 			liveUpdateWindow = !liveUpdateWindow;
 			std::cout << (liveUpdateWindow ? "Live viewer window ENABLED\n" : "Live viewer window DISABLED\n");
 			break;
 
 		case UserAction::None:
+		default:
 			break;
 	}
 
@@ -215,82 +205,148 @@ static float RunTrainingEpoch(Network& network,
 // Main Execution
 // ============================================================================
 
+static void LoadMNISTData(std::vector<std::vector<float>>& trainImages,
+	std::vector<std::vector<float>>& trainLabels,
+	std::vector<std::vector<float>>& testImages,
+	std::vector<std::vector<float>>& testLabels)
+{
+	trainImages = read_mnist_images("DATA/train-images-idx3-ubyte");
+	trainLabels = read_mnist_labels("DATA/train-labels-idx1-ubyte");
+	testImages = read_mnist_images("DATA/t10k-images-idx3-ubyte");
+	testLabels = read_mnist_labels("DATA/t10k-labels-idx1-ubyte");
+}
+
 int main()
 {
-	// 1. Seed Random Number Generator
-	auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-	srand(static_cast<uint32_t>(seed));
+	// Set to true to explore the Latent Space!
+	bool isTestMode = true;
 
-	// 2. Load Input Data & Derive Checkpoint Filename
-	const std::string targetImageFile = "Sarah.bmp";
-	const std::string weightsFile = GetCheckpointFilename(targetImageFile);
-
-	BMPParsedData data;
-	ParseBMPData(targetImageFile.c_str(), data);
-	// Alternative image loading: ParseBMPData("Sarah_large.bmp", data);
-
-	const std::vector<std::vector<float>>& images = data.inputs;
-	const std::vector<std::vector<float>>& labels = data.outputs;
-
-	// 3. Initialize Neural Network & Visualizer Window
-	size_t g = 64;
-	std::vector<size_t> layerDims{ 2,8,16,32,64,64,32,16, 3 };
-	Network network{ layerDims };
-
-	ImageWindow rendererWindow(data.width, data.height);
-
-	// 4. Load Weights Checkpoint (Validates dimensions vs current layerDims automatically)
-	LoadCheckpoint(network, weightsFile);
-
-	// 5. Display Interactive Controls
-	PrintControls();
-
-	// 6. Hyperparameters & Training State
-	const size_t batchSize = 32;
-	const size_t printEveryNBatches = 128;
-	float learningRate = 0.25f;
-
-	size_t currentImage = 0;
-	bool liveUpdateWindow = true;
-
-	// 7. Main Training & UI Loop
-	while (true)
+	if (isTestMode)
 	{
-		// Pump Windows messages so the viewer window stays responsive
-		rendererWindow.ProcessMessages();
+		std::cout << "==================================\n\n";
 
-		// Handle non-blocking user input
-		if (!HandleUserAction(PollUserAction(), network, data, weightsFile, liveUpdateWindow))
+		std::vector<Network::LayerInfo> layerDims{
+			{2, ActFunc::DataBase::FindActFunc<ActFunc::Empty>()},
+			{16, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+			{128, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+			{256, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+			{28 * 28, ActFunc::DataBase::FindActFunc<ActFunc::Sigmoid>()} };
+
+		Network network{ layerDims, CostFunc::DataBase::FindCostFunc<CostFunc::L1>() };
+
+		LoadCheckpoint(network, "mnist_decoder.csv");
+
+		int scale = 10;
+		ImageWindow rendererWindow(28 * scale, 28 * scale);
+
+		float latent_x = 0.0f;
+		float latent_y = 0.0f;
+		float step = 1.0f; // How fast you move through the space
+
+		std::cout << "Controls:\n [W/A/S/D] - Move in Latent Space\n [Q/ESC]   - Quit\n\n";
+		std::cout << "Current Coordinate: (" << latent_x << ", " << latent_y << ")\r";
+
+		while (true)
 		{
-			break;
+			rendererWindow.ProcessMessages();
+
+			bool changed = true; // Force render on first frame
+			if (_kbhit())
+			{
+				int ch = _getch();
+				switch (ch)
+				{
+				case 'w': case 'W': latent_y += step; changed = true; break;
+				case 's': case 'S': latent_y -= step; changed = true; break;
+				case 'a': case 'A': latent_x -= step; changed = true; break;
+				case 'd': case 'D': latent_x += step; changed = true; break;
+				case 'q': case 'Q': case 27: return 0;
+				}
+			}
+
+			if (changed)
+			{
+				// The \r and trailing spaces keep the console clean on a single line
+				std::cout << "Current Coordinate: (" << latent_x << ", " << latent_y << ")          \r";
+
+				// Run the forward pass and update the screen
+				rendererWindow.Update(GenerateImageFromLatent(network, latent_x, latent_y , scale));
+			}
+
+			// Small sleep to prevent frying your CPU (roughly 60 FPS)
+			std::this_thread::sleep_for(std::chrono::milliseconds(16));
 		}
+		return 0;
 
-		// Perform batch training step
-		float cost = RunTrainingEpoch(network, images, labels, currentImage, printEveryNBatches, batchSize, learningRate);
-
-		// Live viewer update
-		if (liveUpdateWindow)
-		{
-			rendererWindow.Update(GenerateReconstructedImage(network, data.width, data.height));
-		}
-
-		// Report progress
-		std::cout << "COST: " << cost << " LR: " << learningRate << '\n';
 	}
+	//else
+	//{
+	//	// 1. Seed Random Number Generator
+	//	auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+	//	srand(static_cast<uint32_t>(seed));
 
-	// 8. Final Output Generation & Cleanup
-	std::cout << "Generating final output image from network state...\n";
+	//	// 2. Load Input Data & Derive Checkpoint Filename
+	//	const std::string weightsFile = GetCheckpointFilename("mnist");
 
-	std::vector<float> final_reconstructed_image = GenerateReconstructedImage(network, data.width, data.height);
+	//	std::vector<std::vector<float>> images, labels, testImages, testLabels;
 
-	rendererWindow.Update(final_reconstructed_image);
 
-	saveBMP("network_output.bmp", data.width, data.height, final_reconstructed_image);
-	std::cout << "Successfully saved network_output.bmp!\n";
+	//	LoadMNISTData(images, labels, testImages, testLabels);
 
-	SaveCheckpoint(network, weightsFile);
-	std::cout << "Final " << weightsFile << " saved.\n";
+	//	labels = images;
+	//	testLabels = testImages;
 
+	//	// 3. Initialize Neural Network & Visualizer Window
+	//	std::vector<size_t> layerDims{ 28 * 28,256,128,16,2,16,128,256,28 * 28 };
+	//	Network network{ layerDims, CostFunc::DataBase::FindCostFunc<CostFunc::L1>() };
+
+	//	ImageWindow rendererWindow(28 * 2, 28);
+
+	//	// 4. Load Weights Checkpoint (Validates dimensions vs current layerDims automatically)
+	//	LoadCheckpoint(network, weightsFile);
+
+	//	// 5. Display Interactive Controls
+	//	PrintControls();
+
+	//	// 6. Hyperparameters & Training State
+	//	const size_t batchSize = 128;
+	//	const size_t printEveryNBatches = 2;
+	//	float learningRate = 0.0001;
+
+	//	size_t currentImage = 0;
+	//	bool liveUpdateWindow = true;
+
+	//	// 7. Main Training & UI Loop
+	//	while (true)
+	//	{
+	//		// Pump Windows messages so the viewer window stays responsive
+	//		rendererWindow.ProcessMessages();
+
+	//		// Handle non-blocking user input
+	//		if (!HandleUserAction(PollUserAction(), network, weightsFile, liveUpdateWindow))
+	//		{
+	//			break;
+	//		}
+
+	//		// Perform batch training step
+	//		float cost = RunTrainingEpoch(network, images, labels, currentImage, printEveryNBatches, batchSize, learningRate);
+
+	//		// Live viewer update
+	//		if (liveUpdateWindow)
+	//		{
+	//			rendererWindow.Update(GenerateReconstructedImage(network, images[GetRandomImageIndex(images.size())]));
+	//		}
+
+	//		// Report progress
+	//		std::cout << "COST: " << cost << " LR: " << learningRate << '\n';
+	//	}
+
+	//	// 8. Final Output Generation & Cleanup
+	//	std::cout << "Generating final output image from network state...\n";
+
+	//	SaveCheckpoint(network, weightsFile);
+	//	std::cout << "Final " << weightsFile << " saved.\n";
+	//}
 	return 0;
 }
 

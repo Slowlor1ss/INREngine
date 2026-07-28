@@ -8,6 +8,8 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFu
 {
 	biases.resize(numBiases, 0.0f);
 	weights.resize(numWeights, 0.0f);
+	b_velocities.resize(numBiases, 0.0f);
+	w_velocities.resize(numWeights, 0.0f);
 
 	for (size_t i = 0; i < numBiases; i++)
 	{
@@ -24,6 +26,31 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFu
 	}
 
 	layerIdx = lIdx;
+}
+
+void Parameters::Add(const Parameters& gradient, double learningRate)
+{
+	// TODO: insert return statement here
+	float momentum = 0.9f;
+
+	if (biases.size() == gradient.biases.size())
+	{
+		for (size_t j = 0; j < biases.size(); j++)
+		{
+			b_velocities[j] = (momentum * b_velocities[j]) + (learningRate * gradient.biases[j]);
+			biases[j] = biases[j] - b_velocities[j];
+		}
+	}
+
+	if (weights.size() == gradient.weights.size())
+	{
+		for (size_t j = 0; j < weights.size(); j++)
+		{
+			w_velocities[j] = (momentum * w_velocities[j]) + (learningRate * gradient.weights[j]);
+			weights[j] = weights[j] - w_velocities[j];
+		}
+	}
+
 }
 
 Parameters& Parameters::operator+=(const Parameters& other)

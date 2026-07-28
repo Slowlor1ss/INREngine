@@ -16,7 +16,7 @@ namespace ActFunc
 		virtual float GetLearningRateMultiplier() const { return 1.0f; }
 	};
 
-	class None : public Base
+	class Empty : public Base
 	{
 	public:
 
@@ -40,6 +40,38 @@ namespace ActFunc
 		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut) const override
 		{
 			return 0;
+		}
+	};
+
+	// does nothing to the incoming value
+	class None : public Base
+	{
+	public:
+
+		static constexpr const char* k_name{ "None" };
+
+		virtual std::string GetName() const override
+		{
+			return k_name;
+		}
+
+		virtual float Execute(float x) const override
+		{
+			// only for traiing!
+			return x;// +0.1f * (((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f);
+		}
+
+		virtual float ExecuteDerivative(float x) const override
+		{
+			return 1;
+		}
+
+		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut) const override
+		{
+			// He initialization
+			float stddev = std::sqrt(1.0f / fanIn);
+			std::normal_distribution<float> distribution(-stddev, stddev);
+			return distribution(generator);
 		}
 	};
 

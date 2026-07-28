@@ -3,31 +3,20 @@
 #include "ActFuncDataBase.h"
 #include "iostream"
 
-Network::Network(const std::vector<size_t>& neuronsPerLayer, CostFunc::Base* costFunc, bool zeroInit)
+Network::Network(const std::vector<LayerInfo>& layerInfos, CostFunc::Base* costFunc, bool zeroInit)
 {
 	m_costFunction = (costFunc != nullptr) ? costFunc : CostFunc::DataBase::FindCostFunc<CostFunc::L1>();
 
-	m_layers.push_back(std::make_unique<InitialLayer>(neuronsPerLayer[0]));
-	m_storedDelta.push_back(Parameters{ m_layers.front()->GetNumNeurons(), m_layers.front()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0 });
-	m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[0], 0.0f));
+	m_layers.push_back(std::make_unique<InitialLayer>(layerInfos[0].numNeurons));
+	m_storedDelta.push_back(Parameters{ m_layers.front()->GetNumNeurons(), m_layers.front()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::Empty>(), 0 });
+	m_costDeltas.push_back(std::vector<float>(layerInfos[0].numNeurons, 0.0f));
 
-	for (size_t i = 1; i < neuronsPerLayer.size(); i++)
+	for (size_t i = 1; i < layerInfos.size(); i++)
 	{
-		ActFunc::Base* actFunc;
-
-		if (i == neuronsPerLayer.size() - 1)
-		{
-			// could be softmax
-			actFunc = ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>();
-		}
-		else
-		{
-			actFunc = ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>();
-		}
-
-		m_layers.push_back(std::make_unique<Layer>(neuronsPerLayer[i], actFunc, i, m_layers.back().get()));
-		m_storedDelta.push_back(Parameters{ m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), i });
-		m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[i], 0.0f));
+		ActFunc::Base* actFunc = layerInfos[i].actFunc ? layerInfos[i].actFunc : ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>();
+		m_layers.push_back(std::make_unique<Layer>(layerInfos[i].numNeurons, actFunc, i, m_layers.back().get()));
+		m_storedDelta.push_back(Parameters{ m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::Empty>(), i });
+		m_costDeltas.push_back(std::vector<float>(layerInfos[i].numNeurons, 0.0f));
 	}
 }
 
@@ -56,7 +45,7 @@ void Network::ConsumeDelta(float learningRate)
 	{
 		for (size_t i = 1; i < m_layers.size(); i++)
 		{
-			const float lr = learningRate * m_layers[i]->m_activationFunction->GetLearningRateMultiplier();
+			const double lr = learningRate * m_layers[i]->m_activationFunction->GetLearningRateMultiplier();
 			if (m_layers[i]->m_params.biases.size() == m_storedDelta[i].biases.size()
 				&& m_layers[i]->m_params.weights.size() == m_storedDelta[i].weights.size())
 			{
@@ -64,8 +53,8 @@ void Network::ConsumeDelta(float learningRate)
 				// apply learning rate
 				// negative because we want to substract. (inverse of the gradient)
 
-				m_storedDelta[i] *= -1.0f * (lr / m_numStored);
-				m_layers[i]->m_params += m_storedDelta[i];
+				//m_storedDelta[i] *= -1.0f * (lr / m_numStored);
+				m_layers[i]->m_params.Add(m_storedDelta[i], lr/ m_numStored);
 				m_storedDelta[i].Clear();
 			}
 		}

@@ -73,7 +73,7 @@ void Layer::Propagate()
 }
 
 InitialLayer::InitialLayer(size_t numNeurons)
-	:Layer{numNeurons, ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0, nullptr}
+	:Layer{numNeurons, ActFunc::DataBase::FindActFunc<ActFunc::Empty>(), 0, nullptr}
 {
 }
 

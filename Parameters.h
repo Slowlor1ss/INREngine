@@ -7,10 +7,14 @@ struct Parameters : public Serializable
 {
 	Parameters() = default;
 	Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFunc, size_t layerIdx);
-	Parameters& operator+=(const Parameters& other);
+	void Update(const Parameters& gradient, double learningRate);
 	Parameters& operator*=(float other);
+	Parameters& operator+=(const Parameters& other);
 	
 	void Clear();
+	std::vector<float> w_velocities;
+	std::vector<float> b_velocities;
+
 	std::vector<float> weights;
 	std::vector<float> biases;
 
