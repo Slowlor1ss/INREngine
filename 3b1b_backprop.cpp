@@ -119,11 +119,11 @@ static void ParseCommandLine(const int argc, char** argv)
 				"==================================================================================================\n",
 				"--i",			"Set input filename",
 				"--o",			"Set output path (can specify file aswell e.g. weights_biases.csv)",	
-				"--use-pe",		"Enable positional encoding",
+				"--set-pe 0/ 1", "Enable positional encoding",
 				"--freq",		"Set positional encoding Frequencies",
 				"--batch",		"Set batch Size",
 				"--lr",			"Set the learning Rate",
-				"--no-live",	"Disable live viewer on start; Note: this can be re-enabled during runtime using 'v'"
+				"--set-live 0/1", "Disable live viewer on start; Note: this can be re-enabled during runtime using 'v'"
 			);
 		}
 		else if (arg == "--i")
@@ -159,9 +159,9 @@ static void ParseCommandLine(const int argc, char** argv)
 				config::output_filename = config::target_image_file;
 			}
 		}
-		else if (arg == "--use-pe")
+		else if (arg == "--set-pe")
 		{
-			config::use_positional_encoding = true;
+			config::use_positional_encoding = std::stoi(argv[++i]);
 		}
 		else if (arg == "--freq" && i + 1 < argc)
 		{
@@ -175,9 +175,9 @@ static void ParseCommandLine(const int argc, char** argv)
 		{
 			config::initial_learning_rate = std::stof(argv[++i]); // Read next arg as float
 		}
-		else if (arg == "--no-live")
+		else if (arg == "--set-live")
 		{
-			config::initial_live_update_state = false;
+			config::initial_live_update_state = std::stoi(argv[++i]);
 		}
 		else
 		{
