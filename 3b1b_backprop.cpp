@@ -80,7 +80,7 @@ enum class UserAction : uint8_t {
 
 namespace config
 {
-	inline std::string target_image_file = "SarahDoYouHaveAnyGamesOnYoPhone.bmp";
+	inline std::string target_image_file = "laurens.bmp";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 	
