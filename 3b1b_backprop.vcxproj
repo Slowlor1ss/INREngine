@@ -167,6 +167,7 @@
     <ClInclude Include="ImageGenerator.h" />
     <ClInclude Include="Layer.h" />
     <ClInclude Include="Network.h" />
+    <ClInclude Include="NeuralImageRecreator.hpp" />
     <ClInclude Include="Parameters.h" />
     <ClInclude Include="Serializable.h" />
     <ClInclude Include="WindowRenderer.h" />
