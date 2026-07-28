@@ -54,7 +54,7 @@ void Network::ConsumeDelta(float learningRate)
 				// negative because we want to substract. (inverse of the gradient)
 
 				//m_storedDelta[i] *= -1.0f * (lr / m_numStored);
-				m_layers[i]->m_params.Add(m_storedDelta[i], lr/ m_numStored);
+				m_layers[i]->m_params.Update(m_storedDelta[i], lr/ m_numStored);
 				m_storedDelta[i].Clear();
 			}
 		}

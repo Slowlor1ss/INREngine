@@ -1,4 +1,8 @@
-void NeuralImageRecreator()
+#pragma once
+
+#include "helpers.h"
+
+inline void NeuralImageRecreator()
 {
 	// Load Input Data & Derive Checkpoint Filename
 	const std::string weightsFile = GetCheckpointFilename(config::output_filename, config::output_path);
@@ -37,14 +41,19 @@ void NeuralImageRecreator()
 
 	// Initialize Neural Network & Visualizer Window
 	size_t inputLayerSize = config::use_positional_encoding ? (config::pe_num_frequencies * 4) : 2;
-//#error // TO JAN CHECK IF THIS IS CORRECT AND FIX IT UP LY OXOXOX (i left the original one commented out but you changed how we make the layers)
-	//std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 16, 3 };
+
 	std::vector<Network::LayerInfo> layerDims{
-		{2, ActFunc::DataBase::FindActFunc<ActFunc::Empty>()},
-		{16, ActFunc::DataBase::FindActFunc<ActFunc::Empty>()},
-		{128, ActFunc::DataBase::FindActFunc<ActFunc::Empty>()},
-		{256, ActFunc::DataBase::FindActFunc<ActFunc::Empty>()},
-		{28 * 28, ActFunc::DataBase::FindActFunc<ActFunc::Empty>()} 
+		{inputLayerSize, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{8, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{16, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{32, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{32, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{32, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{32, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{32, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{32, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{16, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()},
+		{3, ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>()}
 	};
 	Network network{ layerDims };
 
@@ -67,8 +76,7 @@ void NeuralImageRecreator()
 		rendererWindow.ProcessMessages();
 
 		// Handle non-blocking user input
-#error // You changed this function im too lazy to figure out what the correct way to call it is now OXOXOXO
-		if (!HandleUserAction(PollUserAction(), network, data, weightsFile, liveUpdateWindow, coordMapper))
+		if (!HandleUserAction(PollUserAction(), network, weightsFile, liveUpdateWindow))
 		{
 			break;
 		}

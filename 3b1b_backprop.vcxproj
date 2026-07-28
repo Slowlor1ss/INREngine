@@ -164,8 +164,10 @@
     <ClInclude Include="Gemini\BMPParser.h" />
     <ClInclude Include="Gemini\CustomFileReader.h" />
     <ClInclude Include="Gemini\MNISTReader.h" />
+    <ClInclude Include="helpers.h" />
     <ClInclude Include="ImageGenerator.h" />
     <ClInclude Include="Layer.h" />
+    <ClInclude Include="MNISTAutoencoder.hpp" />
     <ClInclude Include="Network.h" />
     <ClInclude Include="NeuralImageRecreator.hpp" />
     <ClInclude Include="Parameters.h" />

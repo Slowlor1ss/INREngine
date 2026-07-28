@@ -28,7 +28,7 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFu
 	layerIdx = lIdx;
 }
 
-void Parameters::Add(const Parameters& gradient, double learningRate)
+void Parameters::Update(const Parameters& gradient, double learningRate)
 {
 	// TODO: insert return statement here
 	float momentum = 0.9f;
