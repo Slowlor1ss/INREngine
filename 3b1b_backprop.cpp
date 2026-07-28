@@ -11,6 +11,9 @@
 #include <iostream>
 #include <fstream>
 #include <chrono>
+#if _HAS_CXX23
+#include <numbers>
+#endif
 #include <vector>
 #include <string>
 #include <cmath>
@@ -83,11 +86,15 @@ static std::vector<float> PositionalEncode(float x, float y, int numFrequencies)
 	std::vector<float> encoded;
 	encoded.reserve(numFrequencies * 4);
 
-	const float PI = 3.14159265359f;
+#if _HAS_CXX23
+	constexpr float PI = std::numbers::pi_v<float>; // Finnaly standard PI
+#else
+	constexpr float PI = static_cast<float>(3.141592653589793);
+#endif
 
 	for (int i = 0; i < numFrequencies; ++i) {
-		float freq = std::pow(2.0f, i) * PI;
-		float weight = 1.0f - (static_cast<float>(i) / static_cast<float>(numFrequencies));
+		const float freq = std::powf(2.0f, float(i)) * PI;
+		const float weight = 1.0f - (static_cast<float>(i) / static_cast<float>(numFrequencies));
     
 		encoded.push_back(std::sin(x * freq) * weight);
 		encoded.push_back(std::cos(x * freq) * weight);
@@ -259,12 +266,14 @@ int main()
 	srand(static_cast<uint32_t>(seed));
 
 	// Load Input Data & Derive Checkpoint Filename
-	constexpr std::string targetImageFile = "Sarah.bmp";
+	// We could probably make this a string_view and that would be better as this is a read only string
+	// but then well also have to adjust the functions that use it etc which is not worth it right now
+	constexpr const char* targetImageFile = "Sarah.bmp";
 	const std::string weightsFile = GetCheckpointFilename(targetImageFile);
 	// Alternative image loading: ParseBMPData("Sarah_large.bmp", data);
 
 	BMPParsedData data;
-	ParseBMPData(targetImageFile.c_str(), data);
+	ParseBMPData(targetImageFile, data);
 
 	// Setup our coordinate mapper lambda for the ImageGenerator
 	std::function<std::vector<float>(float, float)> coordMapper = nullptr;
@@ -275,8 +284,8 @@ int main()
 		coordMapper = std::bind_back(PositionalEncode, config::pe_num_frequencies);
 #else
 		// Reject modern C++ return to Monke 
-		coordMapper = [PE_NUM_FREQUENCIES](float x, float y) {
-			return PositionalEncode(x, y, PE_NUM_FREQUENCIES);
+		coordMapper = [](float x, float y) {
+			return PositionalEncode(x, y, config::pe_num_frequencies);
 		};
 #endif
 	}
