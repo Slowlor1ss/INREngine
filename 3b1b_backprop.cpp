@@ -64,7 +64,7 @@ static void LoadCustomBinaryData(const char* filename, ParsedData& outData)
 // Input & State Definitions
 // ============================================================================
 
-enum class UserAction {
+enum class UserAction : uint8_t {
 	None,
 	SaveWeights,
 	ExportImage,
@@ -72,6 +72,8 @@ enum class UserAction {
 	Quit
 };
 
+namespace
+{
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -143,7 +145,7 @@ static UserAction PollUserAction()
 }
 
 // Handles user actions outside the main training loop; returns false to break loop.
-static bool HandleUserAction(UserAction action, Network& network, const BMPParsedData& data, const std::string& weightsFile, bool& liveUpdateWindow)
+static bool HandleUserAction(const UserAction action, Network& network, const BMPParsedData& data, const std::string& weightsFile, bool& liveUpdateWindow)
 {
 	switch (action)
 	{
@@ -176,7 +178,7 @@ static bool HandleUserAction(UserAction action, Network& network, const BMPParse
 }
 
 // Generates a 32-bit random index to correctly sample datasets larger than RAND_MAX (32,767).
-static size_t GetRandomImageIndex(size_t totalImages)
+static size_t GetRandomImageIndex(const size_t totalImages)
 {
 	static thread_local std::mt19937 rng(static_cast<uint32_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count()));
 	std::uniform_int_distribution<size_t> dist(0, totalImages - 1);
@@ -188,8 +190,8 @@ static float RunTrainingEpoch(Network& network,
                               const std::vector<std::vector<float>>& images,
                               const std::vector<std::vector<float>>& labels,
                               size_t& currentImageIdx,
-                              size_t printEveryNBatches,
-                              size_t batchSize,
+                              const size_t printEveryNBatches,
+                              const size_t batchSize,
                               float& learningRate)
 {
 	float totalCost = 0.0f;
@@ -210,6 +212,7 @@ static float RunTrainingEpoch(Network& network,
 
 	return totalCost / static_cast<float>(batchSize * printEveryNBatches);
 }
+}
 
 // ============================================================================
 // Main Execution
@@ -217,11 +220,11 @@ static float RunTrainingEpoch(Network& network,
 
 int main()
 {
-	// 1. Seed Random Number Generator
+	// Seed Random Number Generator
 	auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 	srand(static_cast<uint32_t>(seed));
 
-	// 2. Load Input Data & Derive Checkpoint Filename
+	// Load Input Data & Derive Checkpoint Filename
 	const std::string targetImageFile = "Sarah.bmp";
 	const std::string weightsFile = GetCheckpointFilename(targetImageFile);
 
@@ -232,28 +235,27 @@ int main()
 	const std::vector<std::vector<float>>& images = data.inputs;
 	const std::vector<std::vector<float>>& labels = data.outputs;
 
-	// 3. Initialize Neural Network & Visualizer Window
-	size_t g = 64;
+	// Initialize Neural Network & Visualizer Window
 	std::vector<size_t> layerDims{ 2,8,16,32,64,64,32,16, 3 };
 	Network network{ layerDims };
 
 	ImageWindow rendererWindow(data.width, data.height);
 
-	// 4. Load Weights Checkpoint (Validates dimensions vs current layerDims automatically)
+	// Load Weights Checkpoint (Validates dimensions vs current layerDims automatically)
 	LoadCheckpoint(network, weightsFile);
 
-	// 5. Display Interactive Controls
+	// Display Interactive Controls
 	PrintControls();
 
-	// 6. Hyperparameters & Training State
-	const size_t batchSize = 32;
-	const size_t printEveryNBatches = 128;
+	// Hyperparameters & Training State
+	constexpr size_t batchSize = 32;
+	constexpr size_t printEveryNBatches = 128;
 	float learningRate = 0.25f;
 
 	size_t currentImage = 0;
 	bool liveUpdateWindow = true;
 
-	// 7. Main Training & UI Loop
+	// Main Training & UI Loop
 	while (true)
 	{
 		// Pump Windows messages so the viewer window stays responsive
@@ -278,14 +280,14 @@ int main()
 		std::cout << "COST: " << cost << " LR: " << learningRate << '\n';
 	}
 
-	// 8. Final Output Generation & Cleanup
+	// Final Output Generation & Cleanup
 	std::cout << "Generating final output image from network state...\n";
 
-	std::vector<float> final_reconstructed_image = GenerateReconstructedImage(network, data.width, data.height);
+	std::vector<float> finalReconstructedImage = GenerateReconstructedImage(network, data.width, data.height);
 
-	rendererWindow.Update(final_reconstructed_image);
+	rendererWindow.Update(finalReconstructedImage);
 
-	saveBMP("network_output.bmp", data.width, data.height, final_reconstructed_image);
+	saveBMP("network_output.bmp", data.width, data.height, finalReconstructedImage);
 	std::cout << "Successfully saved network_output.bmp!\n";
 
 	SaveCheckpoint(network, weightsFile);
