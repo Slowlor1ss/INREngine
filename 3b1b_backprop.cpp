@@ -8,16 +8,19 @@
 #include "Gemini/MNISTReader.h"
 #include "Gemini/CustomFileReader.h"
 
-#include <iostream>
-#include <fstream>
 #include <chrono>
-#if _HAS_CXX23
-#include <numbers>
-#endif
-#include <vector>
-#include <string>
 #include <cmath>
 #include <conio.h> // For _kbhit() and _getch()
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#if _HAS_CXX23
+	#include <numbers>
+#endif
+#include <string>
+#include <vector>
+
+namespace fs = std::filesystem;
 
 // TODO: don't see the point for the database, just use them directly? to have a single instance? does that matter?
 // seems to be to use the inheritance more easily >> convert to template instead?
@@ -75,16 +78,138 @@ enum class UserAction : uint8_t {
 	Quit
 };
 
+namespace config
+{
+	inline std::string target_image_file = "SarahDoYouHaveAnyGamesOnYoPhone.bmp";
+	inline std::string output_path = "";
+	inline std::string output_filename = target_image_file;
+	
+	inline bool use_positional_encoding = true;
+	inline int pe_num_frequencies = 7; // Positional encode
+
+	inline bool initial_live_update_state = true;
+
+	// Hyperparameters & Training State
+	inline size_t batch_size = 32;
+	inline size_t print_every_n_batches = 1024;
+	inline float initial_learning_rate = 0.25f;
+}
+
 namespace
 {
 // ============================================================================
 // Helper Functions
 // ============================================================================
 	
+// MAKE SURE TO ADD TO THE PRINT AT THE BOTTOM WHEN ADDING ARGS!
+static void ParseCommandLine(const int argc, char** argv)
+{
+	for (int i = 1; i < argc; ++i) // Start at 1 because argv[0] is the program name
+	{
+		std::string arg = argv[i];
+		if (arg == "--h" || arg == "-h" || arg == "help")
+		{
+			std::cout << std::format(
+				"Usage:\n"
+				"  {:<10} | {}\n"
+				"  {:<10} | {}\n"
+				"  {:<10} | {}\n"
+				"  {:<10} | {}\n"
+				"  {:<10} | {}\n"
+				"==================================================================================================\n",
+				"--i",			"Set input filename",
+				"--o",			"Set output path (can specify file aswell e.g. weights_biases.csv)",	
+				"--use-pe",		"Enable positional encoding",
+				"--freq",		"Set positional encoding Frequencies",
+				"--batch",		"Set batch Size",
+				"--lr",			"Set the learning Rate",
+				"--no-live",	"Disable live viewer on start; Note: this can be re-enabled during runtime using 'v'"
+			);
+		}
+		else if (arg == "--i")
+		{
+			// Make sure we always have a output path set or if its set to be the same ans input updat e it alongside
+			if (config::output_filename.empty() || config::output_filename == config::target_image_file)
+			{
+				config::output_filename = argv[++i];
+				config::target_image_file = config::output_filename;
+			}
+			else
+			{
+				config::target_image_file = argv[++i];
+			}
+		}
+		else if (arg == "--o" && i + 1 < argc)
+		{
+			fs::path providedPath(argv[++i]);
+
+			// If the path has an extension it's a file
+			if (providedPath.has_extension())
+			{
+				// .parent_path() grabs everything BEFORE the filename (can be empty)
+				config::output_path = providedPath.parent_path().string();
+             
+				// .filename() grabs just the file and its extension
+				config::output_filename = providedPath.filename().string();
+			}
+			else
+			{
+				// If there's no extension, assume it's just a directory
+				config::output_path = providedPath.string();
+				config::output_filename = config::target_image_file;
+			}
+		}
+		else if (arg == "--use-pe")
+		{
+			config::use_positional_encoding = true;
+		}
+		else if (arg == "--freq" && i + 1 < argc)
+		{
+			config::pe_num_frequencies = std::stoi(argv[++i]); // Read next arg as int
+		}
+		else if (arg == "--batch" && i + 1 < argc)
+		{
+			config::batch_size = std::stoull(argv[++i]); // Read next arg as size_t
+		}
+		else if (arg == "--lr" && i + 1 < argc)
+		{
+			config::initial_learning_rate = std::stof(argv[++i]); // Read next arg as float
+		}
+		else if (arg == "--no-live")
+		{
+			config::initial_live_update_state = false;
+		}
+		else
+		{
+			std::cout << "Unknown or incomplete argument: " << arg << "\n";
+		}
+	}
+	
+	// Print the final configuration state after parsing is complete
+	std::cout << std::format(
+		"=== Launch Configuration ===\n"
+		" Input file		  : {}\n"
+		" Output path		  : {}\n"
+		" Positional Encoding : {}\n"
+		" PE Frequencies      : {}\n"
+		" Batch Size          : {}\n"
+		" Learning Rate       : {:.4f}\n"
+		" Live Viewer         : {}\n"
+		"============================\n",
+		config::target_image_file,
+		(fs::path(config::output_path) / config::output_filename).string(),
+		config::use_positional_encoding ? "ON" : "OFF",
+		config::use_positional_encoding ? std::to_string(config::pe_num_frequencies) : "DISABLED",
+		config::batch_size,
+		config::initial_learning_rate,
+		config::initial_live_update_state ? "ON" : "OFF"
+	);
+}
+	
 // Helper to expand a coordinate (x, y) into multiple frequency bands with decay
 static std::vector<float> PositionalEncode(float x, float y, int numFrequencies) {
 	std::vector<float> encoded;
-	encoded.reserve(numFrequencies * 4);
+	encoded.reserve(static_cast<size_t>(numFrequencies) * 4);
 
 #if _HAS_CXX23
 	constexpr float PI = std::numbers::pi_v<float>; // Finnaly standard PI
@@ -107,15 +232,22 @@ static std::vector<float> PositionalEncode(float x, float y, int numFrequencies)
 	
 // Generates a checkpoint filename based on the input image filename.
 // Example: "Sarah.bmp" -> "weights_biases_Sarah.csv"
-static std::string GetCheckpointFilename(const std::string& imagePath)
+static std::string GetCheckpointFilename(const std::string& imageFilename, const std::string& outbasePath = "")
 {
-	size_t lastSlash = imagePath.find_last_of("/\\");
-	std::string filename = (lastSlash == std::string::npos) ? imagePath : imagePath.substr(lastSlash + 1);
+	namespace fs = std::filesystem;
 
-	size_t lastDot = filename.find_last_of('.');
-	std::string stem = (lastDot == std::string::npos) ? filename : filename.substr(0, lastDot);
+	// Get filename withouth extention (aka: stem)
+	std::string stem = fs::path(imageFilename).stem().string();
+	std::string filename = "weights_biases_" + stem + ".csv";
 
-	return "weights_biases_" + stem + ".csv";
+	// If no base path is provided, just return the filename
+	if (outbasePath.empty())
+	{
+		return filename;
+	}
+
+	// The '/' operator safely joins paths, automatically adding slashes if needed!
+	return (fs::path(outbasePath) / filename).string();
 }
 
 static void LoadCheckpoint(Network& network, const std::string& filename)
@@ -246,34 +378,21 @@ static float RunTrainingEpoch(Network& network,
 // ============================================================================
 // Main Execution
 // ============================================================================
-namespace config
+int main(int argc, char** argv)
 {
-	constexpr bool use_positional_encoding = true;
-	constexpr int pe_num_frequencies = 7; // Positional encode
-
-	constexpr bool initial_live_update_state = true;
-
-	// Hyperparameters & Training State
-	constexpr size_t batch_size = 32;
-	constexpr size_t print_every_n_batches = 128;
-	constexpr float initial_learning_rate = 0.25f;
-}
-
-int main()
-{
+	// Parse the command line arguments right at startup
+	ParseCommandLine(argc, argv);
+	
 	// Seed Random Number Generator
 	auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 	srand(static_cast<uint32_t>(seed));
 
 	// Load Input Data & Derive Checkpoint Filename
-	// We could probably make this a string_view and that would be better as this is a read only string
-	// but then well also have to adjust the functions that use it etc which is not worth it right now
-	constexpr const char* targetImageFile = "Sarah.bmp";
-	const std::string weightsFile = GetCheckpointFilename(targetImageFile);
+	const std::string weightsFile = GetCheckpointFilename(config::output_filename, config::output_path);
 	// Alternative image loading: ParseBMPData("Sarah_large.bmp", data);
 
 	BMPParsedData data;
-	ParseBMPData(targetImageFile, data);
+	ParseBMPData(config::target_image_file.c_str(), data);
 
 	// Setup our coordinate mapper lambda for the ImageGenerator
 	std::function<std::vector<float>(float, float)> coordMapper = nullptr;
