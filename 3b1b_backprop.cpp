@@ -77,7 +77,27 @@ namespace
 // ============================================================================
 // Helper Functions
 // ============================================================================
+	
+// Helper to expand a coordinate (x, y) into multiple frequency bands with decay
+static std::vector<float> PositionalEncode(float x, float y, int numFrequencies) {
+	std::vector<float> encoded;
+	encoded.reserve(numFrequencies * 4);
 
+	const float PI = 3.14159265359f;
+
+	for (int i = 0; i < numFrequencies; ++i) {
+		float freq = std::pow(2.0f, i) * PI;
+		float weight = 1.0f - (static_cast<float>(i) / static_cast<float>(numFrequencies));
+    
+		encoded.push_back(std::sin(x * freq) * weight);
+		encoded.push_back(std::cos(x * freq) * weight);
+    
+		encoded.push_back(std::sin(y * freq) * weight);
+		encoded.push_back(std::cos(y * freq) * weight);
+	}
+	return encoded;
+}
+	
 // Generates a checkpoint filename based on the input image filename.
 // Example: "Sarah.bmp" -> "weights_biases_Sarah.csv"
 static std::string GetCheckpointFilename(const std::string& imagePath)
@@ -145,31 +165,33 @@ static UserAction PollUserAction()
 }
 
 // Handles user actions outside the main training loop; returns false to break loop.
-static bool HandleUserAction(const UserAction action, Network& network, const BMPParsedData& data, const std::string& weightsFile, bool& liveUpdateWindow)
+static bool HandleUserAction(const UserAction action, Network& network, const BMPParsedData& data,
+                             const std::string& weightsFile, bool& liveUpdateWindow,
+                             const std::function<std::vector<float>(float, float)>& mapper)
 {
 	switch (action)
 	{
 		case UserAction::Quit:
 			std::cout << "\n[Interrupt Received] Stopping training...\n";
 			return false;
-
+		
 		case UserAction::SaveWeights:
 			SaveCheckpoint(network, weightsFile);
 			break;
-
+		
 		case UserAction::ExportImage:
 		{
-			std::vector<float> reconstructedImage = GenerateReconstructedImage(network, data.width, data.height);
+			std::vector<float> reconstructedImage = GenerateReconstructedImage(network, data.width, data.height, mapper);
 			saveBMP("network_output.bmp", data.width, data.height, reconstructedImage);
 			std::cout << "Successfully saved network_output.bmp!\n";
 			break;
 		}
-
+		
 		case UserAction::ToggleViewer:
 			liveUpdateWindow = !liveUpdateWindow;
 			std::cout << (liveUpdateWindow ? "Live viewer window ENABLED\n" : "Live viewer window DISABLED\n");
 			break;
-
+		
 		case UserAction::None:
 			break;
 	}
@@ -217,6 +239,18 @@ static float RunTrainingEpoch(Network& network,
 // ============================================================================
 // Main Execution
 // ============================================================================
+namespace config
+{
+	constexpr bool use_positional_encoding = true;
+	constexpr int pe_num_frequencies = 7; // Positional encode
+
+	constexpr bool initial_live_update_state = true;
+
+	// Hyperparameters & Training State
+	constexpr size_t batch_size = 32;
+	constexpr size_t print_every_n_batches = 128;
+	constexpr float initial_learning_rate = 0.25f;
+}
 
 int main()
 {
@@ -225,35 +259,57 @@ int main()
 	srand(static_cast<uint32_t>(seed));
 
 	// Load Input Data & Derive Checkpoint Filename
-	const std::string targetImageFile = "Sarah.bmp";
+	constexpr std::string targetImageFile = "Sarah.bmp";
 	const std::string weightsFile = GetCheckpointFilename(targetImageFile);
+	// Alternative image loading: ParseBMPData("Sarah_large.bmp", data);
 
 	BMPParsedData data;
 	ParseBMPData(targetImageFile.c_str(), data);
-	// Alternative image loading: ParseBMPData("Sarah_large.bmp", data);
 
-	const std::vector<std::vector<float>>& images = data.inputs;
+	// Setup our coordinate mapper lambda for the ImageGenerator
+	std::function<std::vector<float>(float, float)> coordMapper = nullptr;
+	if (config::use_positional_encoding) {
+#if _HAS_CXX23
+		// Don't use bind as appenrently it generates horrible assembly and is hard for the compiler to optimize
+		// Actually c++ 23 allows us to use bind back this is apperently eveything std::bind always wanted to be :))!
+		coordMapper = std::bind_back(PositionalEncode, config::pe_num_frequencies);
+#else
+		// Reject modern C++ return to Monke 
+		coordMapper = [PE_NUM_FREQUENCIES](float x, float y) {
+			return PositionalEncode(x, y, PE_NUM_FREQUENCIES);
+		};
+#endif
+	}
+
+	// Prepare images dataset based on the current mode
+	std::vector<std::vector<float>> images;
+	if (config::use_positional_encoding) {
+		images.reserve(data.inputs.size());
+		for (const auto& rawInput : data.inputs) {
+			images.push_back(PositionalEncode(rawInput[0], rawInput[1], config::pe_num_frequencies));
+		}
+	} else {
+		images = data.inputs;
+	}
+
 	const std::vector<std::vector<float>>& labels = data.outputs;
 
 	// Initialize Neural Network & Visualizer Window
-	std::vector<size_t> layerDims{ 2,8,16,32,64,64,32,16, 3 };
+	size_t inputLayerSize = config::use_positional_encoding ? (config::pe_num_frequencies * 4) : 2;
+	std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 64, 64, 32, 16, 3 };
 	Network network{ layerDims };
 
 	ImageWindow rendererWindow(data.width, data.height);
 
 	// Load Weights Checkpoint (Validates dimensions vs current layerDims automatically)
 	LoadCheckpoint(network, weightsFile);
-
+	
 	// Display Interactive Controls
 	PrintControls();
 
-	// Hyperparameters & Training State
-	constexpr size_t batchSize = 32;
-	constexpr size_t printEveryNBatches = 128;
-	float learningRate = 0.25f;
-
 	size_t currentImage = 0;
-	bool liveUpdateWindow = true;
+	bool liveUpdateWindow = config::initial_live_update_state;
+	float learningRate = config::initial_learning_rate;
 
 	// Main Training & UI Loop
 	while (true)
@@ -262,18 +318,18 @@ int main()
 		rendererWindow.ProcessMessages();
 
 		// Handle non-blocking user input
-		if (!HandleUserAction(PollUserAction(), network, data, weightsFile, liveUpdateWindow))
+		if (!HandleUserAction(PollUserAction(), network, data, weightsFile, liveUpdateWindow, coordMapper))
 		{
 			break;
 		}
 
 		// Perform batch training step
-		float cost = RunTrainingEpoch(network, images, labels, currentImage, printEveryNBatches, batchSize, learningRate);
+		float cost = RunTrainingEpoch(network, images, labels, currentImage, config::print_every_n_batches, config::batch_size, learningRate);
 
 		// Live viewer update
 		if (liveUpdateWindow)
 		{
-			rendererWindow.Update(GenerateReconstructedImage(network, data.width, data.height));
+			rendererWindow.Update(GenerateReconstructedImage(network, data.width, data.height, coordMapper));
 		}
 
 		// Report progress
@@ -283,7 +339,7 @@ int main()
 	// Final Output Generation & Cleanup
 	std::cout << "Generating final output image from network state...\n";
 
-	std::vector<float> finalReconstructedImage = GenerateReconstructedImage(network, data.width, data.height);
+	std::vector<float> finalReconstructedImage = GenerateReconstructedImage(network, data.width, data.height, coordMapper);
 
 	rendererWindow.Update(finalReconstructedImage);
 
