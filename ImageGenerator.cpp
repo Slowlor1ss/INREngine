@@ -3,6 +3,8 @@
 #include <vector>
 #include <algorithm>
 
+#include "Network.h"
+
 std::vector<float> GenerateReconstructedImageMNIST(Network& network, const std::vector<float>& originalInputs)
 {
     const int originalWidth = 28;
@@ -93,7 +95,11 @@ std::vector<float> GenerateImageFromLatent(Network& network, float x, float y, i
     return rgbImage;
 }
 
-std::vector<float> GenerateReconstructedImage(const Network& network, int width, int height)
+std::vector<float> GenerateReconstructedImage(
+    const Network& network, 
+    int width, 
+    int height,
+    const std::function<std::vector<float>(float, float)>& coordinateMapper)
 {
     std::vector<float> reconstructedImage(static_cast<size_t>(width) * height * 3);
 
@@ -107,43 +113,61 @@ std::vector<float> GenerateReconstructedImage(const Network& network, int width,
 
     for (unsigned int t = 0; t < numThreads; ++t)
     {
-        int startY = static_cast<int>(t) * rowsPerThread;
-        int endY = std::min(startY + rowsPerThread, height);
+       int startY = static_cast<int>(t) * rowsPerThread;
+       int endY = std::min(startY + rowsPerThread, height);
 
-        if (startY >= height) break;
+       if (startY >= height) break;
 
-        workers.emplace_back([&network, width, height, startY, endY, &reconstructedImage]()
-            {
-                std::vector<std::vector<float>> threadBuffers;
-                std::vector<float> input(2);
+       // Note: We safely capture coordinateMapper by reference because we join all threads 
+       // before this function returns, guaranteeing it won't go out of scope.
+       workers.emplace_back([&network, width, height, startY, endY, &reconstructedImage, &coordinateMapper]()
+       {
+          std::vector<std::vector<float>> threadBuffers;
+          
+          // Pre-allocate the fallback vector to prevent reallocations inside the loop
+          std::vector<float> fallbackInput(2);
+          std::vector<float> mappedInput;
 
-                for (int y = startY; y < endY; ++y)
+          for (int y = startY; y < endY; ++y)
+          {
+             float normY = static_cast<float>(y) / height;
+             size_t rowOffset = static_cast<size_t>(y) * width * 3;
+
+             for (int x = 0; x < width; ++x)
+             {
+                float normX = static_cast<float>(x) / width;
+
+                // Apply positional encoding if provided, otherwise use standard [x, y]
+                if (coordinateMapper)
                 {
-                    float normY = static_cast<float>(y) / height;
-                    input[1] = normY;
-                    size_t rowOffset = static_cast<size_t>(y) * width * 3;
-
-                    for (int x = 0; x < width; ++x)
-                    {
-                        input[0] = static_cast<float>(x) / width;
-
-                        const std::vector<float>& output = network.PropagateThreadSafe(input, threadBuffers);
-
-                        size_t pixelIndex = rowOffset + static_cast<size_t>(x) * 3;
-                        reconstructedImage[pixelIndex + 0] = output[0]; // R
-                        reconstructedImage[pixelIndex + 1] = output[1]; // G
-                        reconstructedImage[pixelIndex + 2] = output[2]; // B
-                    }
+                    mappedInput = coordinateMapper(normX, normY);
                 }
-            });
+                else
+                {
+                    fallbackInput[0] = normX;
+                    fallbackInput[1] = normY;
+                }
+
+                // Reference whichever vector we ended up using
+                const std::vector<float>& finalInput = coordinateMapper ? mappedInput : fallbackInput;
+
+                const std::vector<float>& output = network.PropagateThreadSafe(finalInput, threadBuffers);
+
+                size_t pixelIndex = rowOffset + static_cast<size_t>(x) * 3;
+                reconstructedImage[pixelIndex + 0] = output[0]; // R
+                reconstructedImage[pixelIndex + 1] = output[1]; // G
+                reconstructedImage[pixelIndex + 2] = output[2]; // B
+             }
+          }
+       });
     }
 
     for (auto& worker : workers)
     {
-        if (worker.joinable())
-        {
-            worker.join();
-        }
+       if (worker.joinable())
+       {
+          worker.join();
+       }
     }
 
     return reconstructedImage;

@@ -1,0 +1,40 @@
+name: MSBuild
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  # Replace '3b1b_backprop.sln' with the exact name of your solution file
+  SOLUTION_FILE_PATH: 3b1b_backprop.sln
+  BUILD_CONFIGURATION: Release
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2 
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: 3b1b_backprop_executable
+        # This points to the default folder where VS builds x64 Release exes. 
+        # Update it if your project outputs to a different directory!
+        path: x64\Release\3b1b_backprop.exe
+        # Artifacts are kept for 90 days by default, but you can lower it to save storage.
+        retention-days: 14
