@@ -66,6 +66,12 @@ static void LoadCustomBinaryData(const char* filename, ParsedData& outData)
 // currentImage = (currentImage + 1) % images.size();
 */
 
+#if _HAS_CXX23
+    constexpr float K_PI = std::numbers::pi_v<float>;
+#else
+    constexpr float K_PI = static_cast<float>(3.141592653589793);
+#endif
+
 // ============================================================================
 // Input & State Definitions
 // ============================================================================
@@ -75,7 +81,8 @@ enum class UserAction : uint8_t {
 	SaveWeights,
 	ExportImage,
 	ToggleViewer,
-	Quit
+	SwapRenderMode,
+	Quit,
 };
 
 namespace config
@@ -83,7 +90,10 @@ namespace config
 	inline std::string target_image_file = "laurens.bmp";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
-	
+
+	//TODO-Lkrikilion: make a command like param for this like --render-mode or smth
+	inline RenderMode render_mode = RenderMode::SpatialGradient;
+
 	inline bool use_positional_encoding = true;
 	inline int pe_num_frequencies = 7; // Positional encode
 
@@ -205,20 +215,54 @@ static void ParseCommandLine(const int argc, char** argv)
 		config::initial_live_update_state ? "ON" : "OFF"
 	);
 }
-	
+
+	// TODO: merge the 2 function below or something this is bad but we need one for the imagedataset and another for the coormapper
+static MappedInput PositionalEncodeWithDerivatives(float x, float y, int numFrequencies) 
+{
+    MappedInput result;
+    const size_t size = static_cast<size_t>(numFrequencies) * 4;
+    result.values.reserve(size);
+    result.gradX.reserve(size);
+    result.gradY.reserve(size);
+
+    for (int i = 0; i < numFrequencies; ++i) {
+        const float freq = std::powf(2.0f, float(i)) * K_PI;
+        const float weight = 1.0f - (static_cast<float>(i) / static_cast<float>(numFrequencies));
+
+        // Pre-calculate to save CPU cycles
+        float sin_x = std::sin(x * freq);
+        float cos_x = std::cos(x * freq);
+        float sin_y = std::sin(y * freq);
+        float cos_y = std::cos(y * freq);
+
+        // Standard Values
+        result.values.push_back(sin_x * weight);
+        result.values.push_back(cos_x * weight);
+        result.values.push_back(sin_y * weight);
+        result.values.push_back(cos_y * weight);
+
+        // X Gradients (d/dx)
+        result.gradX.push_back(freq * cos_x * weight);  // d/dx sin = cos * freq
+        result.gradX.push_back(-freq * sin_x * weight); // d/dx cos = -sin * freq
+        result.gradX.push_back(0.0f);                   // d/dx of Y is 0
+        result.gradX.push_back(0.0f);
+
+        // Y Gradients (d/dy)
+        result.gradY.push_back(0.0f);                   // d/dy of X is 0
+        result.gradY.push_back(0.0f);
+        result.gradY.push_back(freq * cos_y * weight);  
+        result.gradY.push_back(-freq * sin_y * weight); 
+    }
+    return result;
+}
+
 // Helper to expand a coordinate (x, y) into multiple frequency bands with decay
 static std::vector<float> PositionalEncode(float x, float y, int numFrequencies) {
 	std::vector<float> encoded;
 	encoded.reserve(static_cast<size_t>(numFrequencies) * 4);
 
-#if _HAS_CXX23
-	constexpr float PI = std::numbers::pi_v<float>; // Finnaly standard PI
-#else
-	constexpr float PI = static_cast<float>(3.141592653589793);
-#endif
-
 	for (int i = 0; i < numFrequencies; ++i) {
-		const float freq = std::powf(2.0f, float(i)) * PI;
+		const float freq = std::powf(2.0f, float(i)) * K_PI;
 		const float weight = 1.0f - (static_cast<float>(i) / static_cast<float>(numFrequencies));
     
 		encoded.push_back(std::sin(x * freq) * weight);
@@ -278,6 +322,7 @@ static void PrintControls()
 	std::cout << "Training started.\n"
 		<< " [Q/ESC] - Stop training\n"
 		<< " [W]     - Save weights\n"
+		<< " [D]     - Swap render mode (Used for debugging)\n"
 		<< " [E]     - Save image to disk\n"
 		<< " [V]     - Toggle live viewer window\n\n";
 }
@@ -298,6 +343,8 @@ static UserAction PollUserAction()
 			return UserAction::ExportImage;
 		case 'v': case 'V':
 			return UserAction::ToggleViewer;
+		case 'd': case 'D':
+			return UserAction::SwapRenderMode;
 		default:
 			return UserAction::None;
 	}
@@ -306,7 +353,7 @@ static UserAction PollUserAction()
 // Handles user actions outside the main training loop; returns false to break loop.
 static bool HandleUserAction(const UserAction action, Network& network, const BMPParsedData& data,
                              const std::string& weightsFile, bool& liveUpdateWindow,
-                             const std::function<std::vector<float>(float, float)>& mapper)
+                             const std::function<MappedInput(float, float)>& mapper)
 {
 	switch (action)
 	{
@@ -320,7 +367,7 @@ static bool HandleUserAction(const UserAction action, Network& network, const BM
 		
 		case UserAction::ExportImage:
 		{
-			std::vector<float> reconstructedImage = GenerateReconstructedImage(network, data.width, data.height, mapper);
+			const std::vector<float> reconstructedImage = GenerateReconstructedImage(network, data.width, data.height, mapper, config::render_mode);
 			saveBMP("network_output.bmp", data.width, data.height, reconstructedImage);
 			std::cout << "Successfully saved network_output.bmp!\n";
 			break;
@@ -330,7 +377,11 @@ static bool HandleUserAction(const UserAction action, Network& network, const BM
 			liveUpdateWindow = !liveUpdateWindow;
 			std::cout << (liveUpdateWindow ? "Live viewer window ENABLED\n" : "Live viewer window DISABLED\n");
 			break;
-		
+
+		case UserAction::SwapRenderMode:
+			config::render_mode = (RenderMode)(((int)config::render_mode + 1) % (int)RenderMode::Last);
+			std::cout << "Updated render mode!"; // Im not making an enum to sting >:(
+
 		case UserAction::None:
 			break;
 	}

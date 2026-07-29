@@ -27,6 +27,17 @@ public:
 	std::vector<float> Propagate(const std::vector<float>& inputActivation);
 	const std::vector<float>& PropagateThreadSafe(const std::vector<float>& inputActivation, std::vector<std::vector<float>>& threadBuffers) const;
 
+	struct SpatialDerivativeBuffer
+	{
+	    std::vector<std::vector<float>> activations;	// The normal RGB values
+	    std::vector<std::vector<float>> gradientX;			// How fast each output changes as X changes
+	    std::vector<std::vector<float>> gradientY;			// How fast each output changes as Y changes
+	};
+	void PropagateSpatialDerivativesThreadSafe(
+	    const std::vector<float>& inputActivation,
+	    const std::vector<float>& inputGradX,
+	    const std::vector<float>& inputGradY,
+	    SpatialDerivativeBuffer& threadBuffers) const;
 	
 	float BackPropagate(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput);
 

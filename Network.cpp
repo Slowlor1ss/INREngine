@@ -252,3 +252,82 @@ float Network::BackPropagate(const std::vector<float>& inputActivation, const st
 
 	return cost;
 }
+
+
+void Network::PropagateSpatialDerivativesThreadSafe(
+	const std::vector<float>& inputActivation,
+    const std::vector<float>& inputGradX,
+    const std::vector<float>& inputGradY,
+    SpatialDerivativeBuffer& threadBuffers) const
+{
+    // Resize buffers if necessary (same logic as your standard function)
+    if (threadBuffers.activations.size() != m_layers.size())
+    {
+        threadBuffers.activations.resize(m_layers.size());
+        threadBuffers.gradientX.resize(m_layers.size());
+        threadBuffers.gradientY.resize(m_layers.size());
+        
+        for (size_t i = 0; i < m_layers.size(); ++i)
+        {
+            size_t neurons = m_layers[i]->GetNumNeurons();
+            threadBuffers.activations[i].resize(neurons);
+            threadBuffers.gradientX[i].resize(neurons);
+            threadBuffers.gradientY[i].resize(neurons);
+        }
+    }
+
+    // Initialize the input layer
+    // The derivative of X with respect to X is 1. The derivative of X with respect to Y is 0.
+	std::ranges::copy(inputActivation, threadBuffers.activations[0].begin());
+    std::ranges::copy(inputGradX, threadBuffers.gradientX[0].begin());
+    std::ranges::copy(inputGradY, threadBuffers.gradientY[0].begin());
+    //threadBuffers.gradientX[0] = { 1.0f, 0.0f };
+    //threadBuffers.gradientY[0] = { 0.0f, 1.0f };
+
+    // Propagate forward
+    for (size_t l = 1; l < m_layers.size(); ++l)
+    {
+        const Layer* layer = m_layers[l].get();
+        const std::vector<float>& prevAct   = threadBuffers.activations[l - 1];
+        const std::vector<float>& prevGradX = threadBuffers.gradientX[l - 1];
+        const std::vector<float>& prevGradY = threadBuffers.gradientY[l - 1];
+
+        std::vector<float>& currentAct   = threadBuffers.activations[l];
+        std::vector<float>& currentGradX = threadBuffers.gradientX[l];
+        std::vector<float>& currentGradY = threadBuffers.gradientY[l];
+
+        const size_t numNeurons = layer->GetNumNeurons();
+        const size_t weightsPerNeuron = prevAct.size();
+        const auto& weights = layer->GetParams().weights;
+        const auto& biases = layer->GetParams().biases;
+        ActFunc::Base* func = layer->GetActivationFunction();
+
+        for (size_t i = 0; i < numNeurons; ++i)
+        {
+            float z = biases[i];
+            float gradX_z = 0.0f;
+            float gradY_z = 0.0f;
+            
+            size_t weightStart = i * weightsPerNeuron;
+            
+            // Multiply weights by previous activations AND previous gradients
+            for (size_t j = 0; j < weightsPerNeuron; ++j)
+            {
+                float w = weights[weightStart + j];
+                z       += w * prevAct[j];
+                gradX_z += w * prevGradX[j];
+                gradY_z += w * prevGradY[j];
+            }
+
+            // Calculate standard activation
+            currentAct[i] = func ? func->Execute(z) : z;
+            
+            // Calculate the derivative of the activation function at Z
+            float actDeriv = func ? func->ExecuteDerivative(z) : 1.0f;
+            
+            // Chain rule: Multiply the sum of weighted gradients by the activation derivative
+            currentGradX[i] = gradX_z * actDeriv;
+            currentGradY[i] = gradY_z * actDeriv;
+        }
+    }
+}

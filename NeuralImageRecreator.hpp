@@ -8,16 +8,16 @@ void NeuralImageRecreator()
 	ParseBMPData(config::target_image_file.c_str(), data);
 
 	// Setup our coordinate mapper lambda for the ImageGenerator
-	std::function<std::vector<float>(float, float)> coordMapper = nullptr;
+	std::function<MappedInput(float, float)> coordMapper = nullptr;
 	if (config::use_positional_encoding) {
 #if _HAS_CXX23
 		// Don't use bind as appenrently it generates horrible assembly and is hard for the compiler to optimize
 		// Actually c++ 23 allows us to use bind back this is apperently eveything std::bind always wanted to be :))!
-		coordMapper = std::bind_back(PositionalEncode, config::pe_num_frequencies);
+		coordMapper = std::bind_back(PositionalEncodeWithDerivatives, config::pe_num_frequencies);
 #else
 		// Reject modern C++ return to Monke 
 		coordMapper = [](float x, float y) {
-			return PositionalEncode(x, y, config::pe_num_frequencies);
+			return PositionalEncodeWithDerivatives(x, y, config::pe_num_frequencies);
 		};
 #endif
 	}
@@ -78,7 +78,7 @@ void NeuralImageRecreator()
 		// Live viewer update
 		if (liveUpdateWindow)
 		{
-			rendererWindow.Update(GenerateReconstructedImage(network, data.width, data.height, coordMapper));
+			rendererWindow.Update(GenerateReconstructedImage(network, data.width, data.height, coordMapper, config::render_mode));
 		}
 
 		// Report progress
@@ -88,7 +88,7 @@ void NeuralImageRecreator()
 	// Final Output Generation & Cleanup
 	std::cout << "Generating final output image from network state...\n";
 
-	std::vector<float> finalReconstructedImage = GenerateReconstructedImage(network, data.width, data.height, coordMapper);
+	std::vector<float> finalReconstructedImage = GenerateReconstructedImage(network, data.width, data.height, coordMapper, config::render_mode);
 
 	rendererWindow.Update(finalReconstructedImage);
 

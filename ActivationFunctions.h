@@ -12,6 +12,7 @@ namespace ActFunc
 		virtual std::string GetName() const = 0;
 		virtual float Execute(float x) const = 0;
 		virtual float ExecuteDerivative(float x) const = 0;
+		//virtual float ExecuteSecondDerivative(float x) const = 0;
 		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const = 0;
 		virtual float GetLearningRateMultiplier() const { return 1.0f; }
 	};
@@ -204,6 +205,12 @@ namespace ActFunc
 		{
 			return k_w0 * std::cos(k_w0 * x);
 		}
+
+		//virtual float ExecuteSecondDerivative(float x) const override
+		//{
+		//    // Second derivative of sin(w0 * x)
+		//    return -1.0f * (k_w0 * k_w0) * std::sin(k_w0 * x);
+		//}
 
 		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
 		{
