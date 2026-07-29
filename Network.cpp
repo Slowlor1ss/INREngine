@@ -3,32 +3,28 @@
 #include "ActFuncDataBase.h"
 #include "iostream"
 
-Network::Network(const std::vector<size_t>& neuronsPerLayer, CostFunc::Base* costFunc, bool zeroInit)
+Network::Network(
+    const std::vector<size_t>& neuronsPerLayer, 
+    ActFunc::Base* hiddenActivation, 
+    ActFunc::Base* outputActivation, 
+    CostFunc::Base* costFunc, 
+    bool zeroInit)
 {
-	m_costFunction = (costFunc != nullptr) ? costFunc : CostFunc::DataBase::FindCostFunc<CostFunc::L1>();
+    m_costFunction = (costFunc != nullptr) ? costFunc : CostFunc::DataBase::FindCostFunc<CostFunc::L1>();
 
-	m_layers.push_back(std::make_unique<InitialLayer>(neuronsPerLayer[0]));
-	m_storedDelta.push_back(Parameters{ m_layers.front()->GetNumNeurons(), m_layers.front()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0 });
-	m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[0], 0.0f));
+    m_layers.push_back(std::make_unique<InitialLayer>(neuronsPerLayer[0]));
+    m_storedDelta.push_back(Parameters{ m_layers.front()->GetNumNeurons(), m_layers.front()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0 });
+    m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[0], 0.0f));
 
-	for (size_t i = 1; i < neuronsPerLayer.size(); i++)
-	{
-		ActFunc::Base* actFunc;
+    for (size_t i = 1; i < neuronsPerLayer.size(); i++)
+    {
+        // Choose the activation function based on the layer index
+        ActFunc::Base* actFunc = (i == neuronsPerLayer.size() - 1) ? outputActivation : hiddenActivation;
 
-		if (i == neuronsPerLayer.size() - 1)
-		{
-			// could be softmax
-			actFunc = ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>();
-		}
-		else
-		{
-			actFunc = ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>();
-		}
-
-		m_layers.push_back(std::make_unique<Layer>(neuronsPerLayer[i], actFunc, i, m_layers.back().get()));
-		m_storedDelta.push_back(Parameters{ m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), i });
-		m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[i], 0.0f));
-	}
+        m_layers.push_back(std::make_unique<Layer>(neuronsPerLayer[i], actFunc, i, m_layers.back().get()));
+        m_storedDelta.push_back(Parameters{ m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), i });
+        m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[i], 0.0f));
+    }
 }
 
 void Network::StoreDelta(const std::vector<Parameters>& other)

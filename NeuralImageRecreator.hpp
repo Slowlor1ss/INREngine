@@ -37,10 +37,16 @@ void NeuralImageRecreator()
 
 	// Initialize Neural Network & Visualizer Window
 	size_t inputLayerSize = config::use_positional_encoding ? (config::pe_num_frequencies * 4) : 2;
-	// This is the best layer config I'm telling you!
 	std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 64, 64, 32, 16, 3 };
-	//std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 16, 3 };
-	Network network{ layerDims };
+	
+	// Pass the activation functions dynamically!
+	Network network{ 
+		layerDims, 
+		ActFunc::DataBase::FindActFunc<ActFunc::Siren>(),
+		// TODO: look in to this more maybe just use sigmoid as its basically the same or none as its more truthfully ig
+		// and the docmentation says to just use a linear or sine https://deepwiki.com/vsitzmann/siren/2-siren-architecture#sinelayer-and-network-structure
+		ActFunc::DataBase::FindActFunc<ActFunc::ColorSquash>() 
+	};
 
 	ImageWindow rendererWindow(data.width, data.height);
 

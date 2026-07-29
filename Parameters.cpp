@@ -20,7 +20,7 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFu
 	size_t fanOut = numBiases;// wrong!!!! should be number of neurons in the next layer >> outoging connections per neuron
 	for (size_t i = 0; i < numWeights; i++)
 	{
-		weights[i] = actFunc->GenerateInitialWeight( generator, fanIn, fanOut );
+		weights[i] = actFunc->GenerateInitialWeight( generator, fanIn, fanOut, lIdx );
 	}
 
 	layerIdx = lIdx;

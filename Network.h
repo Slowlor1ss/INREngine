@@ -9,7 +9,12 @@
 class Network : public Serializable
 {
 public:
-	Network(const std::vector<size_t>& neuronsPerLayer, CostFunc::Base* costFunc = nullptr, bool zeroInit = false);
+	Network(
+		const std::vector<size_t>& neuronsPerLayer,
+		ActFunc::Base* hiddenActivation,
+		ActFunc::Base* outputActivation,
+		CostFunc::Base* costFunc = nullptr,
+		bool zeroInit = false);
 	Network(Network&) = delete;
 	Network(Network&&) = delete;
 	Network& operator=(Network&) = delete;
