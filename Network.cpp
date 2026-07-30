@@ -14,6 +14,7 @@ Network::Network(
 
     m_layers.push_back(std::make_unique<InitialLayer>(neuronsPerLayer[0]));
     m_storedDelta.push_back(Parameters{ m_layers.front()->GetNumNeurons(), m_layers.front()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0 });
+	m_storedDelta.back().Clear(); // TODO: unsure
     m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[0], 0.0f));
 
     for (size_t i = 1; i < neuronsPerLayer.size(); i++)
@@ -23,7 +24,8 @@ Network::Network(
 
         m_layers.push_back(std::make_unique<Layer>(neuronsPerLayer[i], actFunc, i, m_layers.back().get()));
         m_storedDelta.push_back(Parameters{ m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), i });
-        m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[i], 0.0f));
+		m_storedDelta.back().Clear(); // TODO: unsure
+    	m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[i], 0.0f));
     }
 }
 
@@ -273,11 +275,23 @@ void Network::BackPropagateGradientGuided(
     std::vector<float> errorGradX(outputActivations.size());
     std::vector<float> errorGradY(outputActivations.size());
 
+    //for (size_t i = 0; i < outputActivations.size(); ++i) {
+    //    // Derivative of (Prediction - Target)^2 is 2 * (Prediction - Target)
+    //    colorError[i] = 2.0f * (outputActivations[i] - target.values[i]);
+    //    errorGradX[i] = 2.0f * (outputGradX[i] - target.gradX[i]);
+    //    errorGradY[i] = 2.0f * (outputGradY[i] - target.gradY[i]);
+    //}
+
+	// A hyperparameter to balance how much the network cares about slopes vs colors.
+    // 0.01f is a great starting point so the massive slopes don't nuke the colors.
+    float spatialLossWeight = 1.f; 
+
     for (size_t i = 0; i < outputActivations.size(); ++i) {
-        // Derivative of (Prediction - Target)^2 is 2 * (Prediction - Target)
         colorError[i] = 2.0f * (outputActivations[i] - target.values[i]);
-        errorGradX[i] = 2.0f * (outputGradX[i] - target.gradX[i]);
-        errorGradY[i] = 2.0f * (outputGradY[i] - target.gradY[i]);
+        
+        // Scale down the spatial errors!
+        errorGradX[i] = 2.0f * (outputGradX[i] - target.gradX[i]) * spatialLossWeight;
+        errorGradY[i] = 2.0f * (outputGradY[i] - target.gradY[i]) * spatialLossWeight;
     }
 
     // ------
@@ -336,7 +350,12 @@ void Network::BackPropagateGradientGuided(
 
             	// Combine all three to get the total gradient for this specific weight
             	float totalWeightGradient = gradColor + gradXEffect + gradYEffect;
-                
+				//totalWeightGradient = std::clamp(totalWeightGradient, -999'999.0f, 999'999.0f);
+				if (totalWeightGradient > 999'999'999.f)
+				{
+					__debugbreak();
+				}
+
             	// Accumulate the 3 Errors to pass back to the previous layer
             	nextColorError[j] += colorError[i] * (d1 * oldWeight) + 
 									 errorGradX[i] * (d2 * oldWeight * rawSlopeX) + 

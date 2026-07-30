@@ -31,7 +31,7 @@ float& learningRate)
 				{
 					//std::cout << diff;
 					//__debugbreak();
-					cost = 0.f;
+					//cost = 0.f;
 				}
 			}
 			totalCost += cost / float(target.values.size());
@@ -65,27 +65,33 @@ void NeuralImageRecreator()
 
 	// Setup our coordinate mapper lambda for the ImageGenerator
 	std::function<ImageUtils::SpatialData(float, float)> coordMapper = nullptr;
-	if (config::use_positional_encoding) {
-#if _HAS_CXX23
-		// Don't use bind as appenrently it generates horrible assembly and is hard for the compiler to optimize
-		// Actually c++ 23 allows us to use bind back this is apperently eveything std::bind always wanted to be :))!
-		coordMapper = std::bind_back(PositionalEncodeWithDerivatives, config::pe_num_frequencies);
-#else
-		// Reject modern C++ return to Monke 
-		coordMapper = [](float x, float y) {
-			return PositionalEncodeWithDerivatives(x, y, config::pe_num_frequencies);
+if (config::use_positional_encoding) {
+		coordMapper = [w = static_cast<float>(data.width), h = static_cast<float>(data.height), freqs = config::pe_num_frequencies](float x, float y) {
+			ImageUtils::SpatialData d = PositionalEncodeWithDerivatives(x, y, freqs);
+			// NATIVELY SCALE TO PIXEL SPACE!
+			// Apply the chain rule: multiply all X derivatives by (1.0 / width) 
+			// and all Y derivatives by (1.0 / height)
+			for (float& gx : d.gradX) {
+				gx /= w;
+			}
+			for (float& gy : d.gradY) {
+				gy /= h;
+			}
+			
+			return d;
 		};
-#endif
 	} 
 	else {
 		// Fallback mapper for standard inputs
-		coordMapper = [](float x, float y) {
-			ImageUtils::SpatialData d;
-			d.values = { x, y };
-			d.gradX = { 1.0f, 0.0f };
-			d.gradY = { 0.0f, 1.0f };
-			return d;
-		};
+		coordMapper = [w = static_cast<float>(data.width), h = static_cast<float>(data.height)](float x, float y) {
+				ImageUtils::SpatialData d;
+				d.values = { x, y };
+				// NATIVELY SCALE TO PIXEL SPACE! 
+				// Instead of 1.0, X changes by 1 pixel width.
+				d.gradX = { 1.0f / w, 0.0f };
+				d.gradY = { 0.0f, 1.0f / h };
+				return d;
+			};
 	}
 
 	// 1. Generate Target Outputs (RGB + Spatial Edges)
@@ -100,7 +106,9 @@ void NeuralImageRecreator()
 
 	// Initialize Neural Network & Visualizer Window
 	size_t inputLayerSize = config::use_positional_encoding ? (config::pe_num_frequencies * 4) : 2;
-	std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 64, 64, 32, 16, 3 };
+	//std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 64, 64, 32, 16, 3 };
+	std::vector<size_t> layerDims{ inputLayerSize, 64, 64, 64, 64, 3 };
+	//std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 16, 8, 3 };
 	
 	// Pass the activation functions dynamically!
 	Network network{ 
@@ -111,9 +119,10 @@ void NeuralImageRecreator()
 		ActFunc::DataBase::FindActFunc<ActFunc::None>() 
 	};
 
-	ImageWindow rendererWindow(data.width, data.height);
+	ImageWindow rendererWindow(data.width * config::output_image_scale, data.height * config::output_image_scale);
 
 	// Load Weights Checkpoint (Validates dimensions vs current layerDims automatically)
+	// TODO: REENABLE ONCE I FIXED THIS DAMMED BUG
 	LoadCheckpoint(network, weightsFile);
 	
 	// Display Interactive Controls
@@ -140,7 +149,7 @@ void NeuralImageRecreator()
 		// Live viewer update
 		if (liveUpdateWindow)
 		{
-			rendererWindow.Update(GenerateReconstructedImage(network, data.width, data.height, coordMapper, config::render_mode));
+			rendererWindow.Update(GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, coordMapper, config::render_mode));
 		}
 
 		// Report progress
@@ -150,7 +159,7 @@ void NeuralImageRecreator()
 	// Final Output Generation & Cleanup
 	std::cout << "Generating final output image from network state...\n";
 
-	std::vector<float> finalReconstructedImage = GenerateReconstructedImage(network, data.width, data.height, coordMapper, config::render_mode);
+	std::vector<float> finalReconstructedImage = GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, coordMapper, config::render_mode);
 
 	rendererWindow.Update(finalReconstructedImage);
 

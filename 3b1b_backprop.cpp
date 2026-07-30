@@ -87,14 +87,16 @@ enum class UserAction : uint8_t {
 
 namespace config
 {
-	inline std::string target_image_file = "laurens.bmp";
+	inline std::string target_image_file = "NotATomato_small.bmp";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
+
+	inline float output_image_scale = 2.0f;
 
 	//TODO-Lkrikilion: make a command like param for this like --render-mode or smth
 	inline RenderMode render_mode = RenderMode::StandardRGB;
 
-	inline bool use_positional_encoding = false;
+	inline bool use_positional_encoding = true;
 	inline int pe_num_frequencies = 7; // Positional encode
 
 	inline bool initial_live_update_state = true;
@@ -367,8 +369,8 @@ static bool HandleUserAction(const UserAction action, Network& network, const BM
 		
 		case UserAction::ExportImage:
 		{
-			const std::vector<float> reconstructedImage = GenerateReconstructedImage(network, data.width, data.height, mapper, config::render_mode);
-			saveBMP("network_output.bmp", data.width, data.height, reconstructedImage);
+			const std::vector<float> reconstructedImage = GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, mapper, config::render_mode);
+			saveBMP("network_output.bmp", data.width*config::output_image_scale, data.height*config::output_image_scale, reconstructedImage);
 			std::cout << "Successfully saved network_output.bmp!\n";
 			break;
 		}
