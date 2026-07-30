@@ -42,12 +42,16 @@ std::vector<float> GenerateReconstructedImage(
 
 			for (int y = startY; y < endY; ++y)
 			{
-				float normY = static_cast<float>(y) / height;
+				//float normY = static_cast<float>(y) / height;
+				// Changes 0.0 -> 1.0 into -1.0 -> 1.0
+				float normY = (static_cast<float>(y) / height) * 2.0f - 1.0f;
 				size_t rowOffset = static_cast<size_t>(y) * width * 3;
 
 				for (int x = 0; x < width; ++x)
 				{
-					float normX = static_cast<float>(x) / width;
+					//float normX = static_cast<float>(x) / width;
+					// Changes 0.0 -> 1.0 into -1.0 -> 1.0
+					float normX = (static_cast<float>(x) / width) * 2.0f - 1.0f;
 
 					// Reference whichever vector we ended up using
 					//const std::vector<float>& finalInput = coordinateMapper ? mappedInput : fallbackInput;
@@ -57,7 +61,7 @@ std::vector<float> GenerateReconstructedImage(
 					if (coordinateMapper) 
 					{
 					    // PE is ON: Use the mapped values and their complex wave derivatives
-						finalInput= coordinateMapper(normX, normY);
+						finalInput = coordinateMapper(normX, normY);
 					}
 					else 
 					{
