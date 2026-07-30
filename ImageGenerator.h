@@ -2,6 +2,8 @@
 #include <functional>
 #include <vector>
 
+#include "ImageUtils.h"
+
 class Network;
 
 enum class RenderMode {
@@ -23,17 +25,17 @@ enum class RenderMode {
     Last
 };
 
-struct MappedInput {
-    std::vector<float> values;
-    std::vector<float> gradX;
-    std::vector<float> gradY;
-};
+// struct MappedInput {
+//     std::vector<float> values;
+//     std::vector<float> gradX;
+//     std::vector<float> gradY;
+// };
 
 // Parallelized RGB image reconstruction from network weights using multi-threading.
 std::vector<float> GenerateReconstructedImage(
     const Network& network, 
     int width, 
     int height,
-    const std::function<MappedInput(float, float)>& coordinateMapper = nullptr,
+    const std::function<ImageUtils::SpatialData(float, float)>& coordinateMapper = nullptr,
     RenderMode mode = RenderMode::StandardRGB
 );

@@ -92,9 +92,9 @@ namespace config
 	inline std::string output_filename = target_image_file;
 
 	//TODO-Lkrikilion: make a command like param for this like --render-mode or smth
-	inline RenderMode render_mode = RenderMode::SpatialGradient;
+	inline RenderMode render_mode = RenderMode::StandardRGB;
 
-	inline bool use_positional_encoding = true;
+	inline bool use_positional_encoding = false;
 	inline int pe_num_frequencies = 7; // Positional encode
 
 	inline bool initial_live_update_state = true;
@@ -217,9 +217,9 @@ static void ParseCommandLine(const int argc, char** argv)
 }
 
 	// TODO: merge the 2 function below or something this is bad but we need one for the imagedataset and another for the coormapper
-static MappedInput PositionalEncodeWithDerivatives(float x, float y, int numFrequencies) 
+static ImageUtils::SpatialData PositionalEncodeWithDerivatives(float x, float y, int numFrequencies) 
 {
-    MappedInput result;
+    ImageUtils::SpatialData result;
     const size_t size = static_cast<size_t>(numFrequencies) * 4;
     result.values.reserve(size);
     result.gradX.reserve(size);
@@ -353,7 +353,7 @@ static UserAction PollUserAction()
 // Handles user actions outside the main training loop; returns false to break loop.
 static bool HandleUserAction(const UserAction action, Network& network, const BMPParsedData& data,
                              const std::string& weightsFile, bool& liveUpdateWindow,
-                             const std::function<MappedInput(float, float)>& mapper)
+                             const std::function<ImageUtils::SpatialData(float, float)>& mapper)
 {
 	switch (action)
 	{
@@ -380,7 +380,7 @@ static bool HandleUserAction(const UserAction action, Network& network, const BM
 
 		case UserAction::SwapRenderMode:
 			config::render_mode = (RenderMode)(((int)config::render_mode + 1) % (int)RenderMode::Last);
-			std::cout << "Updated render mode!"; // Im not making an enum to sting >:(
+			std::cout << "Updated render mode!\n"; // Im not making an enum to sting >:(
 
 		case UserAction::None:
 			break;

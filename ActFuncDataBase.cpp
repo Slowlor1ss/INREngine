@@ -11,11 +11,12 @@ namespace ActFunc
 		{
 			m_instance = &instance;
 			instance.m_map.emplace(None::k_name, std::make_unique<None>());
-			instance.m_map.emplace(ColorSquash::k_name, std::make_unique<ColorSquash>());
+			//instance.m_map.emplace(ColorSquash::k_name, std::make_unique<ColorSquash>());
 			instance.m_map.emplace(Sigmoid::k_name, std::make_unique<Sigmoid>());
 			instance.m_map.emplace(ReLU::k_name, std::make_unique<ReLU>());
 			instance.m_map.emplace(LeakyReLU::k_name, std::make_unique<LeakyReLU>());
 			instance.m_map.emplace(Siren::k_name, std::make_unique<Siren>());
+			instance.m_map.emplace(Tanh::k_name, std::make_unique<Tanh>());
 		}
 
 		return m_instance;

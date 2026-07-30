@@ -12,7 +12,7 @@ namespace ActFunc
 		virtual std::string GetName() const = 0;
 		virtual float Execute(float x) const = 0;
 		virtual float ExecuteDerivative(float x) const = 0;
-		//virtual float ExecuteSecondDerivative(float x) const = 0;
+		virtual float ExecuteSecondDerivative(float x) const = 0;
 		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const = 0;
 		virtual float GetLearningRateMultiplier() const { return 1.0f; }
 	};
@@ -37,35 +37,12 @@ namespace ActFunc
 		{
 			return 1;
 		}
-
-		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
+		
+		virtual float ExecuteSecondDerivative(float x) const override
 		{
-			return 0;
-		}
-	};
-
-	// Purely made to keep the colours withing a valid range so the representation looks better in the early stages
-	// we could also use some of the other activator functions but that just unnessesarily expensive
-	class ColorSquash : public Base
-	{
-	public:
-		static constexpr const char* k_name{ "FastColorSquash" };
-
-		virtual std::string GetName() const override
-		{
-			return k_name;
-		}
-
-		virtual float Execute(float x) const override
-		{
-			// Squash numbers into a 0.0 to 1.0 range
-			return 0.5f * (x / (1.0f + std::abs(x)) + 1.0f);
-		}
-
-		virtual float ExecuteDerivative(float x) const override
-		{
-			const float denom = 1.0f + std::abs(x);
-			return 0.5f / (denom * denom);
+			// The first derivative of f(x)=x is 1.0. 
+			// The derivative of a constant 1.0 is 0.0.
+			return 0.0f; 
 		}
 
 		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
@@ -76,6 +53,39 @@ namespace ActFunc
 			return distribution(generator);
 		}
 	};
+
+	// Purely made to keep the colours withing a valid range so the representation looks better in the early stages
+	// we could also use some of the other activator functions but that just unnessesarily expensive
+	// class ColorSquash : public Base
+	// {
+	// public:
+	// 	static constexpr const char* k_name{ "FastColorSquash" };
+	//
+	// 	virtual std::string GetName() const override
+	// 	{
+	// 		return k_name;
+	// 	}
+	//
+	// 	virtual float Execute(float x) const override
+	// 	{
+	// 		// Squash numbers into a 0.0 to 1.0 range
+	// 		return 0.5f * (x / (1.0f + std::abs(x)) + 1.0f);
+	// 	}
+	//
+	// 	virtual float ExecuteDerivative(float x) const override
+	// 	{
+	// 		const float denom = 1.0f + std::abs(x);
+	// 		return 0.5f / (denom * denom);
+	// 	}
+	//
+	// 	virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
+	// 	{
+	// 		// Standard Xavier initialization
+	// 		const float stddev = std::sqrt(2.0f / static_cast<float>(fanIn + fanOut));
+	// 		std::uniform_real_distribution distribution(-stddev, stddev);
+	// 		return distribution(generator);
+	// 	}
+	// };
 
 	class Sigmoid : public Base
 	{
@@ -97,6 +107,12 @@ namespace ActFunc
 		{
 			float s = Execute(x);
 			return s * (1.0f - s);
+		}
+		
+		virtual float ExecuteSecondDerivative(float x) const override
+		{
+			float sig = 1.0f / (1.0f + std::exp(-x));
+			return sig * (1.0f - sig) * (1.0f - 2.0f * sig);
 		}
 
 		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
@@ -131,6 +147,11 @@ namespace ActFunc
 		virtual float ExecuteDerivative(float x) const override
 		{
 			return x > 0.0f ? 1.0f : 0.0f;
+		}
+		
+		virtual float ExecuteSecondDerivative(float x) const override
+		{
+			return 0.0f;
 		}
 
 		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
@@ -172,6 +193,11 @@ namespace ActFunc
 		{
 			return x >= 0.0f ? 1.0f : k_leakySlope;
 		}
+		
+		virtual float ExecuteSecondDerivative(float x) const override
+		{
+			return 0.0f;
+		}
 
 		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
 		{
@@ -206,11 +232,11 @@ namespace ActFunc
 			return k_w0 * std::cos(k_w0 * x);
 		}
 
-		//virtual float ExecuteSecondDerivative(float x) const override
-		//{
-		//    // Second derivative of sin(w0 * x)
-		//    return -1.0f * (k_w0 * k_w0) * std::sin(k_w0 * x);
-		//}
+		virtual float ExecuteSecondDerivative(float x) const override
+		{
+		    // Second derivative of sin(w0 * x)
+		    return -1.0f * (k_w0 * k_w0) * std::sin(k_w0 * x);
+		}
 
 		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
 		{
@@ -228,5 +254,40 @@ namespace ActFunc
 
 		// TODO-LKrikilion: mess around with this value a bit on a better machine 
 		virtual float GetLearningRateMultiplier() const override { return 0.0001f; }
+	};
+	
+	// For debugging
+	class Tanh : public Base
+	{
+	public:
+		static constexpr const char* k_name{ "Tanh" };
+		virtual std::string GetName() const override { return k_name; }
+
+		virtual float Execute(float x) const override
+		{
+			return std::tanh(x);
+		}
+
+		virtual float ExecuteDerivative(float x) const override
+		{
+			float t = std::tanh(x);
+			// f'(x) = 1 - tanh(x)^2
+			return 1.0f - (t * t);
+		}
+
+		virtual float ExecuteSecondDerivative(float x) const override
+		{
+			float t = std::tanh(x);
+			// f''(x) = -2 * tanh(x) * (1 - tanh(x)^2)
+			return -2.0f * t * (1.0f - (t * t));
+		}
+
+		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
+		{
+			// Xavier/Glorot Initialization (perfectly balances Tanh networks)
+			float limit = std::sqrt(6.0f / static_cast<float>(fanIn + fanOut));
+			std::uniform_real_distribution<float> dist(-limit, limit);
+			return dist(generator);
+		}
 	};
 }

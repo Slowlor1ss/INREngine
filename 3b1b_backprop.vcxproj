@@ -151,6 +151,7 @@
     <ClCompile Include="ActFuncDataBase.cpp" />
     <ClCompile Include="CostFuncDataBase.cpp" />
     <ClCompile Include="ImageGenerator.cpp" />
+    <ClCompile Include="ImageUtils.cpp" />
     <ClCompile Include="Layer.cpp" />
     <ClCompile Include="Network.cpp" />
     <ClCompile Include="Parameters.cpp" />
@@ -165,6 +166,7 @@
     <ClInclude Include="Gemini\CustomFileReader.h" />
     <ClInclude Include="Gemini\MNISTReader.h" />
     <ClInclude Include="ImageGenerator.h" />
+    <ClInclude Include="ImageUtils.h" />
     <ClInclude Include="Layer.h" />
     <ClInclude Include="Network.h" />
     <ClInclude Include="NeuralImageRecreator.hpp" />

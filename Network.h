@@ -5,6 +5,7 @@
 #include "Parameters.h"
 #include "Layer.h"
 #include "CostFuncDataBase.h"
+#include "ImageUtils.h"
 
 class Network : public Serializable
 {
@@ -29,7 +30,8 @@ public:
 
 	struct SpatialDerivativeBuffer
 	{
-	    std::vector<std::vector<float>> activations;	// The normal RGB values
+		std::vector<std::vector<float>> preActivations;     // The raw 'z' sums before activation
+	    std::vector<std::vector<float>> activations;		// The normal RGB values
 	    std::vector<std::vector<float>> gradientX;			// How fast each output changes as X changes
 	    std::vector<std::vector<float>> gradientY;			// How fast each output changes as Y changes
 	};
@@ -40,6 +42,18 @@ public:
 	    SpatialDerivativeBuffer& threadBuffers) const;
 	
 	float BackPropagate(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput);
+
+	void BackPropagateGradientGuided(
+		const ImageUtils::SpatialData& target,
+		const std::vector<float>& input,
+		const std::vector<std::vector<float>>& forwardActivations,
+		const std::vector<std::vector<float>>& forwardSums,
+		const SpatialDerivativeBuffer& spatialBuffers, // Network's predicted slopes
+		float learningRate);
+	
+	void RunGradientGuidedEpoch(
+		const std::vector<ImageUtils::SpatialData>& inputData, const std::vector<ImageUtils::SpatialData>& targetData, float
+		learningRate);
 
 	void ConsumeDelta(float learningRate);
 

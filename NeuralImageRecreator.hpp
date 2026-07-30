@@ -1,14 +1,70 @@
+static float RunGradientGuidedTrainingEpoch(Network& network,
+const std::vector<ImageUtils::SpatialData>& inputs,
+const std::vector<ImageUtils::SpatialData>& targets,
+size_t& currentImageIdx,
+const size_t printEveryNBatches,
+const size_t batchSize,
+float& learningRate)
+{
+	float totalCost = 0.0f;
+	Network::SpatialDerivativeBuffer spatialBuffers; // Create one buffer to reuse
+
+	for (size_t j = 0; j < printEveryNBatches; j++)
+	{
+		for (size_t i = 0; i < batchSize; i++)
+		{
+			const auto& input = inputs[currentImageIdx];
+			const auto& target = targets[currentImageIdx];
+
+			// 1. FORWARD PASS
+			network.PropagateSpatialDerivativesThreadSafe(input.values, input.gradX, input.gradY, spatialBuffers);
+
+			// 2. BACKWARD PASS (Applies weight updates instantly)
+			network.BackPropagateGradientGuided(target, input.values, spatialBuffers.activations, spatialBuffers.preActivations, spatialBuffers, learningRate);
+
+			// Calculate standard RGB cost for the console log
+			float cost = 0.0f;
+			for(size_t c = 0; c < target.values.size(); ++c){
+				float diff = spatialBuffers.activations.back()[c] - target.values[c]; // TODO: all activations become nan
+				cost += diff * diff;
+				if ( std::_Is_nan(cost) )
+				{
+					//std::cout << diff;
+					//__debugbreak();
+					cost = 0.f;
+				}
+			}
+			totalCost += cost / float(target.values.size());
+			if ( std::_Is_nan(totalCost) )
+			{
+				std::cout << cost;
+				__debugbreak();
+			}
+			//totalCost = std::clamp( totalCost, 0.f, 999999.f);
+
+			currentImageIdx = GetRandomImageIndex(inputs.size());
+		}
+		
+		// Apply the averaged batch weights!
+		network.ConsumeDelta(learningRate);
+        
+		// Decay learning rate
+		learningRate *= static_cast<float>(std::pow(0.9999999, batchSize));
+	}
+
+	return totalCost / static_cast<float>(batchSize * printEveryNBatches);
+}
+
 void NeuralImageRecreator()
 {
 	// Load Input Data & Derive Checkpoint Filename
 	const std::string weightsFile = GetCheckpointFilename(config::output_filename, config::output_path);
-	// Alternative image loading: ParseBMPData("Sarah_large.bmp", data);
 
 	BMPParsedData data;
 	ParseBMPData(config::target_image_file.c_str(), data);
 
 	// Setup our coordinate mapper lambda for the ImageGenerator
-	std::function<MappedInput(float, float)> coordMapper = nullptr;
+	std::function<ImageUtils::SpatialData(float, float)> coordMapper = nullptr;
 	if (config::use_positional_encoding) {
 #if _HAS_CXX23
 		// Don't use bind as appenrently it generates horrible assembly and is hard for the compiler to optimize
@@ -20,20 +76,27 @@ void NeuralImageRecreator()
 			return PositionalEncodeWithDerivatives(x, y, config::pe_num_frequencies);
 		};
 #endif
+	} 
+	else {
+		// Fallback mapper for standard inputs
+		coordMapper = [](float x, float y) {
+			ImageUtils::SpatialData d;
+			d.values = { x, y };
+			d.gradX = { 1.0f, 0.0f };
+			d.gradY = { 0.0f, 1.0f };
+			return d;
+		};
 	}
 
-	// Prepare images dataset based on the current mode
-	std::vector<std::vector<float>> images;
-	if (config::use_positional_encoding) {
-		images.reserve(data.inputs.size());
-		for (const auto& rawInput : data.inputs) {
-			images.push_back(PositionalEncode(rawInput[0], rawInput[1], config::pe_num_frequencies));
-		}
-	} else {
-		images = data.inputs;
-	}
+	// 1. Generate Target Outputs (RGB + Spatial Edges)
+	std::vector<ImageUtils::SpatialData> targetSpatialData = ImageUtils::GenerateGradientTargets(data.outputs, data.width, data.height);
 
-	const std::vector<std::vector<float>>& labels = data.outputs;
+	// 2. Generate Inputs (Coordinates/PE + Spatial Slopes)
+	std::vector<ImageUtils::SpatialData> inputSpatialData;
+	inputSpatialData.reserve(data.inputs.size());
+	for (const auto& rawInput : data.inputs) {
+		inputSpatialData.push_back(coordMapper(rawInput[0], rawInput[1]));
+	}
 
 	// Initialize Neural Network & Visualizer Window
 	size_t inputLayerSize = config::use_positional_encoding ? (config::pe_num_frequencies * 4) : 2;
@@ -45,7 +108,7 @@ void NeuralImageRecreator()
 		ActFunc::DataBase::FindActFunc<ActFunc::Siren>(),
 		// TODO: look in to this more maybe just use sigmoid as its basically the same or none as its more truthfully ig
 		// and the docmentation says to just use a linear or sine https://deepwiki.com/vsitzmann/siren/2-siren-architecture#sinelayer-and-network-structure
-		ActFunc::DataBase::FindActFunc<ActFunc::ColorSquash>() 
+		ActFunc::DataBase::FindActFunc<ActFunc::None>() 
 	};
 
 	ImageWindow rendererWindow(data.width, data.height);
@@ -73,8 +136,7 @@ void NeuralImageRecreator()
 		}
 
 		// Perform batch training step
-		float cost = RunTrainingEpoch(network, images, labels, currentImage, config::print_every_n_batches, config::batch_size, learningRate);
-
+		float cost = RunGradientGuidedTrainingEpoch(network, inputSpatialData, targetSpatialData, currentImage, config::print_every_n_batches, config::batch_size, learningRate);
 		// Live viewer update
 		if (liveUpdateWindow)
 		{

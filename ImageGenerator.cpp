@@ -9,7 +9,7 @@ std::vector<float> GenerateReconstructedImage(
     const Network& network, 
     int width, 
     int height,
-    const std::function<MappedInput(float, float)>& coordinateMapper,
+    const std::function<ImageUtils::SpatialData(float, float)>& coordinateMapper,
     RenderMode mode)
 {
     std::vector<float> reconstructedImage(static_cast<size_t>(width) * height * 3);
@@ -53,7 +53,7 @@ std::vector<float> GenerateReconstructedImage(
 					//const std::vector<float>& finalInput = coordinateMapper ? mappedInput : fallbackInput;
 					size_t pixelIndex = rowOffset + static_cast<size_t>(x) * 3;
 
-					MappedInput finalInput;
+					ImageUtils::SpatialData finalInput;
 					if (coordinateMapper) 
 					{
 					    // PE is ON: Use the mapped values and their complex wave derivatives
@@ -90,7 +90,7 @@ std::vector<float> GenerateReconstructedImage(
 					    // We scale it by a small factor (like 0.1) so the colors arent blown out to pure white
 					    reconstructedImage[pixelIndex + 0] = std::abs(finalGradX[0]) * 0.1f;	// Red = X Gradient
 					    reconstructedImage[pixelIndex + 1] = std::abs(finalGradY[0]) * 0.1f;	// Green = Y Gradient
-						reconstructedImage[pixelIndex + 2] = 0.0f;									// Blue = 0
+						reconstructedImage[pixelIndex + 2] = 0.0f;								// Blue = 0
 					}
 				}
 			}
