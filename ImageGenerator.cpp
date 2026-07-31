@@ -42,16 +42,12 @@ std::vector<float> GenerateReconstructedImage(
 
 			for (int y = startY; y < endY; ++y)
 			{
-				//float normY = static_cast<float>(y) / height;
-				// Changes 0.0 -> 1.0 into -1.0 -> 1.0
-				float normY = (static_cast<float>(y) / height) * 2.0f - 1.0f;
+				float normY = static_cast<float>(y) / height;
 				size_t rowOffset = static_cast<size_t>(y) * width * 3;
 
 				for (int x = 0; x < width; ++x)
 				{
-					//float normX = static_cast<float>(x) / width;
-					// Changes 0.0 -> 1.0 into -1.0 -> 1.0
-					float normX = (static_cast<float>(x) / width) * 2.0f - 1.0f;
+					float normX = static_cast<float>(x) / width;
 
 					// Reference whichever vector we ended up using
 					//const std::vector<float>& finalInput = coordinateMapper ? mappedInput : fallbackInput;
@@ -61,7 +57,7 @@ std::vector<float> GenerateReconstructedImage(
 					if (coordinateMapper) 
 					{
 					    // PE is ON: Use the mapped values and their complex wave derivatives
-						finalInput = coordinateMapper(normX, normY);
+						finalInput= coordinateMapper(normX, normY);
 					}
 					else 
 					{
@@ -73,10 +69,75 @@ std::vector<float> GenerateReconstructedImage(
 
 					if (mode == RenderMode::StandardRGB)
 					{
-					    const std::vector<float>& output = network.PropagateThreadSafe(finalInput.values, standardBuffers);
-					    reconstructedImage[pixelIndex + 0] = output[0];
-					    reconstructedImage[pixelIndex + 1] = output[1];
-					    reconstructedImage[pixelIndex + 2] = output[2];
+						const std::vector<float>& output = network.PropagateThreadSafe(finalInput.values, standardBuffers);
+						reconstructedImage[pixelIndex + 0] = output[0];
+						reconstructedImage[pixelIndex + 1] = output[1];
+						reconstructedImage[pixelIndex + 2] = output[2];
+					}
+					else if (mode == RenderMode::Blur)
+					{
+						// 1. Query the exact center of the pixel
+					    const std::vector<float>& centerOutput = network.PropagateThreadSafe(finalInput.values, standardBuffers);
+					    float centerR = centerOutput[0];
+					    float centerG = centerOutput[1];
+					    float centerB = centerOutput[2];
+
+					    // 2. Setup the Continuous Bilateral Filter parameters
+					    // We sample sub-pixel distances (e.g., 1/3rd of a pixel away)
+						const float subPixelDistMul = 2.5f;
+					    float subPixelDistX = (1.0f / width) * subPixelDistMul;
+					    float subPixelDistY = (1.0f / height) * subPixelDistMul;
+					    
+					    // Sigma values control how aggressive the filter is. 
+					    // Lower colorSigma preserves edges better.
+					    float colorSigma = 0.1f; 
+
+						float sumR = centerR;
+						float sumG = centerG;
+						float sumB = centerB;
+						float sumWeight = 1.0f;
+
+						// 3. MORE SAMPLES: Check 8 directions instead of 4 (including diagonals)
+						std::vector<std::pair<float, float>> subPixelOffsets = {
+							{ subPixelDistX, 0.0f }, { -subPixelDistX, 0.0f },
+							{ 0.0f, subPixelDistY }, { 0.0f, -subPixelDistY },
+							{ subPixelDistX, subPixelDistY }, { -subPixelDistX, -subPixelDistY },
+							{ subPixelDistX, -subPixelDistY }, { -subPixelDistX, subPixelDistY }
+						};
+
+					    for (const auto& offset : subPixelOffsets)
+					    {
+					        // Generate the sub-pixel input
+					        ImageUtils::SpatialData subInput;
+					        if (coordinateMapper) {
+					            subInput = coordinateMapper(normX + offset.first, normY + offset.second);
+					        } else {
+					            subInput.values = { normX + offset.first, normY + offset.second };
+					        }
+
+					        // Query the network for this continuous sub-coordinate
+					        const std::vector<float>& subOut = network.PropagateThreadSafe(subInput.values, standardBuffers);
+
+					        // Calculate color distance (Euclidean distance between RGB values)
+					        float colorDistSq = (subOut[0] - centerR) * (subOut[0] - centerR) +
+					                            (subOut[1] - centerG) * (subOut[1] - centerG) +
+					                            (subOut[2] - centerB) * (subOut[2] - centerB);
+
+					        // Calculate Bilateral Weight (spatial weight is constant here since distances are equal, 
+					        // so we only penalize based on color difference)
+					        float weight = std::exp(-colorDistSq / (2.0f * colorSigma * colorSigma));
+
+					        // Accumulate
+					        sumR += subOut[0] * weight;
+					        sumG += subOut[1] * weight;
+					        sumB += subOut[2] * weight;
+					        sumWeight += weight;
+					    }
+
+					    // 4. Write the final denoised, edge-preserved pixel
+					    reconstructedImage[pixelIndex + 0] = sumR / sumWeight;
+					    reconstructedImage[pixelIndex + 1] = sumG / sumWeight;
+					    reconstructedImage[pixelIndex + 2] = sumB / sumWeight;
 					}
 					else if (mode == RenderMode::SpatialGradient)
 					{

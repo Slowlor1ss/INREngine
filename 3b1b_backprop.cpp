@@ -87,24 +87,25 @@ enum class UserAction : uint8_t {
 
 namespace config
 {
-	inline std::string target_image_file = "laurens.bmp";
+	inline std::string target_image_file = "Training_Data/camera.bmp";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
 	inline float output_image_scale = 2.0f;
+	inline std::vector<size_t> custom_layer_dims = {};
 
 	//TODO-Lkrikilion: make a command like param for this like --render-mode or smth
 	inline RenderMode render_mode = RenderMode::StandardRGB;
 
 	inline bool use_positional_encoding = true;
-	inline int pe_num_frequencies = 7; // Positional encode
+	inline int pe_num_frequencies = 10; // Positional encode
 
 	inline bool initial_live_update_state = true;
 
 	// Hyperparameters & Training State
 	inline size_t batch_size = 32;
 	inline size_t print_every_n_batches = 1024;
-	inline float initial_learning_rate = 0.25f;
+	inline float initial_learning_rate = 0.15f;
 }
 
 namespace
@@ -131,12 +132,26 @@ static void ParseCommandLine(const int argc, char** argv)
 				"==================================================================================================\n",
 				"--i",			"Set input filename",
 				"--o",			"Set output path (can specify file aswell e.g. weights_biases.csv)",	
+				"--layers"		"Set the layers e.g. --layers 128 128 128 128 3"
 				"--set-pe 0/ 1", "Enable positional encoding",
 				"--freq",		"Set positional encoding Frequencies",
 				"--batch",		"Set batch Size",
 				"--lr",			"Set the learning Rate",
 				"--set-live 0/1", "Disable live viewer on start; Note: this can be re-enabled during runtime using 'v'"
 			);
+		}
+		else if (arg == "--layers") 
+		{
+			// Keep reading the next arguments as long as they don't start with '-'
+			while (i + 1 < argc && argv[i + 1][0] != '-') {
+				try {
+					// Convert the string argument to an unsigned long integer (size_t)
+					config::custom_layer_dims.push_back(std::stoul(argv[i + 1]));
+				} catch (const std::exception& e) {
+					std::cerr << "Error parsing layer dimension: " << argv[i + 1] << "\n";
+				}
+				i++; // Advance the loop
+			}
 		}
 		else if (arg == "--i")
 		{

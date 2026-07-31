@@ -37,8 +37,9 @@ float& learningRate)
 			totalCost += cost / float(target.values.size());
 			if ( std::_Is_nan(totalCost) )
 			{
-				std::cout << cost;
-				__debugbreak();
+				totalCost = 999'999.f;
+				//std::cout << cost;
+				//__debugbreak();
 			}
 			//totalCost = std::clamp( totalCost, 0.f, 999999.f);
 
@@ -65,83 +66,57 @@ void NeuralImageRecreator()
 
 	// Setup our coordinate mapper lambda for the ImageGenerator
 	std::function<ImageUtils::SpatialData(float, float)> coordMapper = nullptr;
-//	if (config::use_positional_encoding) {
-//		coordMapper = [w = static_cast<float>(data.width), h = static_cast<float>(data.height), freqs = config::pe_num_frequencies](float x, float y) {
-//			ImageUtils::SpatialData d = PositionalEncodeWithDerivatives(x, y, freqs);
-//			// NATIVELY SCALE TO PIXEL SPACE!
-//			// Apply the chain rule: multiply all X derivatives by (1.0 / width) 
-//			// and all Y derivatives by (1.0 / height)
-//			for (float& gx : d.gradX) {
-//				gx /= w;
-//			}
-//			for (float& gy : d.gradY) {
-//				gy /= h;
-//			}
-//			
-//			return d;
-//		};
-//	} 
-//	else {
-//		// Fallback mapper for standard inputs
-//		coordMapper = [w = static_cast<float>(data.width), h = static_cast<float>(data.height)](float x, float y) {
-//				ImageUtils::SpatialData d;
-//				d.values = { x, y };
-//				// NATIVELY SCALE TO PIXEL SPACE! 
-//				// Instead of 1.0, X changes by 1 pixel width.
-//				d.gradX = { 1.0f / w, 0.0f };
-//				d.gradY = { 0.0f, 1.0f / h };
-//				return d;
-//			};
-//	}
-
-	if (config::use_positional_encoding) {
-        coordMapper = [w = static_cast<float>(data.width), h = static_cast<float>(data.height), freqs = config::pe_num_frequencies](float x, float y) {
-            ImageUtils::SpatialData d = PositionalEncodeWithDerivatives(x, y, freqs);
-            
-            // The space is 2.0 units wide now!
-            for (float& gx : d.gradX) { gx *= (2.0f / w); }
-            for (float& gy : d.gradY) { gy *= (2.0f / h); }
-            return d;
-        };
-    }
+if (config::use_positional_encoding) {
+		coordMapper = [w = static_cast<float>(data.width), h = static_cast<float>(data.height), freqs = config::pe_num_frequencies](float x, float y) {
+			ImageUtils::SpatialData d = PositionalEncodeWithDerivatives(x, y, freqs);
+			// NATIVELY SCALE TO PIXEL SPACE!
+			// Apply the chain rule: multiply all X derivatives by (1.0 / width) 
+			// and all Y derivatives by (1.0 / height)
+			for (float& gx : d.gradX) {
+				gx /= w;
+			}
+			for (float& gy : d.gradY) {
+				gy /= h;
+			}
+			
+			return d;
+		};
+	} 
 	else {
-        coordMapper = [w = static_cast<float>(data.width), h = static_cast<float>(data.height)](float x, float y) {
-            ImageUtils::SpatialData d;
-            d.values = { x, y };
-            
-            // The space is 2.0 units wide now!
-            d.gradX = { 2.0f / w, 0.0f };
-            d.gradY = { 0.0f, 2.0f / h };
-            return d;
-        };
-    }
+		// Fallback mapper for standard inputs
+		coordMapper = [w = static_cast<float>(data.width), h = static_cast<float>(data.height)](float x, float y) {
+				ImageUtils::SpatialData d;
+				d.values = { x, y };
+				// NATIVELY SCALE TO PIXEL SPACE! 
+				// Instead of 1.0, X changes by 1 pixel width.
+				d.gradX = { 1.0f / w, 0.0f };
+				d.gradY = { 0.0f, 1.0f / h };
+				return d;
+			};
+	}
 
 	// 1. Generate Target Outputs (RGB + Spatial Edges)
 	std::vector<ImageUtils::SpatialData> targetSpatialData = ImageUtils::GenerateGradientTargets(data.outputs, data.width, data.height);
 
 	// 2. Generate Inputs (Coordinates/PE + Spatial Slopes)
-	/*std::vector<ImageUtils::SpatialData> inputSpatialData;
-	inputSpatialData.reserve(data.inputs.size());
-	for (const auto& rawInput : data.inputs) {
-		inputSpatialData.push_back(coordMapper(rawInput[0], rawInput[1]));
-	}*/
-
-	// 2. Generate Inputs (Coordinates/PE + Spatial Slopes)
 	std::vector<ImageUtils::SpatialData> inputSpatialData;
 	inputSpatialData.reserve(data.inputs.size());
 	for (const auto& rawInput : data.inputs) {
-		// Map from [0, 1] to [-1, 1]
-		float mappedX = rawInput[0] * 2.0f - 1.0f;
-		float mappedY = rawInput[1] * 2.0f - 1.0f;
-
-		inputSpatialData.push_back(coordMapper(mappedX, mappedY));
+		inputSpatialData.push_back(coordMapper(rawInput[0], rawInput[1]));
 	}
 
 	// Initialize Neural Network & Visualizer Window
 	size_t inputLayerSize = config::use_positional_encoding ? (config::pe_num_frequencies * 4) : 2;
 	//std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 64, 64, 32, 16, 3 };
-	std::vector<size_t> layerDims{ inputLayerSize, 64, 64, 64, 64, 3 };
+	//std::vector<size_t> layerDims{ inputLayerSize, 64, 64, 64, 64, 3 };
+	//std::vector<size_t> layerDims{ inputLayerSize, 128, 128, 3 };
 	//std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 16, 8, 3 };
+	std::vector<size_t> layerDims;
+	if (!config::custom_layer_dims.empty()) {
+		layerDims.insert(layerDims.end(), config::custom_layer_dims.begin(), config::custom_layer_dims.end());
+	} else {
+		layerDims.insert(layerDims.end(), { 64, 64, 64, 64, 3 });
+	}
 	
 	// Pass the activation functions dynamically!
 	Network network{ 

@@ -21,7 +21,7 @@ enum class RenderMode {
 
     // TODO-Lkrikilion:
     //Laplacian,          // Second derivative
-
+    Blur,
     Last
 };
 

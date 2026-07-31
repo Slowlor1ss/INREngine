@@ -353,7 +353,8 @@ void Network::BackPropagateGradientGuided(
 				//totalWeightGradient = std::clamp(totalWeightGradient, -999'999.0f, 999'999.0f);
 				if (totalWeightGradient > 999'999'999.f)
 				{
-					__debugbreak();
+					totalWeightGradient = 999'999.f;
+					//__debugbreak();
 				}
 
             	// Accumulate the 3 Errors to pass back to the previous layer
