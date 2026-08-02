@@ -43,13 +43,18 @@ public:
 	
 	float BackPropagate(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput);
 
+	std::vector<Parameters> CreateEmptyDeltaBuffer() const { return m_storedDelta; }
+	void AccumulateWorkerDeltas(const std::vector<Parameters>& workerDeltas, size_t workerNumStored);
 	void BackPropagateGradientGuided(
-		const ImageUtils::SpatialData& target,
-		const std::vector<float>& input,
-		const std::vector<std::vector<float>>& forwardActivations,
-		const std::vector<std::vector<float>>& forwardSums,
-		const SpatialDerivativeBuffer& spatialBuffers, // Network's predicted slopes
-		float learningRate);
+	    const ImageUtils::SpatialData& target,
+	    const std::vector<float>& input,
+	    const std::vector<std::vector<float>>& forwardActivations,
+	    const std::vector<std::vector<float>>& forwardSums,
+	    const SpatialDerivativeBuffer& spatialBuffers,   // Network's predicted slopes
+	    float learningRate,
+	    std::vector<Parameters>& localDeltas,
+	    size_t& localNumStored
+	);
 	
 	void RunGradientGuidedEpoch(
 		const std::vector<ImageUtils::SpatialData>& inputData, const std::vector<ImageUtils::SpatialData>& targetData, float

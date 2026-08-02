@@ -42,12 +42,16 @@ std::vector<float> GenerateReconstructedImage(
 
 			for (int y = startY; y < endY; ++y)
 			{
-				float normY = static_cast<float>(y) / height;
+				//float normY = static_cast<float>(y) / height;
+				// Changes 0.0 -> 1.0 into -1.0 -> 1.0
+				float normY = (static_cast<float>(y) / (float)height) * 2.0f - 1.0f;
 				size_t rowOffset = static_cast<size_t>(y) * width * 3;
 
 				for (int x = 0; x < width; ++x)
 				{
-					float normX = static_cast<float>(x) / width;
+					//float normX = static_cast<float>(x) / width;
+					// Changes 0.0 -> 1.0 into -1.0 -> 1.0
+					float normX = (static_cast<float>(x) / (float)width) * 2.0f - 1.0f;
 
 					// Reference whichever vector we ended up using
 					//const std::vector<float>& finalInput = coordinateMapper ? mappedInput : fallbackInput;
@@ -156,9 +160,9 @@ std::vector<float> GenerateReconstructedImage(
 					    //reconstructedImage[pixelIndex + 0] = std::abs(finalGradX[0]) * 0.1f;	// Red = X Gradient
 					    //reconstructedImage[pixelIndex + 1] = std::abs(finalGradY[0]) * 0.1f;	// Green = Y Gradient
 
-						// Times width and height as we divide by it in coordMapper NeuralImageGenerator.hpp
-						reconstructedImage[pixelIndex + 0] = std::abs(finalGradX[0] * width) * 0.1f;  
-						reconstructedImage[pixelIndex + 1] = std::abs(finalGradY[0] * height) * 0.1f;
+						// We divide by (width / 2.0f) to map the normalized gradient back to pixel space for viewing
+						reconstructedImage[pixelIndex + 0] = std::abs(finalGradX[0] / (width / 2.0f));  
+						reconstructedImage[pixelIndex + 1] = std::abs(finalGradY[0] / (height / 2.0f));
 
 						reconstructedImage[pixelIndex + 2] = 0.0f;								// Blue = 0
 					}

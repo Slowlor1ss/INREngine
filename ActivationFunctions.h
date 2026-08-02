@@ -117,13 +117,10 @@ namespace ActFunc
 
 		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
 		{
-			//// random value between -1 and 1 -- works but outdated
-			return ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
-		
-			// Xavier/Glorot better here: (but fanout is still wrong , todo)
-			//float stddev = std::sqrt(2.0f / (fanIn + fanOut));
-			//std::normal_distribution<float> distribution(0.0f, stddev);
-			//return distribution(generator);
+			// Xavier initialization bounds
+		    float bound = std::sqrt(6.0f / static_cast<float>(fanIn));
+		    std::uniform_real_distribution<float> distribution(-bound, bound);
+		    return distribution(generator);
 		}
 
 	};
@@ -253,7 +250,7 @@ namespace ActFunc
 		}
 
 		// TODO-LKrikilion: mess around with this value a bit on a better machine 
-		virtual float GetLearningRateMultiplier() const override { return 0.0001f; }
+		virtual float GetLearningRateMultiplier() const override { return 1.0f; }//0.0001f; }
 	};
 	
 	// For debugging

@@ -1,59 +1,36 @@
+#include "TrainingThreadPool.h"
+#include <numeric> // Put this at the very top of your file
+#include <random>
+
 static float RunGradientGuidedTrainingEpoch(Network& network,
-const std::vector<ImageUtils::SpatialData>& inputs,
-const std::vector<ImageUtils::SpatialData>& targets,
-size_t& currentImageIdx,
-const size_t printEveryNBatches,
-const size_t batchSize,
-float& learningRate)
+                                            const std::vector<ImageUtils::SpatialData>& inputs,
+                                            const std::vector<ImageUtils::SpatialData>& targets,
+                                            size_t& currentImageIdx,
+                                            const size_t printEveryNBatches,
+                                            const size_t batchSize,
+                                            float& learningRate,
+                                            TrainingThreadPool& threadPool)
 {
-	float totalCost = 0.0f;
-	Network::SpatialDerivativeBuffer spatialBuffers; // Create one buffer to reuse
+    float totalCost = 0.0f;
 
-	for (size_t j = 0; j < printEveryNBatches; j++)
-	{
-		for (size_t i = 0; i < batchSize; i++)
-		{
-			const auto& input = inputs[currentImageIdx];
-			const auto& target = targets[currentImageIdx];
-
-			// 1. FORWARD PASS
-			network.PropagateSpatialDerivativesThreadSafe(input.values, input.gradX, input.gradY, spatialBuffers);
-
-			// 2. BACKWARD PASS (Applies weight updates instantly)
-			network.BackPropagateGradientGuided(target, input.values, spatialBuffers.activations, spatialBuffers.preActivations, spatialBuffers, learningRate);
-
-			// Calculate standard RGB cost for the console log
-			float cost = 0.0f;
-			for(size_t c = 0; c < target.values.size(); ++c){
-				float diff = spatialBuffers.activations.back()[c] - target.values[c]; // TODO: all activations become nan
-				cost += diff * diff;
-				if ( std::_Is_nan(cost) )
-				{
-					//std::cout << diff;
-					//__debugbreak();
-					//cost = 0.f;
-				}
-			}
-			totalCost += cost / float(target.values.size());
-			if ( std::_Is_nan(totalCost) )
-			{
-				totalCost = 999'999.f;
-				//std::cout << cost;
-				//__debugbreak();
-			}
-			//totalCost = std::clamp( totalCost, 0.f, 999999.f);
-
-			currentImageIdx = GetRandomImageIndex(inputs.size());
-		}
-		
-		// Apply the averaged batch weights!
-		network.ConsumeDelta(learningRate);
+    for (size_t j = 0; j < printEveryNBatches; j++)
+    {
+        // 1. Run the entire batch across all cores instantly
+        float batchCost = threadPool.RunBatch(inputs, targets, currentImageIdx, batchSize);
+        totalCost += (batchCost / static_cast<float>(batchSize));
         
-		// Decay learning rate
-		learningRate *= static_cast<float>(std::pow(0.9999999, batchSize));
-	}
+        // 2. Apply the averaged batch weights via Adam
+        network.ConsumeDelta(learningRate);
+        
+        // 3. Move forward in the dataset (or pick random)
+        currentImageIdx = GetRandomImageIndex(inputs.size());
+        
+        // Decay learning rate
+		// Comented out for now as were now using Adam
+        //learningRate *= static_cast<float>(std::pow(0.9999999, batchSize));
+    }
 
-	return totalCost / static_cast<float>(batchSize * printEveryNBatches);
+    return totalCost / static_cast<float>(printEveryNBatches);
 }
 
 void NeuralImageRecreator()
@@ -66,33 +43,22 @@ void NeuralImageRecreator()
 
 	// Setup our coordinate mapper lambda for the ImageGenerator
 	std::function<ImageUtils::SpatialData(float, float)> coordMapper = nullptr;
-if (config::use_positional_encoding) {
-		coordMapper = [w = static_cast<float>(data.width), h = static_cast<float>(data.height), freqs = config::pe_num_frequencies](float x, float y) {
-			ImageUtils::SpatialData d = PositionalEncodeWithDerivatives(x, y, freqs);
-			// NATIVELY SCALE TO PIXEL SPACE!
-			// Apply the chain rule: multiply all X derivatives by (1.0 / width) 
-			// and all Y derivatives by (1.0 / height)
-			for (float& gx : d.gradX) {
-				gx /= w;
-			}
-			for (float& gy : d.gradY) {
-				gy /= h;
-			}
-			
-			return d;
-		};
-	} 
-	else {
-		// Fallback mapper for standard inputs
-		coordMapper = [w = static_cast<float>(data.width), h = static_cast<float>(data.height)](float x, float y) {
-				ImageUtils::SpatialData d;
-				d.values = { x, y };
-				// NATIVELY SCALE TO PIXEL SPACE! 
-				// Instead of 1.0, X changes by 1 pixel width.
-				d.gradX = { 1.0f / w, 0.0f };
-				d.gradY = { 0.0f, 1.0f / h };
-				return d;
-			};
+	if (config::use_positional_encoding) 
+	{
+	    coordMapper = [freqs = config::pe_num_frequencies](float x, float y) {
+	        // No longer scaling by 2.0/w! Keep it pure.
+	        return PositionalEncodeWithDerivatives(x, y, freqs); 
+	    };
+	}
+	else 
+	{
+	    coordMapper = [](float x, float y) {
+	        ImageUtils::SpatialData d;
+	        d.values = { x, y };
+	        d.gradX = { 1.0f, 0.0f }; // Pure normalized derivative
+	        d.gradY = { 0.0f, 1.0f }; // Pure normalized derivative
+	        return d;
+	    };
 	}
 
 	// 1. Generate Target Outputs (RGB + Spatial Edges)
@@ -105,6 +71,31 @@ if (config::use_positional_encoding) {
 		inputSpatialData.push_back(coordMapper(rawInput[0], rawInput[1]));
 	}
 
+	///
+	// TODO: resize vectors in if statement to not wase memory do this soon or will forget
+	// Create new vectors to hold the randomized data
+	std::vector<ImageUtils::SpatialData> shuffledInputs(inputSpatialData.size());
+	std::vector<ImageUtils::SpatialData> shuffledTargets(targetSpatialData.size());
+	if( config::shuffle_pixel_batch )
+	{
+		std::cout << "Shuffling dataset for random pixel batching...\n";
+
+		// Create an array of indices [0, 1, 2, ... 65535]
+		std::vector<size_t> indices(inputSpatialData.size());
+		std::iota(indices.begin(), indices.end(), 0);
+
+		// Shuffle the indices
+		std::mt19937 g(1337); // Fixed seed for consistency
+		std::shuffle(indices.begin(), indices.end(), g);
+
+
+		for(size_t i = 0; i < indices.size(); ++i) {
+		    shuffledInputs[i] = inputSpatialData[indices[i]];
+		    shuffledTargets[i] = targetSpatialData[indices[i]];
+		}
+	}
+	///
+
 	// Initialize Neural Network & Visualizer Window
 	size_t inputLayerSize = config::use_positional_encoding ? (config::pe_num_frequencies * 4) : 2;
 	//std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 64, 64, 32, 16, 3 };
@@ -112,10 +103,13 @@ if (config::use_positional_encoding) {
 	//std::vector<size_t> layerDims{ inputLayerSize, 128, 128, 3 };
 	//std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 16, 8, 3 };
 	std::vector<size_t> layerDims;
+	layerDims.push_back(inputLayerSize);
 	if (!config::custom_layer_dims.empty()) {
 		layerDims.insert(layerDims.end(), config::custom_layer_dims.begin(), config::custom_layer_dims.end());
 	} else {
-		layerDims.insert(layerDims.end(), { 64, 64, 64, 64, 3 });
+		//layerDims.insert(layerDims.end(), { 64, 64, 64, 64, 3 });
+		layerDims.insert(layerDims.end(), { 256, 256, 256, 256, 3 });
+
 	}
 	
 	// Pass the activation functions dynamically!
@@ -124,8 +118,13 @@ if (config::use_positional_encoding) {
 		ActFunc::DataBase::FindActFunc<ActFunc::Siren>(),
 		// TODO: look in to this more maybe just use sigmoid as its basically the same or none as its more truthfully ig
 		// and the docmentation says to just use a linear or sine https://deepwiki.com/vsitzmann/siren/2-siren-architecture#sinelayer-and-network-structure
-		ActFunc::DataBase::FindActFunc<ActFunc::None>() 
+		ActFunc::DataBase::FindActFunc<ActFunc::Sigmoid>() 
 	};
+
+	// Create the thread pool using your Ryzen's hardware concurrency (usually 16 threads for the 4800H)
+	unsigned int numThreads = std::thread::hardware_concurrency();
+	if (numThreads == 0) numThreads = 8;
+	TrainingThreadPool threadPool(numThreads, network);
 
 	ImageWindow rendererWindow(data.width * config::output_image_scale, data.height * config::output_image_scale);
 
@@ -153,7 +152,12 @@ if (config::use_positional_encoding) {
 		}
 
 		// Perform batch training step
-		float cost = RunGradientGuidedTrainingEpoch(network, inputSpatialData, targetSpatialData, currentImage, config::print_every_n_batches, config::batch_size, learningRate);
+		float cost;
+		if( config::shuffle_pixel_batch )
+			cost = RunGradientGuidedTrainingEpoch(network, shuffledInputs, shuffledTargets, currentImage, config::print_every_n_batches, config::batch_size, learningRate, threadPool);
+		else
+			cost = RunGradientGuidedTrainingEpoch(network, inputSpatialData, targetSpatialData, currentImage, config::print_every_n_batches, config::batch_size, learningRate, threadPool);
+
 		// Live viewer update
 		if (liveUpdateWindow)
 		{

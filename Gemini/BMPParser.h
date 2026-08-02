@@ -98,17 +98,21 @@ bool ParseBMPData(const char* filename, BMPParsedData& outData) {
     outData.height = img.height;
 
     for (size_t y = 0; y < img.height; y++)
-    {
-        for (size_t x = 0; x < img.width; x++)
-        {
-            float c1 = img.data[(y * img.width + x) * 3];
-            float c2 = img.data[(y * img.width + x) * 3 + 1];
-            float c3 = img.data[(y * img.width + x) * 3 + 2];
+	{
+	    for (size_t x = 0; x < img.width; x++)
+	    {
+	        float c1 = img.data[(y * img.width + x) * 3];
+	        float c2 = img.data[(y * img.width + x) * 3 + 1];
+	        float c3 = img.data[(y * img.width + x) * 3 + 2];
 
-            outData.inputs.push_back({ x / float(img.width), y / float(img.height) });
-            outData.outputs.push_back({ c1,c2,c3 });
-        }
-    }
+	        // Map inputs from [0, 1] to [-1, 1]
+	        float normX = (x / float(img.width)) * 2.0f - 1.0f;
+	        float normY = (y / float(img.height)) * 2.0f - 1.0f;
+
+	        outData.inputs.push_back({ normX, normY });
+	        outData.outputs.push_back({ c1, c2, c3 });
+	    }
+	}
     return true;
 }
 

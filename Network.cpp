@@ -48,6 +48,7 @@ InitialLayer& Network::GetInitialLayer()
 	return *static_cast<InitialLayer*>(m_layers.front().get());
 }
 
+// Network.cpp
 void Network::ConsumeDelta(float learningRate)
 {
 	if (m_layers.size() == m_storedDelta.size() && m_numStored > 0)
@@ -55,15 +56,18 @@ void Network::ConsumeDelta(float learningRate)
 		for (size_t i = 1; i < m_layers.size(); i++)
 		{
 			const float lr = learningRate * m_layers[i]->m_activationFunction->GetLearningRateMultiplier();
+			
 			if (m_layers[i]->m_params.biases.size() == m_storedDelta[i].biases.size()
 				&& m_layers[i]->m_params.weights.size() == m_storedDelta[i].weights.size())
 			{
-				// average = divide by numStored
-				// apply learning rate
-				// negative because we want to substract. (inverse of the gradient)
+				// 1. Average the accumulated gradients over the batch
+				m_storedDelta[i] *= (1.0f / static_cast<float>(m_numStored));
 
-				m_storedDelta[i] *= -1.0f * (lr / m_numStored);
-				m_layers[i]->m_params += m_storedDelta[i];
+				// 2. Pass the averaged gradients to our new Adam optimizer!
+				// (Note: ApplyAdamUpdate handles the learning rate and subtraction internally)
+				m_layers[i]->m_params.ApplyAdamUpdate(m_storedDelta[i].weights, m_storedDelta[i].biases, lr);
+
+				// 3. Clear the delta buffer for the next batch
 				m_storedDelta[i].Clear();
 			}
 		}
@@ -255,13 +259,28 @@ float Network::BackPropagate(const std::vector<float>& inputActivation, const st
 	return cost;
 }
 
+void Network::AccumulateWorkerDeltas(const std::vector<Parameters>& workerDeltas, size_t workerNumStored)
+{
+    if (m_storedDelta.size() == workerDeltas.size())
+    {
+        for (size_t i = 1; i < m_storedDelta.size(); i++)
+        {
+            m_storedDelta[i] += workerDeltas[i];
+        }
+        m_numStored += workerNumStored;
+    }
+}
+
 void Network::BackPropagateGradientGuided(
-    const ImageUtils::SpatialData& target,
-    const std::vector<float>& input, // TODO: remove unused
-    const std::vector<std::vector<float>>& forwardActivations,
-    const std::vector<std::vector<float>>& forwardSums,
-    const SpatialDerivativeBuffer& spatialBuffers,
-    float learningRate)
+	    const ImageUtils::SpatialData& target,
+	    const std::vector<float>& input,
+	    const std::vector<std::vector<float>>& forwardActivations,
+	    const std::vector<std::vector<float>>& forwardSums,
+	    const SpatialDerivativeBuffer& spatialBuffers,   // Network's predicted slopes
+	    float learningRate,
+	    std::vector<Parameters>& localDeltas,
+	    size_t& localNumStored
+	)
 {
     // ------
     // Calculate the 3 Error Signals at the Output Layer
@@ -284,7 +303,7 @@ void Network::BackPropagateGradientGuided(
 
 	// A hyperparameter to balance how much the network cares about slopes vs colors.
     // 0.01f is a great starting point so the massive slopes don't nuke the colors.
-    float spatialLossWeight = 1.f; 
+	const float spatialLossWeight = 0.f;//0.00001f; //TODO: RENABLE
 
     for (size_t i = 0; i < outputActivations.size(); ++i) {
         colorError[i] = 2.0f * (outputActivations[i] - target.values[i]);
@@ -351,11 +370,13 @@ void Network::BackPropagateGradientGuided(
             	// Combine all three to get the total gradient for this specific weight
             	float totalWeightGradient = gradColor + gradXEffect + gradYEffect;
 				//totalWeightGradient = std::clamp(totalWeightGradient, -999'999.0f, 999'999.0f);
-				if (totalWeightGradient > 999'999'999.f)
+#ifndef _TRAINING
+            	if (totalWeightGradient > 999'999'999.f)
 				{
 					totalWeightGradient = 999'999.f;
-					//__debugbreak();
+					__debugbreak();
 				}
+#endif
 
             	// Accumulate the 3 Errors to pass back to the previous layer
             	nextColorError[j] += colorError[i] * (d1 * oldWeight) + 
@@ -366,7 +387,7 @@ void Network::BackPropagateGradientGuided(
             	nextErrorGradY[j] += errorGradY[i] * (d1 * oldWeight);
 
             	// FIX: ACCUMULATE INTO STORED DELTAS
-            	m_storedDelta[l].weights[startWeight + j] += totalWeightGradient;
+            	localDeltas[l].weights[startWeight + j] += totalWeightGradient;
             }
             
         	// FIX: ACCUMULATE BIASES
@@ -374,7 +395,7 @@ void Network::BackPropagateGradientGuided(
         	float gradXBias = errorGradX[i] * (d2 * rawSlopeX);
         	float gradYBias = errorGradY[i] * (d2 * rawSlopeY);
             
-        	m_storedDelta[l].biases[i] += (gradColorBias + gradXBias + gradYBias);
+        	localDeltas[l].biases[i] += (gradColorBias + gradXBias + gradYBias);
         }
         
     	// Transfer the calculated errors for the next loop iteration to use
@@ -383,8 +404,7 @@ void Network::BackPropagateGradientGuided(
     	errorGradY = nextErrorGradY;
     }
 
-	// FIX: Tell the network we stored a batch item
-	m_numStored++;
+	localNumStored++;
 }
 
 void Network::RunGradientGuidedEpoch(
@@ -399,7 +419,8 @@ void Network::RunGradientGuidedEpoch(
 		const auto& target = targetData[i];
 
 		PropagateSpatialDerivativesThreadSafe(input.values, input.gradX, input.gradY, spatialBuffers);
-		BackPropagateGradientGuided(target, input.values, spatialBuffers.activations, spatialBuffers.preActivations, spatialBuffers, -195386380931);
+		BackPropagateGradientGuided(target, input.values, spatialBuffers.activations, spatialBuffers.preActivations,
+		                            spatialBuffers, -195386380931, m_storedDelta, m_numStored);
 	}
 	// Apply the averaged batch weights!
 	ConsumeDelta(learningRate);

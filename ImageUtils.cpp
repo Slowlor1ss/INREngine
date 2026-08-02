@@ -30,9 +30,9 @@ std::vector<ImageUtils::SpatialData> ImageUtils::GenerateGradientTargets(
             // Calculate the spatial derivative for each color channel (R, G, B)
             for (int c = 0; c < 3; ++c)
             {
-                // Multiply by width/height to map the pixel-space gradient to normalized [0, 1] coordinate space!
-                dataset[idx].gradX[c] = (targetPixels[idx_x_next][c] - targetPixels[idx_x_prev][c]) / 2.0f;
-                dataset[idx].gradY[c] = (targetPixels[idx_y_next][c] - targetPixels[idx_y_prev][c]) / 2.0f;
+                // Multiply by (width / 2.0f) and (height / 2.0f) to map the pixel-space gradient to normalized [-1, 1] coordinate space!
+                dataset[idx].gradX[c] = ((targetPixels[idx_x_next][c] - targetPixels[idx_x_prev][c]) / 2.0f) * (width / 2.0f);
+				dataset[idx].gradY[c] = ((targetPixels[idx_y_next][c] - targetPixels[idx_y_prev][c]) / 2.0f) * (height / 2.0f);
             }
         }
     }

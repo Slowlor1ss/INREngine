@@ -9,6 +9,13 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFu
 	biases.resize(numBiases, 0.0f);
 	weights.resize(numWeights, 0.0f);
 
+	// Initialize Adam vectors to 0
+    m_biases.resize(numBiases, 0.0f);
+    v_biases.resize(numBiases, 0.0f);
+    m_weights.resize(numWeights, 0.0f);
+    v_weights.resize(numWeights, 0.0f);
+    adam_t = 0;
+
 	for (size_t i = 0; i < numBiases; i++)
 	{
 		biases[i] = 0.0f; // Biases are safer to initialize as straight 0
@@ -104,4 +111,44 @@ void Parameters::Serialize(std::ostream& out)
 		out << weights[i] << (i + 1 == weights.size() ? "" : " ");
 	}
 	out << "\n";
+}
+
+void Parameters::ApplyAdamUpdate(const std::vector<float>& gradWeights, const std::vector<float>& gradBiases, float learningRate)
+{
+    // Adam hyperparameters (Standard defaults)
+    const float beta1 = 0.9f;
+    const float beta2 = 0.999f;
+    const float epsilon = 1e-8f;
+
+    adam_t++; // Increment time step
+
+    // Precalculate bias correction denominators
+    float correction1 = 1.0f - std::pow(beta1, adam_t);
+    float correction2 = 1.0f - std::pow(beta2, adam_t);
+
+    // Update Weights
+    for (size_t i = 0; i < weights.size(); i++)
+    {
+        float g = gradWeights[i];
+        m_weights[i] = beta1 * m_weights[i] + (1.0f - beta1) * g;
+        v_weights[i] = beta2 * v_weights[i] + (1.0f - beta2) * (g * g);
+
+        float m_hat = m_weights[i] / correction1;
+        float v_hat = v_weights[i] / correction2;
+
+        weights[i] -= learningRate * (m_hat / (std::sqrt(v_hat) + epsilon));
+    }
+
+    // Update Biases
+    for (size_t i = 0; i < biases.size(); i++)
+    {
+        float g = gradBiases[i];
+        m_biases[i] = beta1 * m_biases[i] + (1.0f - beta1) * g;
+        v_biases[i] = beta2 * v_biases[i] + (1.0f - beta2) * (g * g);
+
+        float m_hat = m_biases[i] / correction1;
+        float v_hat = v_biases[i] / correction2;
+
+        biases[i] -= learningRate * (m_hat / (std::sqrt(v_hat) + epsilon));
+    }
 }

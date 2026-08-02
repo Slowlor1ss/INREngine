@@ -91,21 +91,24 @@ namespace config
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
-	inline float output_image_scale = 2.0f;
+	inline float output_image_scale = 1.5f;
 	inline std::vector<size_t> custom_layer_dims = {};
 
 	//TODO-Lkrikilion: make a command like param for this like --render-mode or smth
 	inline RenderMode render_mode = RenderMode::StandardRGB;
 
-	inline bool use_positional_encoding = true;
+	inline bool use_positional_encoding = false;
 	inline int pe_num_frequencies = 10; // Positional encode
 
 	inline bool initial_live_update_state = true;
 
 	// Hyperparameters & Training State
-	inline size_t batch_size = 32;
-	inline size_t print_every_n_batches = 1024;
-	inline float initial_learning_rate = 0.15f;
+	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)
+	inline size_t batch_size = 65536;//8192;//32;
+	inline bool shuffle_pixel_batch = true; // TODO: either make this an input parameter or make this the default if batch size isnt == to image size
+	inline size_t print_every_n_batches = 1;
+	//inline float initial_learning_rate = 0.0001f;
+	inline float initial_learning_rate = 0.000025f;
 }
 
 namespace
