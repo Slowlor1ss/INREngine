@@ -287,4 +287,65 @@ namespace ActFunc
 			return dist(generator);
 		}
 	};
+	
+	// https://vishwa91.github.io/wire
+	// Wavelet Implicit Neural Representations
+	class Wire : public Base
+	{
+	public:
+		static constexpr const char* k_name{ "Wire" };
+    
+		// Hyperparameters from the WIRE paper
+		static constexpr float k_w0 = 20.0f; // Frequency (controls sharpness)
+		static constexpr float k_s = 30.0f;  // Scale (controls localization/smoothness)
+
+		virtual std::string GetName() const override { return k_name; }
+
+		virtual float Execute(float x) const override
+		{
+			float s2 = k_s * k_s;
+			float E = std::exp(-s2 * x * x);
+			float C = std::cos(k_w0 * x);
+			return E * C;
+		}
+
+		virtual float ExecuteDerivative(float x) const override
+		{
+			float s2 = k_s * k_s;
+			float E = std::exp(-s2 * x * x);
+			float S = std::sin(k_w0 * x);
+			float C = std::cos(k_w0 * x);
+        
+			// Product rule: d/dx [e^(-s^2 x^2) * cos(w0 x)]
+			return E * (-2.0f * s2 * x * C - k_w0 * S);
+		}
+
+		virtual float ExecuteSecondDerivative(float x) const override
+		{
+			float s2 = k_s * k_s;
+			float E = std::exp(-s2 * x * x);
+			float S = std::sin(k_w0 * x);
+			float C = std::cos(k_w0 * x);
+
+			float term1 = (4.0f * s2 * s2 * x * x) - (2.0f * s2) - (k_w0 * k_w0);
+			float term2 = 4.0f * s2 * k_w0 * x;
+
+			return E * (term1 * C + term2 * S);
+		}
+
+		virtual float GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
+		{
+			// WIRE can use standard SIREN bounds, utilizing w0
+			const float bound = (layerIndex == 1
+								  ? 1.0f / static_cast<float>(fanIn)
+								  : std::sqrt(6.0f / static_cast<float>(fanIn)) / k_w0);
+
+			std::uniform_real_distribution<float> distribution(-bound, bound);
+			return distribution(generator);
+		}
+		
+		// TODO: when we start using the LR multiplyer again
+		// # WIRE works best at 5e-3 to 2e-2 (Source: https://github.com/vishwa91/wire/blob/main/wire_image_denoise.py)
+		virtual float GetLearningRateMultiplier() const override { return 1.0f; }
+	};
 }
