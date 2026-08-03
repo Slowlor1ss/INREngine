@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "ImageUtils.h"
+#include "TrainingThreadPool.h"
 
 class Network;
 
@@ -32,10 +33,18 @@ enum class RenderMode {
 // };
 
 // Parallelized RGB image reconstruction from network weights using multi-threading.
+// std::vector<float> GenerateReconstructedImage(
+//     const Network& network, 
+//     int width, 
+//     int height,
+//     const std::function<ImageUtils::SpatialData(float, float)>& coordinateMapper = nullptr,
+//     RenderMode mode = RenderMode::StandardRGB
+// );
+
 std::vector<float> GenerateReconstructedImage(
     const Network& network, 
     int width, 
     int height,
-    const std::function<ImageUtils::SpatialData(float, float)>& coordinateMapper = nullptr,
-    RenderMode mode = RenderMode::StandardRGB
-);
+    const std::function<ImageUtils::SpatialData(float, float)>& coordinateMapper,
+    RenderMode mode,
+    TrainingThreadPool& threadPool);

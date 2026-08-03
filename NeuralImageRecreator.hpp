@@ -23,11 +23,22 @@ static float RunGradientGuidedTrainingEpoch(Network& network,
         network.ConsumeDelta(learningRate);
         
         // 3. Move forward in the dataset (or pick random)
-        currentImageIdx = GetRandomImageIndex(inputs.size());
-        
+        //currentImageIdx = GetRandomImageIndex(inputs.size());
+    	currentImageIdx = (currentImageIdx + batchSize) % inputs.size();
+    	
         // Decay learning rate
 		// Comented out for now as were now using Adam
         //learningRate *= static_cast<float>(std::pow(0.9999999, batchSize));
+    	
+    	size_t currentEpoch = 0;
+    	size_t maxEpochs = 2000; // From the PyTorch script 'niters = 2000'
+    	float initialLearningRate = 0.005f;
+
+    	// Calculate the decay factor just like the LambdaLR scheduler
+    	float progress = min(static_cast<float>(currentEpoch) / maxEpochs, 1.0f);
+    	learningRate = initialLearningRate * std::pow(0.1f, progress);
+
+    	currentEpoch++;
     }
 
     return totalCost / static_cast<float>(printEveryNBatches);
@@ -49,6 +60,15 @@ void NeuralImageRecreator()
 	        // No longer scaling by 2.0/w! Keep it pure.
 	        return PositionalEncodeWithDerivatives(x, y, freqs); 
 	    };
+	}
+	else if (config::use_gaussian_pe)
+	{
+		GaussianPositionalEncoder gaussianPE(64, 10.0f);
+		// TODO: find a better way but
+		// we copy gaussianPE into the lambda so it lives forever so dont pass a s reference
+		coordMapper = [gaussianPE](float x, float y) {
+			return gaussianPE(x, y);
+		};
 	}
 	else 
 	{
@@ -97,25 +117,25 @@ void NeuralImageRecreator()
 	///
 
 	// Initialize Neural Network & Visualizer Window
-	size_t inputLayerSize = config::use_positional_encoding ? (config::pe_num_frequencies * 4) : 2;
-	//std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 64, 64, 32, 16, 3 };
-	//std::vector<size_t> layerDims{ inputLayerSize, 64, 64, 64, 64, 3 };
-	//std::vector<size_t> layerDims{ inputLayerSize, 128, 128, 3 };
-	//std::vector<size_t> layerDims{ inputLayerSize, 8, 16, 32, 16, 8, 3 };
+	//size_t inputLayerSize = config::use_positional_encoding ? (config::pe_num_frequencies * 4) : 2;
+	// Run a dummy coordinate through the mapper to see how big the output is (depends on what mode we run in)
+	ImageUtils::SpatialData dummyData = coordMapper(0.0f, 0.0f);
+	size_t inputLayerSize = dummyData.values.size();
+	
 	std::vector<size_t> layerDims;
 	layerDims.push_back(inputLayerSize);
 	if (!config::custom_layer_dims.empty()) {
 		layerDims.insert(layerDims.end(), config::custom_layer_dims.begin(), config::custom_layer_dims.end());
 	} else {
 		//layerDims.insert(layerDims.end(), { 64, 64, 64, 64, 3 });
-		layerDims.insert(layerDims.end(), { 256, 256, 256, 256, 3 });
+		layerDims.insert(layerDims.end(), { 256, 256, 256, 256, 256, 256, 3 });
 
 	}
 	
 	// Pass the activation functions dynamically!
 	Network network{ 
 		layerDims, 
-		ActFunc::DataBase::FindActFunc<ActFunc::Siren>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		// TODO: look in to this more maybe just use sigmoid as its basically the same or none as its more truthfully ig
 		// and the docmentation says to just use a linear or sine https://deepwiki.com/vsitzmann/siren/2-siren-architecture#sinelayer-and-network-structure
 		ActFunc::DataBase::FindActFunc<ActFunc::Sigmoid>() 
@@ -146,7 +166,7 @@ void NeuralImageRecreator()
 		rendererWindow.ProcessMessages();
 
 		// Handle non-blocking user input
-		if (!HandleUserAction(PollUserAction(), network, data, weightsFile, liveUpdateWindow, coordMapper))
+		if (!HandleUserAction(PollUserAction(), network, data, weightsFile, liveUpdateWindow, coordMapper, threadPool))
 		{
 			break;
 		}
@@ -161,7 +181,7 @@ void NeuralImageRecreator()
 		// Live viewer update
 		if (liveUpdateWindow)
 		{
-			rendererWindow.Update(GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, coordMapper, config::render_mode));
+			rendererWindow.Update(GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, coordMapper, config::render_mode, threadPool));
 		}
 
 		// Report progress
@@ -171,7 +191,7 @@ void NeuralImageRecreator()
 	// Final Output Generation & Cleanup
 	std::cout << "Generating final output image from network state...\n";
 
-	std::vector<float> finalReconstructedImage = GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, coordMapper, config::render_mode);
+	std::vector<float> finalReconstructedImage = GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, coordMapper, config::render_mode, threadPool);
 
 	rendererWindow.Update(finalReconstructedImage);
 

@@ -11,7 +11,7 @@ import argparse
 # This creates a user-friendly CLI to control the automation script itself.
 parser = argparse.ArgumentParser(description='Automated Hyperparameter Sweep for C++ SIREN')
 parser.add_argument('--tests', dest='tests', type=int, default=9999, help='Number of random tests to run')
-parser.add_argument('--duration', dest='duration', type=int, default=1800, help='Duration per test in seconds')
+parser.add_argument('--duration', dest='duration', type=int, default=2700, help='Duration per test in seconds')
 parser.add_argument('--img', dest='img', type=str, default='W:\\Other\\Personal\\3b1b_backprop\\Training_Data\\camera.bmp', help='Target image to train on')
 args = parser.parse_args()
 
@@ -21,11 +21,11 @@ TEMP_LOG = "temp_log.txt"
 
 # 2. DEFINE THE HYPERPARAMETER SEARCH SPACE
 # The script will randomly pick one value from these arrays for every test
-SPACE_WIDTHS = [64]#[16, 32, 64, 128]
-SPACE_DEPTHS = [3]#, 4, 5, 6]
+SPACE_WIDTHS = [16, 32, 64, 128]
+SPACE_DEPTHS = [3, 4, 5, 6]
 SPACE_PE = [1]
 SPACE_FREQ = [2, 5, 7, 10, 13, 15]
-SPACE_BATCH = [32]
+SPACE_BATCH = [6, 32, 128, 256, 1024]
 SPACE_LR = [0.15, 0.01, 0.001, 0.0005, 0.0001]
 
 if not os.path.exists(CSV_FILE):

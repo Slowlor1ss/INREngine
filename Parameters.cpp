@@ -75,42 +75,107 @@ void Parameters::Clear()
 
 void Parameters::Deserialize(std::istream& in)
 {
-	size_t numBiases = 0;
-	if (in >> numBiases)
-	{
-		biases.resize(numBiases);
-		for (size_t i = 0; i < numBiases; ++i)
-		{
-			in >> biases[i];
-		}
-	}
+    // 1. Load Biases
+    size_t numBiases = 0;
+    if (in >> numBiases)
+    {
+       biases.resize(numBiases);
+       for (size_t i = 0; i < numBiases; ++i) in >> biases[i];
+    }
 
-	size_t numWeights = 0;
-	if (in >> numWeights)
-	{
-		weights.resize(numWeights);
-		for (size_t i = 0; i < numWeights; ++i)
-		{
-			in >> weights[i];
-		}
-	}
+    // 2. Load Weights
+    size_t numWeights = 0;
+    if (in >> numWeights)
+    {
+       weights.resize(numWeights);
+       for (size_t i = 0; i < numWeights; ++i) in >> weights[i];
+    }
+
+    // 3. Load Adam State (with safety fallback for old checkpoints)
+    size_t numMWeights = 0;
+    if (in >> numMWeights)
+    {
+        m_weights.resize(numMWeights);
+        for (size_t i = 0; i < numMWeights; ++i) in >> m_weights[i];
+    } else {
+        m_weights.assign(weights.size(), 0.0f); // Fallback to 0
+    }
+
+    size_t numVWeights = 0;
+    if (in >> numVWeights)
+    {
+        v_weights.resize(numVWeights);
+        for (size_t i = 0; i < numVWeights; ++i) in >> v_weights[i];
+    } else {
+        v_weights.assign(weights.size(), 0.0f); // Fallback to 0
+    }
+
+    size_t numMBiases = 0;
+    if (in >> numMBiases)
+    {
+        m_biases.resize(numMBiases);
+        for (size_t i = 0; i < numMBiases; ++i) in >> m_biases[i];
+    } else {
+        m_biases.assign(biases.size(), 0.0f); // Fallback to 0
+    }
+
+    size_t numVBiases = 0;
+    if (in >> numVBiases)
+    {
+        v_biases.resize(numVBiases);
+        for (size_t i = 0; i < numVBiases; ++i) in >> v_biases[i];
+    } else {
+        v_biases.assign(biases.size(), 0.0f); // Fallback to 0
+    }
 }
 
 void Parameters::Serialize(std::ostream& out)
 {
-	out << biases.size() << "\n";
-	for (size_t i = 0; i < biases.size(); i++)
-	{
-		out << biases[i] << (i + 1 == biases.size() ? "" : " ");
-	}
-	out << "\n";
+    // 1. Save Biases
+    out << biases.size() << "\n";
+    for (size_t i = 0; i < biases.size(); i++)
+    {
+       out << biases[i] << (i + 1 == biases.size() ? "" : " ");
+    }
+    out << "\n";
 
-	out << weights.size() << "\n";
-	for (size_t i = 0; i < weights.size(); i++)
-	{
-		out << weights[i] << (i + 1 == weights.size() ? "" : " ");
-	}
-	out << "\n";
+    // 2. Save Weights
+    out << weights.size() << "\n";
+    for (size_t i = 0; i < weights.size(); i++)
+    {
+       out << weights[i] << (i + 1 == weights.size() ? "" : " ");
+    }
+    out << "\n";
+
+    // 3. Save Adam Momentum & Variance for Weights
+    out << m_weights.size() << "\n";
+    for (size_t i = 0; i < m_weights.size(); i++)
+    {
+       out << m_weights[i] << (i + 1 == m_weights.size() ? "" : " ");
+    }
+    out << "\n";
+
+    out << v_weights.size() << "\n";
+    for (size_t i = 0; i < v_weights.size(); i++)
+    {
+       out << v_weights[i] << (i + 1 == v_weights.size() ? "" : " ");
+    }
+    out << "\n";
+
+    // 4. Save Adam Momentum & Variance for Biases
+    out << m_biases.size() << "\n";
+    for (size_t i = 0; i < m_biases.size(); i++)
+    {
+       out << m_biases[i] << (i + 1 == m_biases.size() ? "" : " ");
+    }
+    out << "\n";
+
+    out << v_biases.size() << "\n";
+    for (size_t i = 0; i < v_biases.size(); i++)
+    {
+       out << v_biases[i] << (i + 1 == v_biases.size() ? "" : " ");
+    }
+    out << "\n";
 }
 
 void Parameters::ApplyAdamUpdate(const std::vector<float>& gradWeights, const std::vector<float>& gradBiases, float learningRate)

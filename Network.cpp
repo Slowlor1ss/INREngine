@@ -303,7 +303,7 @@ void Network::BackPropagateGradientGuided(
 
 	// A hyperparameter to balance how much the network cares about slopes vs colors.
     // 0.01f is a great starting point so the massive slopes don't nuke the colors.
-	const float spatialLossWeight = 0.f;//0.00001f; //TODO: RENABLE
+	const float spatialLossWeight = 0;//0.0001f;//0.00001f; //TODO: RENABLE
 
     for (size_t i = 0; i < outputActivations.size(); ++i) {
         colorError[i] = 2.0f * (outputActivations[i] - target.values[i]);

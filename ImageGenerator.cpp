@@ -1,5 +1,4 @@
 #include "ImageGenerator.h"
-#include <thread>
 #include <vector>
 #include <algorithm>
 
@@ -10,174 +9,150 @@ std::vector<float> GenerateReconstructedImage(
     int width, 
     int height,
     const std::function<ImageUtils::SpatialData(float, float)>& coordinateMapper,
-    RenderMode mode)
+    RenderMode mode,
+    TrainingThreadPool& threadPool)
 {
-    std::vector<float> reconstructedImage(static_cast<size_t>(width) * height * 3);
+    size_t totalPixels = static_cast<size_t>(width) * height;
+    std::vector<float> reconstructedImage(totalPixels * 3);
 
-    unsigned int numThreads = std::thread::hardware_concurrency();
-    if (numThreads == 0) numThreads = 4;
+    // Pre-allocate buffers for each thread so they don't recreate them inside the loop
+    // or overwrite each other's activations during parallel execution
+    size_t numWorkers = threadPool.GetThreadCount();
+    std::vector<std::vector<std::vector<float>>> threadStandardBuffers(numWorkers);
+    std::vector<Network::SpatialDerivativeBuffer> threadSpatialBuffers(numWorkers);
 
-    std::vector<std::thread> workers;
-    workers.reserve(numThreads);
-
-    int rowsPerThread = (height + static_cast<int>(numThreads) - 1) / static_cast<int>(numThreads);
-
-    for (unsigned int t = 0; t < numThreads; ++t)
+    // Execute via the persistent thread pool
+    threadPool.RunParallelTask(totalPixels, [&](size_t threadIndex, size_t startIdx, size_t endIdx)
     {
-		int startY = static_cast<int>(t) * rowsPerThread;
-		int endY = std::min(startY + rowsPerThread, height);
+        // Grab this specific thread's pre-allocated buffers
+        auto& standardBuffers = threadStandardBuffers[threadIndex];
+        auto& spatialBuffers = threadSpatialBuffers[threadIndex];
 
-		if (startY >= height) break;
+        // Loop over the flat 1D chunk assigned to this thread
+        for (size_t i = startIdx; i < endIdx; ++i)
+        {
+            // Convert flat 1D index back to 2D x,y coordinates
+            int x = static_cast<int>(i % width);
+            int y = static_cast<int>(i / width);
 
-		// Note: We safely capture coordinateMapper by reference because we join all threads 
-		// before this function returns, guaranteeing it won't go out of scope.
-		workers.emplace_back([&network, width, height, startY, endY, &reconstructedImage, &coordinateMapper, mode]()
-		{
-			// TODO-Lkrikilion: clean this up its getting messy
-			// Initalizing here to avoid recreating inside for loop, this still has a useless construction though based on the rendering mode
-			// could probbaly be fixed with constexprs :D but honestly probably doesnt matter
-		    std::vector<std::vector<float>> standardBuffers;
-			Network::SpatialDerivativeBuffer spatialBuffers;
+            // Changes 0.0 -> 1.0 into -1.0 -> 1.0
+            float normY = (static_cast<float>(y) / (float)height) * 2.0f - 1.0f;
+            float normX = (static_cast<float>(x) / (float)width) * 2.0f - 1.0f;
+            
+            size_t pixelIndex = i * 3;
 
+            ImageUtils::SpatialData finalInput;
+            if (coordinateMapper) 
+            {
+                // PE is ON: Use the mapped values and their complex wave derivatives
+                finalInput = coordinateMapper(normX, normY);
+            }
+            else 
+            {
+                // PE is OFF: Standard Inputs and base derivatives
+                finalInput.values = { normX, normY };
+                finalInput.gradX  = { 1.0f, 0.0f }; // d/dx of X is 1, d/dx of Y is 0
+                finalInput.gradY  = { 0.0f, 1.0f }; // d/dy of X is 0, d/dy of Y is 1
+            }
 
-			for (int y = startY; y < endY; ++y)
-			{
-				//float normY = static_cast<float>(y) / height;
-				// Changes 0.0 -> 1.0 into -1.0 -> 1.0
-				float normY = (static_cast<float>(y) / (float)height) * 2.0f - 1.0f;
-				size_t rowOffset = static_cast<size_t>(y) * width * 3;
+            if (mode == RenderMode::StandardRGB)
+            {
+                const std::vector<float>& output = network.PropagateThreadSafe(finalInput.values, standardBuffers);
 
-				for (int x = 0; x < width; ++x)
-				{
-					//float normX = static_cast<float>(x) / width;
-					// Changes 0.0 -> 1.0 into -1.0 -> 1.0
-					float normX = (static_cast<float>(x) / (float)width) * 2.0f - 1.0f;
+                reconstructedImage[pixelIndex + 0] = output[0];
+                reconstructedImage[pixelIndex + 1] = output[1];
+                reconstructedImage[pixelIndex + 2] = output[2];
+            }
+            else if (mode == RenderMode::Blur)
+            {
+                // 1. Query the exact center of the pixel
+                const std::vector<float>& centerOutput = network.PropagateThreadSafe(finalInput.values, standardBuffers);
+                float centerR = centerOutput[0];
+                float centerG = centerOutput[1];
+                float centerB = centerOutput[2];
 
-					// Reference whichever vector we ended up using
-					//const std::vector<float>& finalInput = coordinateMapper ? mappedInput : fallbackInput;
-					size_t pixelIndex = rowOffset + static_cast<size_t>(x) * 3;
+                // 2. Setup the Continuous Bilateral Filter parameters
+                // We sample sub-pixel distances (e.g., 1/3rd of a pixel away)
+                const float subPixelDistMul = 2.5f;
+                float subPixelDistX = (1.0f / width) * subPixelDistMul;
+                float subPixelDistY = (1.0f / height) * subPixelDistMul;
+                
+                // Sigma values control how aggressive the filter is. 
+                // Lower colorSigma preserves edges better.
+                float colorSigma = 0.1f; 
 
-					ImageUtils::SpatialData finalInput;
-					if (coordinateMapper) 
-					{
-					    // PE is ON: Use the mapped values and their complex wave derivatives
-						finalInput= coordinateMapper(normX, normY);
-					}
-					else 
-					{
-					    // PE is OFF: Standard Inputs and base derivatives
-					    finalInput.values = { normX, normY };
-					    finalInput.gradX  = { 1.0f, 0.0f }; // d/dx of X is 1, d/dx of Y is 0
-					    finalInput.gradY  = { 0.0f, 1.0f }; // d/dy of X is 0, d/dy of Y is 1
-					}
+                float sumR = centerR;
+                float sumG = centerG;
+                float sumB = centerB;
+                float sumWeight = 1.0f;
 
-					if (mode == RenderMode::StandardRGB)
-					{
-						const std::vector<float>& output = network.PropagateThreadSafe(finalInput.values, standardBuffers);
-						reconstructedImage[pixelIndex + 0] = output[0];
-						reconstructedImage[pixelIndex + 1] = output[1];
-						reconstructedImage[pixelIndex + 2] = output[2];
-					}
-					else if (mode == RenderMode::Blur)
-					{
-						// 1. Query the exact center of the pixel
-					    const std::vector<float>& centerOutput = network.PropagateThreadSafe(finalInput.values, standardBuffers);
-					    float centerR = centerOutput[0];
-					    float centerG = centerOutput[1];
-					    float centerB = centerOutput[2];
+                // 3. MORE SAMPLES: Check 8 directions instead of 4 (including diagonals)
+                std::vector<std::pair<float, float>> subPixelOffsets = {
+                    { subPixelDistX, 0.0f }, { -subPixelDistX, 0.0f },
+                    { 0.0f, subPixelDistY }, { 0.0f, -subPixelDistY },
+                    { subPixelDistX, subPixelDistY }, { -subPixelDistX, -subPixelDistY },
+                    { subPixelDistX, -subPixelDistY }, { -subPixelDistX, subPixelDistY }
+                };
 
-					    // 2. Setup the Continuous Bilateral Filter parameters
-					    // We sample sub-pixel distances (e.g., 1/3rd of a pixel away)
-						const float subPixelDistMul = 2.5f;
-					    float subPixelDistX = (1.0f / width) * subPixelDistMul;
-					    float subPixelDistY = (1.0f / height) * subPixelDistMul;
-					    
-					    // Sigma values control how aggressive the filter is. 
-					    // Lower colorSigma preserves edges better.
-					    float colorSigma = 0.1f; 
+                for (const auto& offset : subPixelOffsets)
+                {
+                    // Generate the sub-pixel input
+                    ImageUtils::SpatialData subInput;
+                    if (coordinateMapper) {
+                        subInput = coordinateMapper(normX + offset.first, normY + offset.second);
+                    } else {
+                        subInput.values = { normX + offset.first, normY + offset.second };
+                    }
 
-						float sumR = centerR;
-						float sumG = centerG;
-						float sumB = centerB;
-						float sumWeight = 1.0f;
+                    // Query the network for this continuous sub-coordinate
+                    const std::vector<float>& subOut = network.PropagateThreadSafe(subInput.values, standardBuffers);
 
-						// 3. MORE SAMPLES: Check 8 directions instead of 4 (including diagonals)
-						std::vector<std::pair<float, float>> subPixelOffsets = {
-							{ subPixelDistX, 0.0f }, { -subPixelDistX, 0.0f },
-							{ 0.0f, subPixelDistY }, { 0.0f, -subPixelDistY },
-							{ subPixelDistX, subPixelDistY }, { -subPixelDistX, -subPixelDistY },
-							{ subPixelDistX, -subPixelDistY }, { -subPixelDistX, subPixelDistY }
-						};
+                    // Calculate color distance (Euclidean distance between RGB values)
+                    float colorDistSq = (subOut[0] - centerR) * (subOut[0] - centerR) +
+                                        (subOut[1] - centerG) * (subOut[1] - centerG) +
+                                        (subOut[2] - centerB) * (subOut[2] - centerB);
 
-					    for (const auto& offset : subPixelOffsets)
-					    {
-					        // Generate the sub-pixel input
-					        ImageUtils::SpatialData subInput;
-					        if (coordinateMapper) {
-					            subInput = coordinateMapper(normX + offset.first, normY + offset.second);
-					        } else {
-					            subInput.values = { normX + offset.first, normY + offset.second };
-					        }
+                    // Calculate Bilateral Weight (spatial weight is constant here since distances are equal, 
+                    // so we only penalize based on color difference)
+                    float weight = std::exp(-colorDistSq / (2.0f * colorSigma * colorSigma));
 
-					        // Query the network for this continuous sub-coordinate
-					        const std::vector<float>& subOut = network.PropagateThreadSafe(subInput.values, standardBuffers);
+                    // Accumulate
+                    sumR += subOut[0] * weight;
+                    sumG += subOut[1] * weight;
+                    sumB += subOut[2] * weight;
+                    sumWeight += weight;
+                }
 
-					        // Calculate color distance (Euclidean distance between RGB values)
-					        float colorDistSq = (subOut[0] - centerR) * (subOut[0] - centerR) +
-					                            (subOut[1] - centerG) * (subOut[1] - centerG) +
-					                            (subOut[2] - centerB) * (subOut[2] - centerB);
+                // 4. Write the final denoised, edge-preserved pixel
+                reconstructedImage[pixelIndex + 0] = sumR / sumWeight;
+                reconstructedImage[pixelIndex + 1] = sumG / sumWeight;
+                reconstructedImage[pixelIndex + 2] = sumB / sumWeight;
+            }
+            else if (mode == RenderMode::SpatialGradient)
+            {
+                network.PropagateSpatialDerivativesThreadSafe(
+                    finalInput.values, 
+                    finalInput.gradX, 
+                    finalInput.gradY, 
+                    spatialBuffers);
+                
+                // Grab the X and Y gradients of the Red channel (index 0) from the final layer
+                const auto& finalGradX = spatialBuffers.gradientX.back();
+                const auto& finalGradY = spatialBuffers.gradientY.back();
+                
+                // We take the absolute value so negative gradients dont render as black
+                // We scale it by a small factor (like 0.1) so the colors arent blown out to pure white
+                //reconstructedImage[pixelIndex + 0] = std::abs(finalGradX[0]) * 0.1f; // Red = X Gradient
+                //reconstructedImage[pixelIndex + 1] = std::abs(finalGradY[0]) * 0.1f; // Green = Y Gradient
 
-					        // Calculate Bilateral Weight (spatial weight is constant here since distances are equal, 
-					        // so we only penalize based on color difference)
-					        float weight = std::exp(-colorDistSq / (2.0f * colorSigma * colorSigma));
+                // We divide by (width / 2.0f) to map the normalized gradient back to pixel space for viewing
+                reconstructedImage[pixelIndex + 0] = std::abs(finalGradX[0] / (width / 2.0f));  
+                reconstructedImage[pixelIndex + 1] = std::abs(finalGradY[0] / (height / 2.0f));
 
-					        // Accumulate
-					        sumR += subOut[0] * weight;
-					        sumG += subOut[1] * weight;
-					        sumB += subOut[2] * weight;
-					        sumWeight += weight;
-					    }
-
-					    // 4. Write the final denoised, edge-preserved pixel
-					    reconstructedImage[pixelIndex + 0] = sumR / sumWeight;
-					    reconstructedImage[pixelIndex + 1] = sumG / sumWeight;
-					    reconstructedImage[pixelIndex + 2] = sumB / sumWeight;
-					}
-					else if (mode == RenderMode::SpatialGradient)
-					{
-					    network.PropagateSpatialDerivativesThreadSafe(
-							finalInput.values, 
-							finalInput.gradX, 
-							finalInput.gradY, 
-							spatialBuffers);
-					    
-					    // Grab the X and Y gradients of the Red channel (index 0) from the final layer
-					    const auto& finalGradX = spatialBuffers.gradientX.back();
-					    const auto& finalGradY = spatialBuffers.gradientY.back();
-					    
-					    // We take the absolute value so negative gradients dont render as black
-					    // We scale it by a small factor (like 0.1) so the colors arent blown out to pure white
-					    //reconstructedImage[pixelIndex + 0] = std::abs(finalGradX[0]) * 0.1f;	// Red = X Gradient
-					    //reconstructedImage[pixelIndex + 1] = std::abs(finalGradY[0]) * 0.1f;	// Green = Y Gradient
-
-						// We divide by (width / 2.0f) to map the normalized gradient back to pixel space for viewing
-						reconstructedImage[pixelIndex + 0] = std::abs(finalGradX[0] / (width / 2.0f));  
-						reconstructedImage[pixelIndex + 1] = std::abs(finalGradY[0] / (height / 2.0f));
-
-						reconstructedImage[pixelIndex + 2] = 0.0f;								// Blue = 0
-					}
-				}
-			}
-		});
-    }
-
-	for (auto& worker : workers)
-	{
-		if (worker.joinable())
-		{
-			worker.join();
-		}
-	}
+                reconstructedImage[pixelIndex + 2] = 0.0f;                      // Blue = 0
+            }
+        }
+    });
 
     return reconstructedImage;
 }

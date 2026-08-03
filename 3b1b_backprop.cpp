@@ -98,17 +98,18 @@ namespace config
 	inline RenderMode render_mode = RenderMode::StandardRGB;
 
 	inline bool use_positional_encoding = false;
+	inline bool use_gaussian_pe = false;
 	inline int pe_num_frequencies = 10; // Positional encode
 
-	inline bool initial_live_update_state = true;
+	inline bool initial_live_update_state = false;
 
 	// Hyperparameters & Training State
 	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)
-	inline size_t batch_size = 65536;//8192;//32;
+	inline size_t batch_size = 8192;//65536;//8192;//32;
 	inline bool shuffle_pixel_batch = true; // TODO: either make this an input parameter or make this the default if batch size isnt == to image size
 	inline size_t print_every_n_batches = 1;
 	//inline float initial_learning_rate = 0.0001f;
-	inline float initial_learning_rate = 0.000025f;
+	inline float initial_learning_rate = 0.005f;//WIRE //0.000025f; Siren
 }
 
 namespace
@@ -246,7 +247,7 @@ static ImageUtils::SpatialData PositionalEncodeWithDerivatives(float x, float y,
     result.gradY.reserve(size);
 
     for (int i = 0; i < numFrequencies; ++i) {
-        const float freq = std::powf(2.0f, float(i)) * K_PI;
+        const float freq = std::powf(2.f, float(i)) * K_PI;
         const float weight = 1.0f - (static_cast<float>(i) / static_cast<float>(numFrequencies));
 
         // Pre-calculate to save CPU cycles
@@ -373,7 +374,8 @@ static UserAction PollUserAction()
 // Handles user actions outside the main training loop; returns false to break loop.
 static bool HandleUserAction(const UserAction action, Network& network, const BMPParsedData& data,
                              const std::string& weightsFile, bool& liveUpdateWindow,
-                             const std::function<ImageUtils::SpatialData(float, float)>& mapper)
+                             const std::function<ImageUtils::SpatialData(float, float)>& mapper,
+                             TrainingThreadPool& threadPool)
 {
 	switch (action)
 	{
@@ -387,7 +389,7 @@ static bool HandleUserAction(const UserAction action, Network& network, const BM
 		
 		case UserAction::ExportImage:
 		{
-			const std::vector<float> reconstructedImage = GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, mapper, config::render_mode);
+			const std::vector<float> reconstructedImage = GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, mapper, config::render_mode, threadPool);
 			saveBMP("network_output.bmp", data.width*config::output_image_scale, data.height*config::output_image_scale, reconstructedImage);
 			std::cout << "Successfully saved network_output.bmp!\n";
 			break;

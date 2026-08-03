@@ -11,14 +11,14 @@ struct Parameters : public Serializable
 	Parameters& operator*=(float other);
 	
 	void Clear();
-	std::vector<float> weights;
+	std::vector<float> weights; // Position (actual real weights)
 	std::vector<float> biases;
 
 	size_t layerIdx;
 
     // Adam state variables
-    std::vector<float> m_weights;
-    std::vector<float> v_weights;
+    std::vector<float> m_weights; // Momentum
+    std::vector<float> v_weights; // Velocity
     std::vector<float> m_biases;
     std::vector<float> v_biases;
     
