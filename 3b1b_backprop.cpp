@@ -67,9 +67,9 @@ static void LoadCustomBinaryData(const char* filename, ParsedData& outData)
 */
 
 #if _HAS_CXX23
-    constexpr float K_PI = std::numbers::pi_v<float>;
+    constexpr engineFloat K_PI = std::numbers::pi_v<engineFloat>;
 #else
-    constexpr float K_PI = static_cast<float>(3.141592653589793);
+    constexpr engineFloat K_PI = static_cast<engineFloat>(3.141592653589793);
 #endif
 
 // ============================================================================
@@ -91,7 +91,7 @@ namespace config
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
-	inline float output_image_scale = 1.5f;
+	inline engineFloat output_image_scale = 1.5f;
 	inline std::vector<size_t> custom_layer_dims = {};
 
 	//TODO-Lkrikilion: make a command like param for this like --render-mode or smth
@@ -109,7 +109,7 @@ namespace config
 	inline bool shuffle_pixel_batch = true; // TODO: either make this an input parameter or make this the default if batch size isnt == to image size
 	inline size_t print_every_n_batches = 1;
 	//inline float initial_learning_rate = 0.0001f;
-	inline float initial_learning_rate = 0.005f;//WIRE //0.000025f; Siren
+	inline engineFloat initial_learning_rate = 0.005f;//WIRE //0.000025f; Siren
 }
 
 namespace
@@ -152,7 +152,7 @@ static void ParseCommandLine(const int argc, char** argv)
 					// Convert the string argument to an unsigned long integer (size_t)
 					config::custom_layer_dims.push_back(std::stoul(argv[i + 1]));
 				} catch (const std::exception& e) {
-					std::cerr << "Error parsing layer dimension: " << argv[i + 1] << "\n";
+					std::cerr << "Error parsing layer dimension: " << argv[i + 1] << "Error: " << e.what() << "\n";
 				}
 				i++; // Advance the loop
 			}
@@ -238,7 +238,7 @@ static void ParseCommandLine(const int argc, char** argv)
 }
 
 	// TODO: merge the 2 function below or something this is bad but we need one for the imagedataset and another for the coormapper
-static ImageUtils::SpatialData PositionalEncodeWithDerivatives(float x, float y, int numFrequencies) 
+static ImageUtils::SpatialData PositionalEncodeWithDerivatives(engineFloat x, engineFloat y, int numFrequencies) 
 {
     ImageUtils::SpatialData result;
     const size_t size = static_cast<size_t>(numFrequencies) * 4;
@@ -247,14 +247,14 @@ static ImageUtils::SpatialData PositionalEncodeWithDerivatives(float x, float y,
     result.gradY.reserve(size);
 
     for (int i = 0; i < numFrequencies; ++i) {
-        const float freq = std::powf(2.f, float(i)) * K_PI;
-        const float weight = 1.0f - (static_cast<float>(i) / static_cast<float>(numFrequencies));
+        const engineFloat freq = std::powf(2.f, float(i)) * K_PI;
+        const engineFloat weight = 1.0f - (static_cast<float>(i) / static_cast<float>(numFrequencies));
 
         // Pre-calculate to save CPU cycles
-        float sin_x = std::sin(x * freq);
-        float cos_x = std::cos(x * freq);
-        float sin_y = std::sin(y * freq);
-        float cos_y = std::cos(y * freq);
+        engineFloat sin_x = std::sin(x * freq);
+        engineFloat cos_x = std::cos(x * freq);
+        engineFloat sin_y = std::sin(y * freq);
+        engineFloat cos_y = std::cos(y * freq);
 
         // Standard Values
         result.values.push_back(sin_x * weight);
@@ -278,13 +278,13 @@ static ImageUtils::SpatialData PositionalEncodeWithDerivatives(float x, float y,
 }
 
 // Helper to expand a coordinate (x, y) into multiple frequency bands with decay
-static std::vector<float> PositionalEncode(float x, float y, int numFrequencies) {
-	std::vector<float> encoded;
+static std::vector<engineFloat> PositionalEncode(engineFloat x, engineFloat y, int numFrequencies) {
+	std::vector<engineFloat> encoded;
 	encoded.reserve(static_cast<size_t>(numFrequencies) * 4);
 
 	for (int i = 0; i < numFrequencies; ++i) {
-		const float freq = std::powf(2.0f, float(i)) * K_PI;
-		const float weight = 1.0f - (static_cast<float>(i) / static_cast<float>(numFrequencies));
+		const engineFloat freq = std::pow(2.0f, static_cast<engineFloat>(i)) * K_PI;
+		const engineFloat weight = 1.0f - (static_cast<engineFloat>(i) / static_cast<engineFloat>(numFrequencies));
     
 		encoded.push_back(std::sin(x * freq) * weight);
 		encoded.push_back(std::cos(x * freq) * weight);
@@ -301,18 +301,17 @@ static std::string GetCheckpointFilename(const std::string& imageFilename, const
 {
 	namespace fs = std::filesystem;
 
-	// Get filename withouth extention (aka: stem)
+	// Get filename without extension (aka: stem)
 	std::string stem = fs::path(imageFilename).stem().string();
 	std::string filename = "weights_biases_" + stem + ".csv";
 
-	// If no base path is provided, just return the filename
-	if (outbasePath.empty())
+	// If a base path is provided, modify the filename variable
+	if (!outbasePath.empty())
 	{
-		return filename;
+		filename = (fs::path(outbasePath) / filename).string();
 	}
-
-	// The '/' operator safely joins paths, automatically adding slashes if needed!
-	return (fs::path(outbasePath) / filename).string();
+	
+	return filename; 
 }
 
 static void LoadCheckpoint(Network& network, const std::string& filename)
@@ -353,8 +352,7 @@ static UserAction PollUserAction()
 {
 	if (!_kbhit()) return UserAction::None;
 
-	int ch = _getch();
-	switch (ch)
+	switch (int ch = _getch())
 	{
 		case 'q': case 'Q': case 27: // ESC
 			return UserAction::Quit;
@@ -374,7 +372,7 @@ static UserAction PollUserAction()
 // Handles user actions outside the main training loop; returns false to break loop.
 static bool HandleUserAction(const UserAction action, Network& network, const BMPParsedData& data,
                              const std::string& weightsFile, bool& liveUpdateWindow,
-                             const std::function<ImageUtils::SpatialData(float, float)>& mapper,
+                             const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& mapper,
                              TrainingThreadPool& threadPool)
 {
 	switch (action)
@@ -389,8 +387,8 @@ static bool HandleUserAction(const UserAction action, Network& network, const BM
 		
 		case UserAction::ExportImage:
 		{
-			const std::vector<float> reconstructedImage = GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, mapper, config::render_mode, threadPool);
-			saveBMP("network_output.bmp", data.width*config::output_image_scale, data.height*config::output_image_scale, reconstructedImage);
+			const std::vector<engineFloat> reconstructedImage = GenerateReconstructedImage(network, int(data.width * config::output_image_scale), int(data.height * config::output_image_scale), mapper, config::render_mode, threadPool);
+			saveBMP("network_output.bmp", int(data.width*config::output_image_scale), int(data.height*config::output_image_scale), reconstructedImage);
 			std::cout << "Successfully saved network_output.bmp!\n";
 			break;
 		}
@@ -403,7 +401,8 @@ static bool HandleUserAction(const UserAction action, Network& network, const BM
 		case UserAction::SwapRenderMode:
 			config::render_mode = (RenderMode)(((int)config::render_mode + 1) % (int)RenderMode::Last);
 			std::cout << "Updated render mode!\n"; // Im not making an enum to sting >:(
-
+			break;
+		
 		case UserAction::None:
 			break;
 	}
@@ -420,31 +419,31 @@ static size_t GetRandomImageIndex(const size_t totalImages)
 }
 
 // Executes a full epoch consisting of multiple mini-batches and returns the average cost.
-static float RunTrainingEpoch(Network& network,
-                              const std::vector<std::vector<float>>& images,
-                              const std::vector<std::vector<float>>& labels,
+static engineFloat RunTrainingEpoch(Network& network,
+                              const std::vector<std::vector<engineFloat>>& images,
+                              const std::vector<std::vector<engineFloat>>& labels,
                               size_t& currentImageIdx,
                               const size_t printEveryNBatches,
                               const size_t batchSize,
-                              float& learningRate)
+                              engineFloat& learningRate)
 {
-	float totalCost = 0.0f;
+	engineFloat totalCost = 0.0f;
 
 	for (size_t j = 0; j < printEveryNBatches; j++)
 	{
 		for (size_t i = 0; i < batchSize; i++)
 		{
-			float c = network.BackPropagate(images[currentImageIdx], labels[currentImageIdx]);
+			engineFloat c = network.BackPropagate(images[currentImageIdx], labels[currentImageIdx]);
 			totalCost += c;
 
 			currentImageIdx = GetRandomImageIndex(images.size());
 		}
 
 		network.ConsumeDelta(learningRate);
-		learningRate *= static_cast<float>(std::pow(0.9999999, batchSize));
+		learningRate *= static_cast<engineFloat>(std::pow(0.9999999, batchSize));
 	}
 
-	return totalCost / static_cast<float>(batchSize * printEveryNBatches);
+	return totalCost / static_cast<engineFloat>(batchSize * printEveryNBatches);
 }
 }
 

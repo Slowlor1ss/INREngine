@@ -3,6 +3,8 @@
 #include <cmath>
 #include <algorithm>
 
+#include "Types.h"
+
 namespace CostFunc
 {
 	class Base
@@ -10,8 +12,8 @@ namespace CostFunc
 	public:
 		virtual ~Base() = default;
 		virtual std::string GetName() const = 0;
-		virtual float Execute(float activation, float target) const = 0;
-		virtual float ExecuteDerivative(float activation, float target) const = 0;
+		virtual engineFloat Execute(engineFloat activation, engineFloat target) const = 0;
+		virtual engineFloat ExecuteDerivative(engineFloat activation, engineFloat target) const = 0;
 	};
 
 	class MSE : public Base
@@ -24,13 +26,13 @@ namespace CostFunc
 			return k_name;
 		}
 
-		virtual float Execute(float activation, float target) const override
+		virtual engineFloat Execute(engineFloat activation, engineFloat target) const override
 		{
-			float diff = activation - target;
+			engineFloat diff = activation - target;
 			return diff * diff;
 		}
 
-		virtual float ExecuteDerivative(float activation, float target) const override
+		virtual engineFloat ExecuteDerivative(engineFloat activation, engineFloat target) const override
 		{
 			// derivative of (act - y)^2 is 2 * (act - y)
 			return 2.0f * (activation - target);
@@ -47,12 +49,12 @@ namespace CostFunc
 			return k_name;
 		}
 
-		virtual float Execute(float activation, float target) const override
+		virtual engineFloat Execute(engineFloat activation, engineFloat target) const override
 		{
 			return std::abs(activation - target);
 		}
 
-		virtual float ExecuteDerivative(float activation, float target) const override
+		virtual engineFloat ExecuteDerivative(engineFloat activation, engineFloat target) const override
 		{
 			// derivative of l1 loss: -1 if target > activation, +1 if activation >= target
 			return (target > activation) ? -1.0f : 1.0f;

@@ -7,8 +7,10 @@
 #include <stdexcept>
 #include <string>
 
+// TODO: we dont use this file anymore
+
 // Helper function to swap endianness for 32-bit integers
-uint32_t swap_endian(uint32_t val) {
+inline uint32_t swap_endian(uint32_t val) {
     return ((val << 24) & 0xFF000000) |
         ((val << 8) & 0x00FF0000) |
         ((val >> 8) & 0x0000FF00) |
@@ -16,7 +18,7 @@ uint32_t swap_endian(uint32_t val) {
 }
 
 // Function to read MNIST images into a vector of vectors
-std::vector<std::vector<float>> read_mnist_images(const std::string& filepath, bool normalize = true) {
+inline std::vector<std::vector<float>> read_mnist_images(const std::string& filepath, bool normalize = true) {
     std::ifstream file(filepath, std::ios::binary);
     if (!file.is_open()) {
         throw std::runtime_error("Cannot open file: " + filepath);

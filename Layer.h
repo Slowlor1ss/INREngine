@@ -45,10 +45,10 @@ protected:
 	size_t m_numNeurons;
 
 	// actiavtion before the activationfunction applies
-	std::vector<float> m_preProcessedActivations;
+	std::vector<engineFloat> m_preProcessedActivations;
 
 	// final activation
-	std::vector<float> m_activations;
+	std::vector<engineFloat> m_activations;
 
 	friend class Network;
 };
@@ -58,5 +58,5 @@ class InitialLayer : public Layer
 public:
 	InitialLayer(size_t numNeurons);
 	virtual ~InitialLayer() = default;
-	void StartPropagation(const std::vector<float>& inputActivation);
+	void StartPropagation(const std::vector<engineFloat>& inputActivation);
 };

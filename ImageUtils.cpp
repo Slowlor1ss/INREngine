@@ -1,7 +1,7 @@
 #include "ImageUtils.h"
 
 std::vector<ImageUtils::SpatialData> ImageUtils::GenerateGradientTargets(
-    const std::vector<std::vector<float>>& targetPixels, int width, int height)
+    const std::vector<std::vector<engineFloat>>& targetPixels, int width, int height)
 {
     std::vector<SpatialData> dataset(width * height);
 
@@ -13,8 +13,8 @@ std::vector<ImageUtils::SpatialData> ImageUtils::GenerateGradientTargets(
             dataset[idx].values = targetPixels[idx];
 			
             // Initialize gradient vectors for R, G, B channels
-            dataset[idx].gradX.resize(3, 0.0f);
-            dataset[idx].gradY.resize(3, 0.0f);
+            dataset[idx].gradX.resize(3, 0.0);
+            dataset[idx].gradY.resize(3, 0.0);
 
             // Safely grab neighbor indices (clamping at the borders to prevent out-of-bounds)
             int x_prev = std::max(0, x - 1);
@@ -31,8 +31,8 @@ std::vector<ImageUtils::SpatialData> ImageUtils::GenerateGradientTargets(
             for (int c = 0; c < 3; ++c)
             {
                 // Multiply by (width / 2.0f) and (height / 2.0f) to map the pixel-space gradient to normalized [-1, 1] coordinate space!
-                dataset[idx].gradX[c] = ((targetPixels[idx_x_next][c] - targetPixels[idx_x_prev][c]) / 2.0f) * (width / 2.0f);
-				dataset[idx].gradY[c] = ((targetPixels[idx_y_next][c] - targetPixels[idx_y_prev][c]) / 2.0f) * (height / 2.0f);
+                dataset[idx].gradX[c] = ((targetPixels[idx_x_next][c] - targetPixels[idx_x_prev][c]) / (engineFloat)2.0) * (width / (engineFloat)2.0);
+				dataset[idx].gradY[c] = ((targetPixels[idx_y_next][c] - targetPixels[idx_y_prev][c]) / (engineFloat)2.0) * (height / (engineFloat)2.0);
             }
         }
     }

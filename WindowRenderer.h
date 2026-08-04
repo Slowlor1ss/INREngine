@@ -3,13 +3,15 @@
 #include <cstdint>
 #include <windows.h>
 
+#include "Types.h"
+
 class ImageWindow {
 public:
     ImageWindow(int width, int height);
     ~ImageWindow();
 
     // Takes an array of RGB floats (0.0 to 1.0) and draws it
-    void Update(const std::vector<float>& rgbData);
+    void Update(const std::vector<engineFloat>& rgbData);
     
     // Call this in your main loop so the window doesn't freeze
     void ProcessMessages(); 

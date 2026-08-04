@@ -4,8 +4,10 @@
 #include <mutex>
 #include <condition_variable>
 #include <cstdint>
-#include "ImageUtils.h"
 #include <functional>
+
+#include "ImageUtils.h"
+#include "Types.h"
 
 class Network;
 
@@ -17,7 +19,7 @@ public:
     TrainingThreadPool(size_t numThreads, Network& net);
     ~TrainingThreadPool();
 
-    float RunBatch(const std::vector<ImageUtils::SpatialData>& inputs,
+    engineFloat RunBatch(const std::vector<ImageUtils::SpatialData>& inputs,
                    const std::vector<ImageUtils::SpatialData>& targets,
                    size_t startIndex,
                    size_t batchSize);
@@ -38,7 +40,7 @@ private:
     bool m_stop = false;
     uint64_t m_batchID = 0; 
     size_t m_activeWorkers = 0;
-    float m_batchCost = 0.0f;
+    engineFloat m_batchCost = 0.0f;
 
     // Training Data
     const std::vector<ImageUtils::SpatialData>* m_inputs = nullptr;

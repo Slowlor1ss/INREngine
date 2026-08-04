@@ -4,21 +4,21 @@
 
 #include "Network.h"
 
-std::vector<float> GenerateReconstructedImage(
+std::vector<engineFloat> GenerateReconstructedImage(
     const Network& network, 
     int width, 
     int height,
-    const std::function<ImageUtils::SpatialData(float, float)>& coordinateMapper,
+    const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordinateMapper,
     RenderMode mode,
     TrainingThreadPool& threadPool)
 {
     size_t totalPixels = static_cast<size_t>(width) * height;
-    std::vector<float> reconstructedImage(totalPixels * 3);
+    std::vector<engineFloat> reconstructedImage(totalPixels * 3);
 
     // Pre-allocate buffers for each thread so they don't recreate them inside the loop
     // or overwrite each other's activations during parallel execution
     size_t numWorkers = threadPool.GetThreadCount();
-    std::vector<std::vector<std::vector<float>>> threadStandardBuffers(numWorkers);
+    std::vector<std::vector<std::vector<engineFloat>>> threadStandardBuffers(numWorkers);
     std::vector<Network::SpatialDerivativeBuffer> threadSpatialBuffers(numWorkers);
 
     // Execute via the persistent thread pool
@@ -36,8 +36,8 @@ std::vector<float> GenerateReconstructedImage(
             int y = static_cast<int>(i / width);
 
             // Changes 0.0 -> 1.0 into -1.0 -> 1.0
-            float normY = (static_cast<float>(y) / (float)height) * 2.0f - 1.0f;
-            float normX = (static_cast<float>(x) / (float)width) * 2.0f - 1.0f;
+            engineFloat normY = (static_cast<engineFloat>(y) / (engineFloat)height) * 2.0f - 1.0f;
+            engineFloat normX = (static_cast<engineFloat>(x) / (engineFloat)width) * 2.0f - 1.0f;
             
             size_t pixelIndex = i * 3;
 
@@ -57,7 +57,7 @@ std::vector<float> GenerateReconstructedImage(
 
             if (mode == RenderMode::StandardRGB)
             {
-                const std::vector<float>& output = network.PropagateThreadSafe(finalInput.values, standardBuffers);
+                const std::vector<engineFloat>& output = network.PropagateThreadSafe(finalInput.values, standardBuffers);
 
                 reconstructedImage[pixelIndex + 0] = output[0];
                 reconstructedImage[pixelIndex + 1] = output[1];
@@ -66,28 +66,28 @@ std::vector<float> GenerateReconstructedImage(
             else if (mode == RenderMode::Blur)
             {
                 // 1. Query the exact center of the pixel
-                const std::vector<float>& centerOutput = network.PropagateThreadSafe(finalInput.values, standardBuffers);
-                float centerR = centerOutput[0];
-                float centerG = centerOutput[1];
-                float centerB = centerOutput[2];
+                const std::vector<engineFloat>& centerOutput = network.PropagateThreadSafe(finalInput.values, standardBuffers);
+                engineFloat centerR = centerOutput[0];
+                engineFloat centerG = centerOutput[1];
+                engineFloat centerB = centerOutput[2];
 
                 // 2. Setup the Continuous Bilateral Filter parameters
                 // We sample sub-pixel distances (e.g., 1/3rd of a pixel away)
-                const float subPixelDistMul = 2.5f;
-                float subPixelDistX = (1.0f / width) * subPixelDistMul;
-                float subPixelDistY = (1.0f / height) * subPixelDistMul;
+                const engineFloat subPixelDistMul = 2.5f;
+                engineFloat subPixelDistX = (1.0f / width) * subPixelDistMul;
+                engineFloat subPixelDistY = (1.0f / height) * subPixelDistMul;
                 
                 // Sigma values control how aggressive the filter is. 
                 // Lower colorSigma preserves edges better.
-                float colorSigma = 0.1f; 
+                engineFloat colorSigma = 0.1f; 
 
-                float sumR = centerR;
-                float sumG = centerG;
-                float sumB = centerB;
-                float sumWeight = 1.0f;
+                engineFloat sumR = centerR;
+                engineFloat sumG = centerG;
+                engineFloat sumB = centerB;
+                engineFloat sumWeight = 1.0f;
 
                 // 3. MORE SAMPLES: Check 8 directions instead of 4 (including diagonals)
-                std::vector<std::pair<float, float>> subPixelOffsets = {
+                std::vector<std::pair<engineFloat, engineFloat>> subPixelOffsets = {
                     { subPixelDistX, 0.0f }, { -subPixelDistX, 0.0f },
                     { 0.0f, subPixelDistY }, { 0.0f, -subPixelDistY },
                     { subPixelDistX, subPixelDistY }, { -subPixelDistX, -subPixelDistY },
@@ -105,16 +105,16 @@ std::vector<float> GenerateReconstructedImage(
                     }
 
                     // Query the network for this continuous sub-coordinate
-                    const std::vector<float>& subOut = network.PropagateThreadSafe(subInput.values, standardBuffers);
+                    const std::vector<engineFloat>& subOut = network.PropagateThreadSafe(subInput.values, standardBuffers);
 
                     // Calculate color distance (Euclidean distance between RGB values)
-                    float colorDistSq = (subOut[0] - centerR) * (subOut[0] - centerR) +
+                    engineFloat colorDistSq = (subOut[0] - centerR) * (subOut[0] - centerR) +
                                         (subOut[1] - centerG) * (subOut[1] - centerG) +
                                         (subOut[2] - centerB) * (subOut[2] - centerB);
 
                     // Calculate Bilateral Weight (spatial weight is constant here since distances are equal, 
                     // so we only penalize based on color difference)
-                    float weight = std::exp(-colorDistSq / (2.0f * colorSigma * colorSigma));
+                    engineFloat weight = std::exp(-colorDistSq / (2.0f * colorSigma * colorSigma));
 
                     // Accumulate
                     sumR += subOut[0] * weight;

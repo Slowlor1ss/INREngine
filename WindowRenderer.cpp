@@ -51,11 +51,11 @@ ImageWindow::~ImageWindow() {
     }
 }
 
-void ImageWindow::Update(const std::vector<float>& rgbData) {
+void ImageWindow::Update(const std::vector<engineFloat>& rgbData) {
     for (int i = 0; i < m_width * m_height; ++i) {
-        float r = rgbData[i * 3 + 0];
-        float g = rgbData[i * 3 + 1];
-        float b = rgbData[i * 3 + 2];
+        engineFloat r = rgbData[i * 3 + 0];
+        engineFloat g = rgbData[i * 3 + 1];
+        engineFloat b = rgbData[i * 3 + 2];
 
         // Clamp values safely before casting to uint8_t
         r = (r > 1.0f) ? 1.0f : ((r < 0.0f) ? 0.0f : r);
@@ -70,7 +70,7 @@ void ImageWindow::Update(const std::vector<float>& rgbData) {
     }
 
     // Paint to the screen immediately
-    HDC hdc = GetDC(m_hwnd);
+    const HDC hdc = GetDC(m_hwnd);
     SetDIBitsToDevice(hdc, 0, 0, m_width, m_height, 0, 0, 0, m_height, 
                       m_displayBuffer.data(), &m_bmi, DIB_RGB_COLORS);
     ReleaseDC(m_hwnd, hdc);

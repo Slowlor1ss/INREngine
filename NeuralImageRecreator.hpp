@@ -2,46 +2,46 @@
 #include <numeric> // Put this at the very top of your file
 #include <random>
 
-static float RunGradientGuidedTrainingEpoch(Network& network,
+//TODO: move
+size_t currentEpoch = 0;
+size_t maxEpochs = 8000; // From the PyTorch script niters = 2000
+
+static engineFloat RunGradientGuidedTrainingEpoch(Network& network,
                                             const std::vector<ImageUtils::SpatialData>& inputs,
                                             const std::vector<ImageUtils::SpatialData>& targets,
                                             size_t& currentImageIdx,
                                             const size_t printEveryNBatches,
                                             const size_t batchSize,
-                                            float& learningRate,
+                                            engineFloat& learningRate,
                                             TrainingThreadPool& threadPool)
 {
-    float totalCost = 0.0f;
+    engineFloat totalCost = 0.0f;
 
     for (size_t j = 0; j < printEveryNBatches; j++)
     {
-        // 1. Run the entire batch across all cores instantly
-        float batchCost = threadPool.RunBatch(inputs, targets, currentImageIdx, batchSize);
-        totalCost += (batchCost / static_cast<float>(batchSize));
+        // Run the entire batch across all cores instantly
+        engineFloat batchCost = threadPool.RunBatch(inputs, targets, currentImageIdx, batchSize);
+        totalCost += (batchCost / static_cast<engineFloat>(batchSize));
         
-        // 2. Apply the averaged batch weights via Adam
+        // Apply the averaged batch weights via Adam
         network.ConsumeDelta(learningRate);
         
-        // 3. Move forward in the dataset (or pick random)
+        // Move forward in the dataset (or pick random)
         //currentImageIdx = GetRandomImageIndex(inputs.size());
     	currentImageIdx = (currentImageIdx + batchSize) % inputs.size();
     	
         // Decay learning rate
 		// Comented out for now as were now using Adam
-        //learningRate *= static_cast<float>(std::pow(0.9999999, batchSize));
-    	
-    	size_t currentEpoch = 0;
-    	size_t maxEpochs = 2000; // From the PyTorch script 'niters = 2000'
-    	float initialLearningRate = 0.005f;
+        //learningRate *= static_cast<engineFloat>(std::pow(0.9999999, batchSize));
 
     	// Calculate the decay factor just like the LambdaLR scheduler
-    	float progress = min(static_cast<float>(currentEpoch) / maxEpochs, 1.0f);
-    	learningRate = initialLearningRate * std::pow(0.1f, progress);
+    	engineFloat progress = min(static_cast<engineFloat>(currentEpoch) / maxEpochs, 1.0f);
+    	learningRate = config::initial_learning_rate * std::pow(0.1f, progress);
 
     	currentEpoch++;
     }
 
-    return totalCost / static_cast<float>(printEveryNBatches);
+    return totalCost / static_cast<engineFloat>(printEveryNBatches);
 }
 
 void NeuralImageRecreator()
@@ -53,10 +53,10 @@ void NeuralImageRecreator()
 	ParseBMPData(config::target_image_file.c_str(), data);
 
 	// Setup our coordinate mapper lambda for the ImageGenerator
-	std::function<ImageUtils::SpatialData(float, float)> coordMapper = nullptr;
+	std::function<ImageUtils::SpatialData(engineFloat, engineFloat)> coordMapper = nullptr;
 	if (config::use_positional_encoding) 
 	{
-	    coordMapper = [freqs = config::pe_num_frequencies](float x, float y) {
+	    coordMapper = [freqs = config::pe_num_frequencies](engineFloat x, engineFloat y) {
 	        // No longer scaling by 2.0/w! Keep it pure.
 	        return PositionalEncodeWithDerivatives(x, y, freqs); 
 	    };
@@ -66,13 +66,13 @@ void NeuralImageRecreator()
 		GaussianPositionalEncoder gaussianPE(64, 10.0f);
 		// TODO: find a better way but
 		// we copy gaussianPE into the lambda so it lives forever so dont pass a s reference
-		coordMapper = [gaussianPE](float x, float y) {
+		coordMapper = [gaussianPE](engineFloat x, engineFloat y) {
 			return gaussianPE(x, y);
 		};
 	}
 	else 
 	{
-	    coordMapper = [](float x, float y) {
+	    coordMapper = [](engineFloat x, engineFloat y) {
 	        ImageUtils::SpatialData d;
 	        d.values = { x, y };
 	        d.gradX = { 1.0f, 0.0f }; // Pure normalized derivative
@@ -127,8 +127,8 @@ void NeuralImageRecreator()
 	if (!config::custom_layer_dims.empty()) {
 		layerDims.insert(layerDims.end(), config::custom_layer_dims.begin(), config::custom_layer_dims.end());
 	} else {
-		//layerDims.insert(layerDims.end(), { 64, 64, 64, 64, 3 });
-		layerDims.insert(layerDims.end(), { 256, 256, 256, 256, 256, 256, 3 });
+		layerDims.insert(layerDims.end(), { 64, 64, 64, 64, 3 });
+		//layerDims.insert(layerDims.end(), { 256, 256, 256, 256, 256, 256, 3 });
 
 	}
 	
@@ -146,7 +146,7 @@ void NeuralImageRecreator()
 	if (numThreads == 0) numThreads = 8;
 	TrainingThreadPool threadPool(numThreads, network);
 
-	ImageWindow rendererWindow(data.width * config::output_image_scale, data.height * config::output_image_scale);
+	ImageWindow rendererWindow(int(data.width * config::output_image_scale), int(data.height * config::output_image_scale));
 
 	// Load Weights Checkpoint (Validates dimensions vs current layerDims automatically)
 	// TODO: REENABLE ONCE I FIXED THIS DAMMED BUG
@@ -157,7 +157,7 @@ void NeuralImageRecreator()
 
 	size_t currentImage = 0;
 	bool liveUpdateWindow = config::initial_live_update_state;
-	float learningRate = config::initial_learning_rate;
+	engineFloat learningRate = config::initial_learning_rate;
 
 	// Main Training & UI Loop
 	while (true)
@@ -172,7 +172,7 @@ void NeuralImageRecreator()
 		}
 
 		// Perform batch training step
-		float cost;
+		engineFloat cost;
 		if( config::shuffle_pixel_batch )
 			cost = RunGradientGuidedTrainingEpoch(network, shuffledInputs, shuffledTargets, currentImage, config::print_every_n_batches, config::batch_size, learningRate, threadPool);
 		else
@@ -181,7 +181,7 @@ void NeuralImageRecreator()
 		// Live viewer update
 		if (liveUpdateWindow)
 		{
-			rendererWindow.Update(GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, coordMapper, config::render_mode, threadPool));
+			rendererWindow.Update(GenerateReconstructedImage(network, int(data.width * config::output_image_scale), int(data.height * config::output_image_scale), coordMapper, config::render_mode, threadPool));
 		}
 
 		// Report progress
@@ -191,7 +191,7 @@ void NeuralImageRecreator()
 	// Final Output Generation & Cleanup
 	std::cout << "Generating final output image from network state...\n";
 
-	std::vector<float> finalReconstructedImage = GenerateReconstructedImage(network, data.width * config::output_image_scale, data.height * config::output_image_scale, coordMapper, config::render_mode, threadPool);
+	std::vector<engineFloat> finalReconstructedImage = GenerateReconstructedImage(network, int(data.width * config::output_image_scale), int(data.height * config::output_image_scale), coordMapper, config::render_mode, threadPool);
 
 	rendererWindow.Update(finalReconstructedImage);
 

@@ -27,24 +27,24 @@ enum class RenderMode {
 };
 
 // struct MappedInput {
-//     std::vector<float> values;
-//     std::vector<float> gradX;
-//     std::vector<float> gradY;
+//     std::vector<engineFloat> values;
+//     std::vector<engineFloat> gradX;
+//     std::vector<engineFloat> gradY;
 // };
 
 // Parallelized RGB image reconstruction from network weights using multi-threading.
-// std::vector<float> GenerateReconstructedImage(
+// std::vector<engineFloat> GenerateReconstructedImage(
 //     const Network& network, 
 //     int width, 
 //     int height,
-//     const std::function<ImageUtils::SpatialData(float, float)>& coordinateMapper = nullptr,
+//     const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordinateMapper = nullptr,
 //     RenderMode mode = RenderMode::StandardRGB
 // );
 
-std::vector<float> GenerateReconstructedImage(
+std::vector<engineFloat> GenerateReconstructedImage(
     const Network& network, 
     int width, 
     int height,
-    const std::function<ImageUtils::SpatialData(float, float)>& coordinateMapper,
+    const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordinateMapper,
     RenderMode mode,
     TrainingThreadPool& threadPool);

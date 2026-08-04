@@ -16,15 +16,17 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFu
     v_weights.resize(numWeights, 0.0f);
     adam_t = 0;
 
+	static std::random_device rd;
+	//static std::mt19937 generator(rd());
+	static std::mt19937 generator(42); // Fixed seed for debugging
+	size_t fanIn = (numBiases > 0) ? (numWeights / numBiases) : 1;
+	size_t fanOut = numBiases;
+	
 	for (size_t i = 0; i < numBiases; i++)
 	{
-		biases[i] = 0.0f; // Biases are safer to initialize as straight 0
+		biases[i] = actFunc->GenerateInitialBiases( generator, fanIn, fanOut, lIdx );
 	}
 
-	static std::random_device rd;
-	static std::mt19937 generator(rd());
-	size_t fanIn = (numBiases > 0) ? (numWeights / numBiases) : 1;
-	size_t fanOut = numBiases;// wrong!!!! should be number of neurons in the next layer >> outoging connections per neuron
 	for (size_t i = 0; i < numWeights; i++)
 	{
 		weights[i] = actFunc->GenerateInitialWeight( generator, fanIn, fanOut, lIdx );
@@ -54,7 +56,7 @@ Parameters& Parameters::operator+=(const Parameters& other)
 	return *this;
 }
 
-Parameters& Parameters::operator*=(float other)
+Parameters& Parameters::operator*=(engineFloat other)
 {
 	for (size_t j = 0; j < biases.size(); j++)
 	{
@@ -178,28 +180,28 @@ void Parameters::Serialize(std::ostream& out)
     out << "\n";
 }
 
-void Parameters::ApplyAdamUpdate(const std::vector<float>& gradWeights, const std::vector<float>& gradBiases, float learningRate)
+void Parameters::ApplyAdamUpdate(const std::vector<engineFloat>& gradWeights, const std::vector<engineFloat>& gradBiases, engineFloat learningRate)
 {
     // Adam hyperparameters (Standard defaults)
-    const float beta1 = 0.9f;
-    const float beta2 = 0.999f;
-    const float epsilon = 1e-8f;
+    constexpr engineFloat beta1 = 0.9f;
+    constexpr engineFloat beta2 = 0.999f;
+    constexpr engineFloat epsilon = 1e-8f;
 
     adam_t++; // Increment time step
 
     // Precalculate bias correction denominators
-    float correction1 = 1.0f - std::pow(beta1, adam_t);
-    float correction2 = 1.0f - std::pow(beta2, adam_t);
+    const engineFloat correction1 = 1.0f - std::pow(beta1, adam_t);
+    const engineFloat correction2 = 1.0f - std::pow(beta2, adam_t);
 
     // Update Weights
     for (size_t i = 0; i < weights.size(); i++)
     {
-        float g = gradWeights[i];
+        engineFloat g = gradWeights[i];
         m_weights[i] = beta1 * m_weights[i] + (1.0f - beta1) * g;
         v_weights[i] = beta2 * v_weights[i] + (1.0f - beta2) * (g * g);
 
-        float m_hat = m_weights[i] / correction1;
-        float v_hat = v_weights[i] / correction2;
+        engineFloat m_hat = m_weights[i] / correction1;
+        engineFloat v_hat = v_weights[i] / correction2;
 
         weights[i] -= learningRate * (m_hat / (std::sqrt(v_hat) + epsilon));
     }
@@ -207,12 +209,12 @@ void Parameters::ApplyAdamUpdate(const std::vector<float>& gradWeights, const st
     // Update Biases
     for (size_t i = 0; i < biases.size(); i++)
     {
-        float g = gradBiases[i];
+        engineFloat g = gradBiases[i];
         m_biases[i] = beta1 * m_biases[i] + (1.0f - beta1) * g;
         v_biases[i] = beta2 * v_biases[i] + (1.0f - beta2) * (g * g);
 
-        float m_hat = m_biases[i] / correction1;
-        float v_hat = v_biases[i] / correction2;
+        engineFloat m_hat = m_biases[i] / correction1;
+        engineFloat v_hat = v_biases[i] / correction2;
 
         biases[i] -= learningRate * (m_hat / (std::sqrt(v_hat) + epsilon));
     }

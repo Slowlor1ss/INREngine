@@ -46,11 +46,11 @@ void Layer::Propagate()
 		{
 			size_t startWeight = i * weightsPerNeuron;
 
-			float activation = 0.0f;
+			engineFloat activation = 0.0f;
 			for (size_t j = 0; j < m_previousLayer->m_activations.size(); j++)
 			{
-				float prevActivation = m_previousLayer->m_activations[j];
-				float weight = m_params.weights[startWeight + j];
+				engineFloat prevActivation = m_previousLayer->m_activations[j];
+				engineFloat weight = m_params.weights[startWeight + j];
 				activation += weight * prevActivation;
 			}
 			activation += m_params.biases[i];
@@ -77,7 +77,7 @@ InitialLayer::InitialLayer(size_t numNeurons)
 {
 }
 
-void InitialLayer::StartPropagation(const std::vector<float>& inputActivation)
+void InitialLayer::StartPropagation(const std::vector<engineFloat>& inputActivation)
 {
 	if (inputActivation.size() == m_numNeurons)
 	{

@@ -13,9 +13,9 @@ Network::Network(
     m_costFunction = (costFunc != nullptr) ? costFunc : CostFunc::DataBase::FindCostFunc<CostFunc::L1>();
 
     m_layers.push_back(std::make_unique<InitialLayer>(neuronsPerLayer[0]));
-    m_storedDelta.push_back(Parameters{ m_layers.front()->GetNumNeurons(), m_layers.front()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0 });
+    m_storedDelta.emplace_back(m_layers.front()->GetNumNeurons(), m_layers.front()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0);
 	m_storedDelta.back().Clear(); // TODO: unsure
-    m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[0], 0.0f));
+    m_costDeltas.emplace_back(neuronsPerLayer[0], 0.0f);
 
     for (size_t i = 1; i < neuronsPerLayer.size(); i++)
     {
@@ -23,9 +23,9 @@ Network::Network(
         ActFunc::Base* actFunc = (i == neuronsPerLayer.size() - 1) ? outputActivation : hiddenActivation;
 
         m_layers.push_back(std::make_unique<Layer>(neuronsPerLayer[i], actFunc, i, m_layers.back().get()));
-        m_storedDelta.push_back(Parameters{ m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), i });
+        m_storedDelta.emplace_back(m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), i);
 		m_storedDelta.back().Clear(); // TODO: unsure
-    	m_costDeltas.push_back(std::vector<float>(neuronsPerLayer[i], 0.0f));
+    	m_costDeltas.emplace_back(neuronsPerLayer[i], 0.0f);
     }
 }
 
@@ -43,25 +43,25 @@ void Network::StoreDelta(const std::vector<Parameters>& other)
 	}
 }
 
-InitialLayer& Network::GetInitialLayer()
+InitialLayer& Network::GetInitialLayer() const
 {
 	return *static_cast<InitialLayer*>(m_layers.front().get());
 }
 
 // Network.cpp
-void Network::ConsumeDelta(float learningRate)
+void Network::ConsumeDelta(engineFloat learningRate)
 {
 	if (m_layers.size() == m_storedDelta.size() && m_numStored > 0)
 	{
 		for (size_t i = 1; i < m_layers.size(); i++)
 		{
-			const float lr = learningRate * m_layers[i]->m_activationFunction->GetLearningRateMultiplier();
+			const engineFloat lr = learningRate * m_layers[i]->m_activationFunction->GetLearningRateMultiplier();
 			
 			if (m_layers[i]->m_params.biases.size() == m_storedDelta[i].biases.size()
 				&& m_layers[i]->m_params.weights.size() == m_storedDelta[i].weights.size())
 			{
 				// 1. Average the accumulated gradients over the batch
-				m_storedDelta[i] *= (1.0f / static_cast<float>(m_numStored));
+				m_storedDelta[i] *= (1.0f / static_cast<engineFloat>(m_numStored));
 
 				// 2. Pass the averaged gradients to our new Adam optimizer!
 				// (Note: ApplyAdamUpdate handles the learning rate and subtraction internally)
@@ -115,11 +115,11 @@ void Network::Deserialize(std::istream& in)
 	}
 }
 
-float Network::CalculateCost(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput)
+engineFloat Network::CalculateCost(const std::vector<engineFloat>& inputActivation,const std::vector<engineFloat>& preferredOutput)
 {
-	const std::vector<float>& result = Propagate(inputActivation);
+	const std::vector<engineFloat>& result = Propagate(inputActivation);
 
-	float cost = 0.0f;
+	engineFloat cost = 0.0f;
 	if (result.size() == preferredOutput.size())
 	{
 		for (size_t i = 0; i < result.size(); i++)
@@ -129,16 +129,16 @@ float Network::CalculateCost(const std::vector<float>& inputActivation,const std
 		return cost / result.size();
 	}
 
-	return std::numeric_limits<float>().infinity();
+	return std::numeric_limits<engineFloat>().infinity();
 }
 
-std::vector<float> Network::Propagate(const std::vector<float>& inputActivation)
+std::vector<engineFloat> Network::Propagate(const std::vector<engineFloat>& inputActivation)
 {
 	GetInitialLayer().StartPropagation(inputActivation);
 	return m_layers.back()->m_activations;
 }
 
-const std::vector<float>& Network::PropagateThreadSafe(const std::vector<float>& inputActivation, std::vector<std::vector<float>>& threadBuffers) const
+const std::vector<engineFloat>& Network::PropagateThreadSafe(const std::vector<engineFloat>& inputActivation, std::vector<std::vector<engineFloat>>& threadBuffers) const
 {
 	if (threadBuffers.size() != m_layers.size())
 	{
@@ -154,8 +154,8 @@ const std::vector<float>& Network::PropagateThreadSafe(const std::vector<float>&
 	for (size_t l = 1; l < m_layers.size(); ++l)
 	{
 		const Layer* layer = m_layers[l].get();
-		const std::vector<float>& prevAct = threadBuffers[l - 1];
-		std::vector<float>& currentAct = threadBuffers[l];
+		const std::vector<engineFloat>& prevAct = threadBuffers[l - 1];
+		std::vector<engineFloat>& currentAct = threadBuffers[l];
 
 		const size_t numNeurons = layer->GetNumNeurons();
 		const size_t weightsPerNeuron = prevAct.size();
@@ -165,7 +165,7 @@ const std::vector<float>& Network::PropagateThreadSafe(const std::vector<float>&
 
 		for (size_t i = 0; i < numNeurons; ++i)
 		{
-			float z = biases[i];
+			engineFloat z = biases[i];
 			size_t weightStart = i * weightsPerNeuron;
 			for (size_t j = 0; j < weightsPerNeuron; ++j)
 			{
@@ -179,21 +179,21 @@ const std::vector<float>& Network::PropagateThreadSafe(const std::vector<float>&
 	return threadBuffers.back();
 }
 
-float Network::BackPropagate(const std::vector<float>& inputActivation, const std::vector<float>& preferredOutput)
+engineFloat Network::BackPropagate(const std::vector<engineFloat>& inputActivation, const std::vector<engineFloat>& preferredOutput)
 {
 	// propagate forwards
-	float cost = CalculateCost(inputActivation, preferredOutput);
+	engineFloat cost = CalculateCost(inputActivation, preferredOutput);
 
 	// create empty network with same dimensions to store deltas. 
 	// propagate backwards
 	Layer* layer = m_layers.back().get();
 	size_t layerIndex = m_layers.size() - 1;
 
-	std::vector<float>& prevLayerCostDeltas = m_costDeltas[layerIndex];
+	std::vector<engineFloat>& prevLayerCostDeltas = m_costDeltas[layerIndex];
 	for (size_t i = 0; i < layer->m_numNeurons; i++)
 	{
-		float act = layer->m_activations[i];
-		float y = preferredOutput[i];
+		engineFloat act = layer->m_activations[i];
+		engineFloat y = preferredOutput[i];
 
 		// the derivative of the cost function
 		// a.k.a direction to push our activation to decrease cost ?
@@ -203,13 +203,13 @@ float Network::BackPropagate(const std::vector<float>& inputActivation, const st
 	while (layer->m_previousLayer != nullptr)
 	{
 		Parameters& deltaLayer = m_storedDelta[layerIndex];
-		const std::vector<float>& currentCostDeltas = m_costDeltas[layerIndex];
+		const std::vector<engineFloat>& currentCostDeltas = m_costDeltas[layerIndex];
 
 		for (size_t i = 0; i < layer->m_numNeurons; i++)
 		{
 			//calc bias nudge
-			float z = layer->m_preProcessedActivations[i];
-			float actFuncDeriv = layer->m_activationFunction->ExecuteDerivative(z);
+			engineFloat z = layer->m_preProcessedActivations[i];
+			engineFloat actFuncDeriv = layer->m_activationFunction->ExecuteDerivative(z);
 
 			deltaLayer.biases[i] += actFuncDeriv * currentCostDeltas[i];
 
@@ -228,7 +228,7 @@ float Network::BackPropagate(const std::vector<float>& inputActivation, const st
 		// setup for next layer
 		if (layerIndex > 1)
 		{
-			std::vector<float>& nextCostDeltas = m_costDeltas[layerIndex - 1];
+			std::vector<engineFloat>& nextCostDeltas = m_costDeltas[layerIndex - 1];
 			std::fill(nextCostDeltas.begin(), nextCostDeltas.end(), 0.0f);
 
 			for (size_t i = 0; i < layer->m_previousLayer->m_numNeurons; i++)
@@ -241,9 +241,9 @@ float Network::BackPropagate(const std::vector<float>& inputActivation, const st
 				for (size_t j = 0; j < layer->m_numNeurons; j++)
 				{
 					size_t weightIdx = weightsPerNeuron * j + relevantWeightIndex;
-					float z = layer->m_preProcessedActivations[j];
-					float actFuncDeriv = layer->m_activationFunction->ExecuteDerivative(z);
-					float biasDelta = actFuncDeriv * currentCostDeltas[j];
+					engineFloat z = layer->m_preProcessedActivations[j];
+					engineFloat actFuncDeriv = layer->m_activationFunction->ExecuteDerivative(z);
+					engineFloat biasDelta = actFuncDeriv * currentCostDeltas[j];
 					nextCostDeltas[i] += layer->m_params.weights[weightIdx] * biasDelta; // deltaLayer.biases[j] == actFuncDeriv * currentCostDeltas[i];
 				}
 			}
@@ -273,11 +273,11 @@ void Network::AccumulateWorkerDeltas(const std::vector<Parameters>& workerDeltas
 
 void Network::BackPropagateGradientGuided(
 	    const ImageUtils::SpatialData& target,
-	    const std::vector<float>& input,
-	    const std::vector<std::vector<float>>& forwardActivations,
-	    const std::vector<std::vector<float>>& forwardSums,
+	    const std::vector<engineFloat>& input,
+	    const std::vector<std::vector<engineFloat>>& forwardActivations,
+	    const std::vector<std::vector<engineFloat>>& forwardSums,
 	    const SpatialDerivativeBuffer& spatialBuffers,   // Network's predicted slopes
-	    float learningRate,
+	    engineFloat learningRate,
 	    std::vector<Parameters>& localDeltas,
 	    size_t& localNumStored
 	)
@@ -285,14 +285,14 @@ void Network::BackPropagateGradientGuided(
     // ------
     // Calculate the 3 Error Signals at the Output Layer
     // ------
-    size_t numLayers = m_layers.size();
+    const size_t numLayers = m_layers.size();
     const auto& outputActivations = forwardActivations.back();
     const auto& outputGradX = spatialBuffers.gradientX.back();
     const auto& outputGradY = spatialBuffers.gradientY.back();
 
-    std::vector<float> colorError(outputActivations.size());
-    std::vector<float> errorGradX(outputActivations.size());
-    std::vector<float> errorGradY(outputActivations.size());
+    std::vector<engineFloat> colorError(outputActivations.size());
+    std::vector<engineFloat> errorGradX(outputActivations.size());
+    std::vector<engineFloat> errorGradY(outputActivations.size());
 
     //for (size_t i = 0; i < outputActivations.size(); ++i) {
     //    // Derivative of (Prediction - Target)^2 is 2 * (Prediction - Target)
@@ -303,7 +303,7 @@ void Network::BackPropagateGradientGuided(
 
 	// A hyperparameter to balance how much the network cares about slopes vs colors.
     // 0.01f is a great starting point so the massive slopes don't nuke the colors.
-	const float spatialLossWeight = 0;//0.0001f;//0.00001f; //TODO: RENABLE
+    constexpr engineFloat spatialLossWeight = 0;//0.0001f;//0.00001f; //TODO: RENABLE
 
     for (size_t i = 0; i < outputActivations.size(); ++i) {
         colorError[i] = 2.0f * (outputActivations[i] - target.values[i]);
@@ -319,56 +319,56 @@ void Network::BackPropagateGradientGuided(
     for (int l = (int)numLayers - 1; l >= 1; --l) 
     {
         // // Grab the previous layer's activations (or the raw input if it's layer 0)
-        // const std::vector<float>& prevActivations = (l == 0) ? input : forwardActivations[l - 1]; 
+        // const std::vector<EngineFloat>& prevActivations = (l == 0) ? input : forwardActivations[l - 1]; 
         // // Grab the previous layer's slopes (or the target's input slopes if layer 0)
-        // const std::vector<float>& prevGradX = (l == 0) ? target.gradX : spatialBuffers.gradientX[l - 1]; 
-        // const std::vector<float>& prevGradY = (l == 0) ? target.gradY : spatialBuffers.gradientY[l - 1]; 
+        // const std::vector<EngineFloat>& prevGradX = (l == 0) ? target.gradX : spatialBuffers.gradientX[l - 1]; 
+        // const std::vector<EngineFloat>& prevGradY = (l == 0) ? target.gradY : spatialBuffers.gradientY[l - 1]; 
     	
     	// Grab the previous layer's data directly from the buffers
-    	const std::vector<float>& prevActivations = forwardActivations[l - 1]; 
-    	const std::vector<float>& prevGradX = spatialBuffers.gradientX[l - 1]; 
-    	const std::vector<float>& prevGradY = spatialBuffers.gradientY[l - 1];
+    	const std::vector<engineFloat>& prevActivations = forwardActivations[l - 1]; 
+    	const std::vector<engineFloat>& prevGradX = spatialBuffers.gradientX[l - 1]; 
+    	const std::vector<engineFloat>& prevGradY = spatialBuffers.gradientY[l - 1];
     	
         size_t weightsPerNeuron = prevActivations.size();
         
         // Prepare empty error arrays to pass back to the previous layer
-        std::vector<float> nextColorError(weightsPerNeuron, 0.0f);
-        std::vector<float> nextErrorGradX(weightsPerNeuron, 0.0f);
-        std::vector<float> nextErrorGradY(weightsPerNeuron, 0.0f);
+        std::vector<engineFloat> nextColorError(weightsPerNeuron, 0.0f);
+        std::vector<engineFloat> nextErrorGradX(weightsPerNeuron, 0.0f);
+        std::vector<engineFloat> nextErrorGradY(weightsPerNeuron, 0.0f);
     	
         for (size_t i = 0; i < m_layers[l]->GetNumNeurons(); ++i) 
         {
-            float z = forwardSums[l][i];
-            float d1 = m_layers[l]->m_activationFunction->ExecuteDerivative(z); // f'(z)
-            float d2 = m_layers[l]->m_activationFunction->ExecuteSecondDerivative(z); // f''(z)
+            const engineFloat z = forwardSums[l][i];
+            const engineFloat d1 = m_layers[l]->m_activationFunction->ExecuteDerivative(z); // f'(z)
+            const engineFloat d2 = m_layers[l]->m_activationFunction->ExecuteSecondDerivative(z); // f''(z)
 
-            size_t startWeight = i * weightsPerNeuron;
+            const size_t startWeight = i * weightsPerNeuron;
             
             // To calculate f''(z) * Sum(w * prev_slope), we need the raw pre-activation slope
-            float rawSlopeX = 0.0f;
-            float rawSlopeY = 0.0f;
+            engineFloat rawSlopeX = 0.0f;
+            engineFloat rawSlopeY = 0.0f;
             for (size_t j = 0; j < prevActivations.size(); ++j) {
-                float weight = m_layers[l]->m_params.weights[startWeight + j];
+                const engineFloat weight = m_layers[l]->m_params.weights[startWeight + j];
                 rawSlopeX += weight * prevGradX[j];
                 rawSlopeY += weight * prevGradY[j];
             }
 
             for (size_t j = 0; j < prevActivations.size(); ++j) 
             {
-                float prevA = prevActivations[j];
-                float oldWeight = m_layers[l]->m_params.weights[startWeight + j]; // Save BEFORE modifying!
+                const engineFloat prevA = prevActivations[j];
+                const engineFloat oldWeight = m_layers[l]->m_params.weights[startWeight + j]; // Save BEFORE modifying!
 
                 // How this weight affects the Color Error
-                float gradColor = colorError[i] * (d1 * prevA);
+                const engineFloat gradColor = colorError[i] * (d1 * prevA);
 
                 // How this weight affects the X-Slope Error
-                float gradXEffect = errorGradX[i] * ((d2 * prevA * rawSlopeX) + (d1 * prevGradX[j]));
+                const engineFloat gradXEffect = errorGradX[i] * ((d2 * prevA * rawSlopeX) + (d1 * prevGradX[j]));
 
                 // How this weight affects the Y-Slope Error
-                float gradYEffect = errorGradY[i] * ((d2 * prevA * rawSlopeY) + (d1 * prevGradY[j]));
+                const engineFloat gradYEffect = errorGradY[i] * ((d2 * prevA * rawSlopeY) + (d1 * prevGradY[j]));
 
             	// Combine all three to get the total gradient for this specific weight
-            	float totalWeightGradient = gradColor + gradXEffect + gradYEffect;
+            	engineFloat totalWeightGradient = gradColor + gradXEffect + gradYEffect;
 				//totalWeightGradient = std::clamp(totalWeightGradient, -999'999.0f, 999'999.0f);
 #ifndef _TRAINING
             	if (totalWeightGradient > 999'999'999.f)
@@ -390,10 +390,10 @@ void Network::BackPropagateGradientGuided(
             	localDeltas[l].weights[startWeight + j] += totalWeightGradient;
             }
             
-        	// FIX: ACCUMULATE BIASES
-        	float gradColorBias = colorError[i] * d1;
-        	float gradXBias = errorGradX[i] * (d2 * rawSlopeX);
-        	float gradYBias = errorGradY[i] * (d2 * rawSlopeY);
+        	// Accumulate biases
+        	const engineFloat gradColorBias = colorError[i] * d1;
+        	const engineFloat gradXBias = errorGradX[i] * (d2 * rawSlopeX);
+        	const engineFloat gradYBias = errorGradY[i] * (d2 * rawSlopeY);
             
         	localDeltas[l].biases[i] += (gradColorBias + gradXBias + gradYBias);
         }
@@ -409,8 +409,8 @@ void Network::BackPropagateGradientGuided(
 
 void Network::RunGradientGuidedEpoch(
 	const std::vector<ImageUtils::SpatialData>& inputData, 
-	const std::vector<ImageUtils::SpatialData>& targetData,  
-	float learningRate)
+	const std::vector<ImageUtils::SpatialData>& targetData,
+	const engineFloat learningRate)
 {
 	SpatialDerivativeBuffer spatialBuffers;
 	for (size_t i = 0; i < inputData.size(); ++i)
@@ -420,16 +420,16 @@ void Network::RunGradientGuidedEpoch(
 
 		PropagateSpatialDerivativesThreadSafe(input.values, input.gradX, input.gradY, spatialBuffers);
 		BackPropagateGradientGuided(target, input.values, spatialBuffers.activations, spatialBuffers.preActivations,
-		                            spatialBuffers, -195386380931, m_storedDelta, m_numStored);
+		                            spatialBuffers, -195386380931, m_storedDelta, m_numStored); // TODO: remove learning rate
 	}
 	// Apply the averaged batch weights!
 	ConsumeDelta(learningRate);
 }
 
 void Network::PropagateSpatialDerivativesThreadSafe(
-	const std::vector<float>& inputActivation,
-    const std::vector<float>& inputGradX,
-    const std::vector<float>& inputGradY,
+	const std::vector<engineFloat>& inputActivation,
+    const std::vector<engineFloat>& inputGradX,
+    const std::vector<engineFloat>& inputGradY,
     SpatialDerivativeBuffer& threadBuffers) const
 {
 	// Resize buffers
@@ -463,13 +463,13 @@ void Network::PropagateSpatialDerivativesThreadSafe(
     for (size_t l = 1; l < m_layers.size(); ++l)
     {
         const Layer* layer = m_layers[l].get();
-        const std::vector<float>& prevAct   = threadBuffers.activations[l - 1];
-        const std::vector<float>& prevGradX = threadBuffers.gradientX[l - 1];
-        const std::vector<float>& prevGradY = threadBuffers.gradientY[l - 1];
+        const std::vector<engineFloat>& prevAct   = threadBuffers.activations[l - 1];
+        const std::vector<engineFloat>& prevGradX = threadBuffers.gradientX[l - 1];
+        const std::vector<engineFloat>& prevGradY = threadBuffers.gradientY[l - 1];
 
-        std::vector<float>& currentAct   = threadBuffers.activations[l];
-        std::vector<float>& currentGradX = threadBuffers.gradientX[l];
-        std::vector<float>& currentGradY = threadBuffers.gradientY[l];
+        std::vector<engineFloat>& currentAct   = threadBuffers.activations[l];
+        std::vector<engineFloat>& currentGradX = threadBuffers.gradientX[l];
+        std::vector<engineFloat>& currentGradY = threadBuffers.gradientY[l];
 
         const size_t numNeurons = layer->GetNumNeurons();
         const size_t weightsPerNeuron = prevAct.size();
@@ -479,16 +479,16 @@ void Network::PropagateSpatialDerivativesThreadSafe(
 
         for (size_t i = 0; i < numNeurons; ++i)
         {
-            float z = biases[i];
-            float gradX_z = 0.0f;
-            float gradY_z = 0.0f;
-            
-            size_t weightStart = i * weightsPerNeuron;
+            engineFloat z = biases[i];
+            engineFloat gradX_z = 0.0f;
+            engineFloat gradY_z = 0.0f;
+
+            const size_t weightStart = i * weightsPerNeuron;
             
             // Multiply weights by previous activations AND previous gradients
             for (size_t j = 0; j < weightsPerNeuron; ++j)
             {
-                float w = weights[weightStart + j];
+                const engineFloat w = weights[weightStart + j];
                 z       += w * prevAct[j];
                 gradX_z += w * prevGradX[j];
                 gradY_z += w * prevGradY[j];
@@ -501,7 +501,7 @@ void Network::PropagateSpatialDerivativesThreadSafe(
             currentAct[i] = func ? func->Execute(z) : z;
             
             // Calculate the derivative of the activation function at Z
-            float actDeriv = func ? func->ExecuteDerivative(z) : 1.0f;
+            engineFloat actDeriv = func ? func->ExecuteDerivative(z) : 1.0f;
             
             // Chain rule: Multiply the sum of weighted gradients by the activation derivative
             currentGradX[i] = gradX_z * actDeriv;

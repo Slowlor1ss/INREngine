@@ -24,43 +24,43 @@ public:
 	void SetCostFunction(CostFunc::Base* costFunc) { m_costFunction = costFunc; }
 	CostFunc::Base* GetCostFunction() const { return m_costFunction; }
 
-	float CalculateCost(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput);
-	std::vector<float> Propagate(const std::vector<float>& inputActivation);
-	const std::vector<float>& PropagateThreadSafe(const std::vector<float>& inputActivation, std::vector<std::vector<float>>& threadBuffers) const;
+	engineFloat CalculateCost(const std::vector<engineFloat>& inputActivation,const std::vector<engineFloat>& preferredOutput);
+	std::vector<engineFloat> Propagate(const std::vector<engineFloat>& inputActivation);
+	const std::vector<engineFloat>& PropagateThreadSafe(const std::vector<engineFloat>& inputActivation, std::vector<std::vector<engineFloat>>& threadBuffers) const;
 
 	struct SpatialDerivativeBuffer
 	{
-		std::vector<std::vector<float>> preActivations;     // The raw 'z' sums before activation
-	    std::vector<std::vector<float>> activations;		// The normal RGB values
-	    std::vector<std::vector<float>> gradientX;			// How fast each output changes as X changes
-	    std::vector<std::vector<float>> gradientY;			// How fast each output changes as Y changes
+		std::vector<std::vector<engineFloat>> preActivations;     // The raw 'z' sums before activation
+	    std::vector<std::vector<engineFloat>> activations;		// The normal RGB values
+	    std::vector<std::vector<engineFloat>> gradientX;			// How fast each output changes as X changes
+	    std::vector<std::vector<engineFloat>> gradientY;			// How fast each output changes as Y changes
 	};
 	void PropagateSpatialDerivativesThreadSafe(
-	    const std::vector<float>& inputActivation,
-	    const std::vector<float>& inputGradX,
-	    const std::vector<float>& inputGradY,
+	    const std::vector<engineFloat>& inputActivation,
+	    const std::vector<engineFloat>& inputGradX,
+	    const std::vector<engineFloat>& inputGradY,
 	    SpatialDerivativeBuffer& threadBuffers) const;
 	
-	float BackPropagate(const std::vector<float>& inputActivation,const std::vector<float>& preferredOutput);
+	engineFloat BackPropagate(const std::vector<engineFloat>& inputActivation,const std::vector<engineFloat>& preferredOutput);
 
 	std::vector<Parameters> CreateEmptyDeltaBuffer() const { return m_storedDelta; }
 	void AccumulateWorkerDeltas(const std::vector<Parameters>& workerDeltas, size_t workerNumStored);
 	void BackPropagateGradientGuided(
 	    const ImageUtils::SpatialData& target,
-	    const std::vector<float>& input,
-	    const std::vector<std::vector<float>>& forwardActivations,
-	    const std::vector<std::vector<float>>& forwardSums,
+	    const std::vector<engineFloat>& input,
+	    const std::vector<std::vector<engineFloat>>& forwardActivations,
+	    const std::vector<std::vector<engineFloat>>& forwardSums,
 	    const SpatialDerivativeBuffer& spatialBuffers,   // Network's predicted slopes
-	    float learningRate,
+	    engineFloat learningRate,
 	    std::vector<Parameters>& localDeltas,
 	    size_t& localNumStored
 	);
 	
 	void RunGradientGuidedEpoch(
-		const std::vector<ImageUtils::SpatialData>& inputData, const std::vector<ImageUtils::SpatialData>& targetData, float
+		const std::vector<ImageUtils::SpatialData>& inputData, const std::vector<ImageUtils::SpatialData>& targetData, engineFloat
 		learningRate);
 
-	void ConsumeDelta(float learningRate);
+	void ConsumeDelta(engineFloat learningRate);
 
 	// Inherited via Serializable
 	virtual void Serialize(std::ostream& out) override;
@@ -68,11 +68,11 @@ public:
 
 private:
 	void StoreDelta(const std::vector<Parameters>& other);
-	InitialLayer& GetInitialLayer();
+	InitialLayer& GetInitialLayer() const;
 private:
 	std::vector<std::unique_ptr<Layer>> m_layers;
 	std::vector<Parameters> m_storedDelta;
-	std::vector<std::vector<float>> m_costDeltas;
+	std::vector<std::vector<engineFloat>> m_costDeltas;
 	CostFunc::Base* m_costFunction = nullptr;
 
 	size_t m_numStored = 0;

@@ -86,8 +86,8 @@ Image loadBMP(const std::string& filename) {
 struct BMPParsedData {
     int width = 0;
     int height = 0;
-    std::vector<std::vector<float>> inputs;
-    std::vector<std::vector<float>> outputs;
+    std::vector<std::vector<engineFloat>> inputs;
+    std::vector<std::vector<engineFloat>> outputs;
 };
 
 bool ParseBMPData(const char* filename, BMPParsedData& outData) {
@@ -109,20 +109,27 @@ bool ParseBMPData(const char* filename, BMPParsedData& outData) {
 	        float normX = (x / float(img.width)) * 2.0f - 1.0f;
 	        float normY = (y / float(img.height)) * 2.0f - 1.0f;
 
-	        outData.inputs.push_back({ normX, normY });
-	        outData.outputs.push_back({ c1, c2, c3 });
+	        outData.inputs.push_back({ 
+                static_cast<engineFloat>(normX), 
+                static_cast<engineFloat>(normY) 
+            });
+	        outData.outputs.push_back({ 
+                static_cast<engineFloat>(c1), 
+                static_cast<engineFloat>(c2), 
+                static_cast<engineFloat>(c3) 
+            });
 	    }
 	}
     return true;
 }
 
-float clamp(float v, float l, float h) {
+inline engineFloat clamp(const engineFloat v, const engineFloat l, const engineFloat h) {
     if (v > h) return h;
     if (v < l) return l;
     return v;
 }
 
-void saveBMP(const std::string& filename, int width, int height, const std::vector<float>& data) {
+void saveBMP(const std::string& filename, int width, int height, const std::vector<engineFloat>& data) {
     std::ofstream file(filename, std::ios::binary);
     if (!file) {
         std::cerr << "Error: Could not open " << filename << " for writing.\n";
@@ -155,9 +162,9 @@ void saveBMP(const std::string& filename, int width, int height, const std::vect
             int idx = (y * width + x) * 3;
 
             // NN outputs might slightly exceed bounds; clamp them safely
-            float r = clamp(data[idx + 0], 0, 1);
-            float g = clamp(data[idx + 1], 0, 1);
-            float b = clamp(data[idx + 2], 0, 1);
+            engineFloat r = clamp(data[idx + 0], 0, 1);
+            engineFloat g = clamp(data[idx + 1], 0, 1);
+            engineFloat b = clamp(data[idx + 2], 0, 1);
 
             // BMPs store pixels in BGR order
             row_data[x * 3 + 0] = static_cast<uint8_t>(b * 255.0f);

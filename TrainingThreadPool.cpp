@@ -50,7 +50,7 @@ TrainingThreadPool::TrainingThreadPool(size_t numThreads, Network& net) : m_netw
                     // Reset thread-local accumulators
                     for(auto& p : localDeltas) p.Clear();
                     localNumStored = 0;
-                    float localCost = 0.0f;
+                    engineFloat localCost = 0.0f;
 
                     // Heavy math pass
                     for (size_t j = startIdx; j < endIdx; ++j) 
@@ -62,12 +62,12 @@ TrainingThreadPool::TrainingThreadPool(size_t numThreads, Network& net) : m_netw
                         m_network.PropagateSpatialDerivativesThreadSafe(input.values, input.gradX, input.gradY, spatialBuffers);
                         m_network.BackPropagateGradientGuided(target, input.values, spatialBuffers.activations, spatialBuffers.preActivations, spatialBuffers, 0.0f, localDeltas, localNumStored);
 
-                        float pixelCost = 0.0f;
+                        engineFloat pixelCost = 0.0f;
                         for(size_t c = 0; c < target.values.size(); ++c){
-                            float diff = spatialBuffers.activations.back()[c] - target.values[c];
+                            engineFloat diff = spatialBuffers.activations.back()[c] - target.values[c];
                             pixelCost += diff * diff;
                         }
-                        localCost += pixelCost / float(target.values.size());
+                        localCost += pixelCost / engineFloat(target.values.size());
                         
                         #ifndef _TRAINING
                         if ( std::_Is_nan(localCost) )
@@ -115,7 +115,7 @@ TrainingThreadPool::~TrainingThreadPool()
     }
 }
 
-float TrainingThreadPool::RunBatch(const std::vector<ImageUtils::SpatialData>& inputs,
+engineFloat TrainingThreadPool::RunBatch(const std::vector<ImageUtils::SpatialData>& inputs,
                                     const std::vector<ImageUtils::SpatialData>& targets, 
                                     size_t startIndex, 
                                     size_t batchSize)

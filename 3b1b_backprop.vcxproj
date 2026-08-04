@@ -246,6 +246,7 @@
     <ClInclude Include="Parameters.h" />
     <ClInclude Include="Serializable.h" />
     <ClInclude Include="TrainingThreadPool.h" />
+    <ClInclude Include="Types.h" />
     <ClInclude Include="WindowRenderer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
