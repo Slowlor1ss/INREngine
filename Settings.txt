@@ -1,0 +1,15 @@
+SIREN:
+
+use_gaussian_pe
+batch_size = 8192
+shuffle_pixel_batch = true
+LR = 0.000025f
+Layers = 256, 256, 256, 256, 256, 256
+
+WIRE:
+
+No PE
+batch_size = 65536 (256ull*256ull)
+shuffle_pixel_batch = true
+LR = 0.005f
+Layers = 256, 256

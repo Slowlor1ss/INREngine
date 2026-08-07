@@ -96,7 +96,7 @@ namespace config
 	inline std::vector<size_t> custom_layer_dims = { 256, 256, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
 		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
-		ActFunc::DataBase::FindActFunc<ActFunc::Siren>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::None>()
 	};
 
