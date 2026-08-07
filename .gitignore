@@ -405,3 +405,4 @@ weights_biases_light_on.csv
 weights_biases_Sarah.csv
 weights_biases_SarahDoYouHaveAnyGamesOnYoPhone.csv
 *.csv
+/benchmark_*

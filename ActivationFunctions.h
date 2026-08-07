@@ -275,7 +275,7 @@ namespace ActFunc
 		}
 
 		// TODO-LKrikilion: mess around with this value a bit on a better machine 
-		virtual engineFloat GetLearningRateMultiplier() const override { return 2.f; }//0.0001f; }
+		virtual engineFloat GetLearningRateMultiplier() const override { return 1.f; }//0.0001f; }
 	};
 	
 	// For debugging
@@ -323,8 +323,8 @@ namespace ActFunc
 		// Hyperparameters from the WIRE paper & python files
 		// https://github.com/vishwa91/wire/blob/main/wire_image_denoise.py
 		// We suggest omega0 = 4 and sigma0 = 4 for denoising, and omega0=20, sigma0=30 for image representation
-		static constexpr engineFloat k_w0 = 4.f;//30.f;//16.f;//20.0f; // Frequency (controls sharpness)
-		static constexpr engineFloat k_s = 4.f;//45.f;//24.f;//30.0f;  // Scale (controls localization/smoothness)
+		static constexpr engineFloat k_w0 = 20.f;//30.f;//16.f;//20.0f; // Frequency (controls sharpness)
+		static constexpr engineFloat k_s = 30.f;//45.f;//24.f;//30.0f;  // Scale (controls localization/smoothness)
 
 		virtual std::string GetName() const override { return k_name; }
 		

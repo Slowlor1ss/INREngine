@@ -88,11 +88,12 @@ enum class UserAction : uint8_t {
 
 namespace config
 {
-	inline std::string target_image_file = "Training_Data/castle_512.bmp";//"Training_Data/camera.bmp";
+	inline bool benchmark_enabled = true;
+	inline std::string target_image_file = "Training_Data/DIV2K_train_LR_mild/0064x4m.bmp";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
-	inline engineFloat output_image_scale = 1.5f;
+	inline engineFloat output_image_scale = 1.f;
 	inline std::vector<size_t> custom_layer_dims = { 256, 256, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
 		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),

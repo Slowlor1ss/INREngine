@@ -102,10 +102,10 @@ void NeuralImageRecreator()
 	    };
 	}
 
-	// 1. Generate Target Outputs (RGB + Spatial Edges)
+	// Generate Target Outputs (RGB + Spatial Edges)
 	std::vector<ImageUtils::SpatialData> targetSpatialData = ImageUtils::GenerateGradientTargets(data.outputs, data.width, data.height);
 
-	// 2. Generate Inputs (Coordinates/PE + Spatial Slopes)
+	// Generate Inputs (Coordinates/PE + Spatial Slopes)
 	std::vector<ImageUtils::SpatialData> inputSpatialData;
 	inputSpatialData.reserve(data.inputs.size());
 	for (const auto& rawInput : data.inputs) {
@@ -178,7 +178,10 @@ void NeuralImageRecreator()
 
 	// Load Weights Checkpoint (Validates dimensions vs current layerDims automatically)
 	// TODO: REENABLE ONCE I FIXED THIS DAMMED BUG
-	LoadCheckpoint(network, weightsFile);
+	if (!config::benchmark_enabled)
+	{
+		LoadCheckpoint(network, weightsFile);
+	}
 	
 	// Display Interactive Controls
 	PrintControls();
@@ -206,6 +209,32 @@ void NeuralImageRecreator()
 		else
 			cost = RunGradientGuidedTrainingEpoch(network, inputSpatialData, targetSpatialData, currentImage, config::print_every_n_batches, config::batch_size, learningRate, threadPool);
 
+		engineFloat currentPSNR = CalculatePSNR(cost);
+		
+		if (config::benchmark_enabled)
+		{
+			// Ensure the output directories exist
+			std::string stem = fs::path(config::output_filename).stem().string();
+			std::filesystem::path basePath(config::output_path);
+			auto benchFolder = basePath / ("benchmark_" + stem);
+			std::filesystem::create_directories(benchFolder);
+			std::filesystem::create_directories(benchFolder / "rgb");
+			std::filesystem::create_directories(benchFolder / "grad");
+
+			// Log Metrics to CSV
+			std::string csvPath = (benchFolder / "metrics.csv").string();
+			LogTrainingMetrics(csvPath, currentEpoch, cost, currentPSNR);
+
+			// Save Image Frames
+			auto rgbImage = GenerateReconstructedImage(network, data.width*config::output_image_scale, data.height*config::output_image_scale, coordMapper, RenderMode::StandardRGB, threadPool);
+			std::string rgbPath = std::format("{}/rgb/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
+			saveBMP(rgbPath, data.width*config::output_image_scale, data.height*config::output_image_scale, rgbImage);
+
+			auto gradImage = GenerateReconstructedImage(network, data.width*config::output_image_scale, data.height*config::output_image_scale, coordMapper, RenderMode::SpatialGradient, threadPool);
+			std::string gradPath = std::format("{}/grad/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
+			saveBMP(gradPath, data.width*config::output_image_scale, data.height*config::output_image_scale, gradImage);
+		}
+		
 		// Live viewer update
 		if (liveUpdateWindow)
 		{
@@ -213,7 +242,13 @@ void NeuralImageRecreator()
 		}
 
 		// Report progress
-		std::cout << "COST: " << cost << " LR: " << learningRate << '\n';
+		std::cout << "COST: " << cost << " LR: " << learningRate << "PSNR(dB): " << currentPSNR << '\n';
+		
+		if (config::benchmark_enabled && currentEpoch >= maxEpochs)
+		{
+			std::cout << "Max epochs reached! Auto-quitting for benchmark pipeline...\n";
+			break;
+		}
 	}
 
 	// Final Output Generation & Cleanup
@@ -223,9 +258,25 @@ void NeuralImageRecreator()
 
 	rendererWindow.Update(finalReconstructedImage);
 
-	saveBMP("network_output.bmp", data.width, data.height, finalReconstructedImage);
-	std::cout << "Successfully saved network_output.bmp!\n";
+	if (!config::benchmark_enabled)
+	{
+		saveBMP("network_output.bmp", data.width, data.height, finalReconstructedImage);
+		std::cout << "Successfully saved network_output.bmp!\n";
+	}
 
-	SaveCheckpoint(network, weightsFile);
-	std::cout << "Final " << weightsFile << " saved.\n";
+	if (config::benchmark_enabled)
+	{
+		// Ensure the output directories exist
+		std::string stem = fs::path(config::output_filename).stem().string();
+		std::filesystem::path basePath(config::output_path);
+		auto benchFolder = basePath / ("benchmark_" + stem);
+		const std::string benchWeightsFile = GetCheckpointFilename(config::output_filename, benchFolder.string());
+		SaveCheckpoint(network, benchWeightsFile);
+		std::cout << "Final " << benchWeightsFile << " saved.\n";
+	}
+	else
+	{
+		SaveCheckpoint(network, weightsFile);
+		std::cout << "Final " << weightsFile << " saved.\n";
+	}
 }
