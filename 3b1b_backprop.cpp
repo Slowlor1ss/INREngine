@@ -89,12 +89,12 @@ enum class UserAction : uint8_t {
 namespace config
 {
 	inline bool benchmark_enabled = true;
-	inline std::string target_image_file = "Training_Data/DIV2K_train_LR_mild/0064x4m.bmp";
+	inline std::string target_image_file = "Training_Data/0064_x4.bmp";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
 	inline engineFloat output_image_scale = 1.f;
-	inline std::vector<size_t> custom_layer_dims = { 256, 256, 3 };
+	inline std::vector<size_t> custom_layer_dims = { 526, 526, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
 		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
@@ -114,7 +114,7 @@ namespace config
 	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)
 	inline size_t batch_size = 256ull*256ull;//8192;//65536;//8192;//32;
 	inline bool shuffle_pixel_batch = true; // TODO: either make this an input parameter or make this the default if batch size isnt == to image size
-	inline size_t print_every_n_batches = 1;
+	inline size_t print_every_n_batches = 10;
 	//inline float initial_learning_rate = 0.0001f;
 	inline engineFloat initial_learning_rate = 0.005f;//0.005f;//WIRE //0.000025f; Siren
 	
@@ -166,6 +166,7 @@ static int ParseCommandLine(const int argc, char** argv)
 		}
 		else if (arg == "--layers") 
 		{
+			config::custom_layer_dims.clear();
 			// Keep reading the next arguments as long as they don't start with '-'
 			while (i + 1 < argc && argv[i + 1][0] != '-') {
 				try {
@@ -180,6 +181,7 @@ static int ParseCommandLine(const int argc, char** argv)
 		}
 		else if (arg == "--act")
 		{
+			config::custom_activations.clear();
 			// Keep reading the next arguments as long as they don't start with '-'
 			while (i + 1 < argc && argv[i + 1][0] != '-') {
 				try {

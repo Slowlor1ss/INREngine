@@ -25,7 +25,7 @@ inline void LogTrainingMetrics(const std::string& csvFilepath, size_t batch, eng
 
 //TODO: move
 size_t currentEpoch = 0;
-size_t maxEpochs = 2000; // From the PyTorch script niters = 2000
+size_t maxEpochs = 4000; // From the PyTorch script niters = 2000
 
 static engineFloat RunGradientGuidedTrainingEpoch(Network& network,
                                             const std::vector<ImageUtils::SpatialData>& inputs,
@@ -56,7 +56,8 @@ static engineFloat RunGradientGuidedTrainingEpoch(Network& network,
         //learningRate *= static_cast<engineFloat>(std::pow(0.9999999, batchSize));
 
     	// Calculate the decay factor just like the LambdaLR scheduler
-    	engineFloat progress = min(static_cast<engineFloat>(currentEpoch) / maxEpochs, 1.0f);
+    	//engineFloat progress = min(static_cast<engineFloat>(currentEpoch) / maxEpochs, 1.0f);
+    	engineFloat progress = min(static_cast<engineFloat>(currentEpoch) / (maxEpochs*4ull), 1.0f); // im cheating in 8000 rather then using the 2000 as it just seems to work better TODO; look in to a slower degrading LR
     	learningRate = config::initial_learning_rate * std::pow(0.1f, progress);
 
     	currentEpoch++;
@@ -153,16 +154,16 @@ void NeuralImageRecreator()
 
 	}
 	
-	std::vector<ActFunc::Base*> activations = {
-		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),   // Layer 1: The Localized Denoiser
-		ActFunc::DataBase::FindActFunc<ActFunc::Siren>(),  // Layer 2: The High-Frequency Fitter
-		ActFunc::DataBase::FindActFunc<ActFunc::None>()    // Layer 3: Output Linear Projection
-	};
+	// std::vector<ActFunc::Base*> activations = {
+	// 	ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),   // Layer 1: The Localized Denoiser
+	// 	ActFunc::DataBase::FindActFunc<ActFunc::Siren>(),  // Layer 2: The High-Frequency Fitter
+	// 	ActFunc::DataBase::FindActFunc<ActFunc::None>()    // Layer 3: Output Linear Projection
+	// };
 	
 	// Pass the activation functions dynamically!
 	Network network{ 
 		layerDims, 
-		activations
+		config::custom_activations
 		//ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		// TODO: look in to this more maybe just use sigmoid as its basically the same or none as its more truthfully ig
 		// and the docmentation says to just use a linear or sine https://deepwiki.com/vsitzmann/siren/2-siren-architecture#sinelayer-and-network-structure
@@ -242,7 +243,7 @@ void NeuralImageRecreator()
 		}
 
 		// Report progress
-		std::cout << "COST: " << cost << " LR: " << learningRate << "PSNR(dB): " << currentPSNR << '\n';
+		std::cout << "COST: " << cost << " LR: " << learningRate << " PSNR(dB): " << currentPSNR << '\n';
 		
 		if (config::benchmark_enabled && currentEpoch >= maxEpochs)
 		{
