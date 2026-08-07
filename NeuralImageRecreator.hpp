@@ -2,9 +2,30 @@
 #include <numeric> // Put this at the very top of your file
 #include <random>
 
+// Assuming 'mse' is your mean squared error for the current batch
+inline engineFloat CalculatePSNR(engineFloat mse) {
+	if (mse <= 0.0000001f) return 100.0f; // Prevent divide by zero (perfect image)
+	return -10.0f * std::log10(mse);
+}
+
+inline void LogTrainingMetrics(const std::string& csvFilepath, size_t batch, engineFloat cost, engineFloat psnr) 
+{
+	bool writeHeader = !std::filesystem::exists(csvFilepath);
+    
+	std::ofstream file(csvFilepath, std::ios::app); // Append mode
+	if (file.is_open()) 
+	{
+		if (writeHeader) 
+		{
+			file << "Batch,Cost,PSNR\n";
+		}
+		file << batch << "," << cost << "," << psnr << "\n";
+	}
+}
+
 //TODO: move
 size_t currentEpoch = 0;
-size_t maxEpochs = 8000; // From the PyTorch script niters = 2000
+size_t maxEpochs = 2000; // From the PyTorch script niters = 2000
 
 static engineFloat RunGradientGuidedTrainingEpoch(Network& network,
                                             const std::vector<ImageUtils::SpatialData>& inputs,
@@ -105,7 +126,7 @@ void NeuralImageRecreator()
 		std::iota(indices.begin(), indices.end(), 0);
 
 		// Shuffle the indices
-		std::mt19937 g(1337); // Fixed seed for consistency
+		std::mt19937 g(42); // Fixed seed for consistency
 		std::shuffle(indices.begin(), indices.end(), g);
 
 
@@ -127,18 +148,25 @@ void NeuralImageRecreator()
 	if (!config::custom_layer_dims.empty()) {
 		layerDims.insert(layerDims.end(), config::custom_layer_dims.begin(), config::custom_layer_dims.end());
 	} else {
-		layerDims.insert(layerDims.end(), { 64, 64, 64, 64, 3 });
-		//layerDims.insert(layerDims.end(), { 256, 256, 256, 256, 256, 256, 3 });
+		//layerDims.insert(layerDims.end(), { 64, 64, 64, 64, 3 });
+		layerDims.insert(layerDims.end(), { 256, 256, 3 });
 
 	}
+	
+	std::vector<ActFunc::Base*> activations = {
+		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),   // Layer 1: The Localized Denoiser
+		ActFunc::DataBase::FindActFunc<ActFunc::Siren>(),  // Layer 2: The High-Frequency Fitter
+		ActFunc::DataBase::FindActFunc<ActFunc::None>()    // Layer 3: Output Linear Projection
+	};
 	
 	// Pass the activation functions dynamically!
 	Network network{ 
 		layerDims, 
-		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
+		activations
+		//ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		// TODO: look in to this more maybe just use sigmoid as its basically the same or none as its more truthfully ig
 		// and the docmentation says to just use a linear or sine https://deepwiki.com/vsitzmann/siren/2-siren-architecture#sinelayer-and-network-structure
-		ActFunc::DataBase::FindActFunc<ActFunc::Sigmoid>() 
+		//ActFunc::DataBase::FindActFunc<ActFunc::Sigmoid>() 
 	};
 
 	// Create the thread pool using your Ryzen's hardware concurrency (usually 16 threads for the 4800H)

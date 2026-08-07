@@ -65,13 +65,13 @@ std::vector<engineFloat> GenerateReconstructedImage(
             }
             else if (mode == RenderMode::Blur)
             {
-                // 1. Query the exact center of the pixel
+                // Query the exact center of the pixel
                 const std::vector<engineFloat>& centerOutput = network.PropagateThreadSafe(finalInput.values, standardBuffers);
                 engineFloat centerR = centerOutput[0];
                 engineFloat centerG = centerOutput[1];
                 engineFloat centerB = centerOutput[2];
 
-                // 2. Setup the Continuous Bilateral Filter parameters
+                // Setup the Continuous Bilateral Filter parameters
                 // We sample sub-pixel distances (e.g., 1/3rd of a pixel away)
                 const engineFloat subPixelDistMul = 2.5f;
                 engineFloat subPixelDistX = (1.0f / width) * subPixelDistMul;
@@ -86,7 +86,7 @@ std::vector<engineFloat> GenerateReconstructedImage(
                 engineFloat sumB = centerB;
                 engineFloat sumWeight = 1.0f;
 
-                // 3. MORE SAMPLES: Check 8 directions instead of 4 (including diagonals)
+                // MORE SAMPLES: Check 8 directions instead of 4 (including diagonals)
                 std::vector<std::pair<engineFloat, engineFloat>> subPixelOffsets = {
                     { subPixelDistX, 0.0f }, { -subPixelDistX, 0.0f },
                     { 0.0f, subPixelDistY }, { 0.0f, -subPixelDistY },

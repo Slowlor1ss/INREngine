@@ -14,6 +14,7 @@ namespace ActFunc
 		static DataBase* GetOrCreateInstance();
 	public:
 		static Base* FindActFunc(const std::string& name);
+		static std::string GetAllActNames();
 
 		template <typename Imp>
 		static Base* FindActFunc();

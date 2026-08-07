@@ -17,6 +17,7 @@
 #if _HAS_CXX23
 	#include <numbers>
 #endif
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -87,29 +88,38 @@ enum class UserAction : uint8_t {
 
 namespace config
 {
-	inline std::string target_image_file = "Training_Data/camera.bmp";
+	inline std::string target_image_file = "Training_Data/castle_512.bmp";//"Training_Data/camera.bmp";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
 	inline engineFloat output_image_scale = 1.5f;
-	inline std::vector<size_t> custom_layer_dims = {};
+	inline std::vector<size_t> custom_layer_dims = { 256, 256, 3 };
+	inline std::vector<ActFunc::Base*> custom_activations = {
+		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::Siren>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::None>()
+	};
 
 	//TODO-Lkrikilion: make a command like param for this like --render-mode or smth
 	inline RenderMode render_mode = RenderMode::StandardRGB;
 
 	inline bool use_positional_encoding = false;
-	inline bool use_gaussian_pe = false;
 	inline int pe_num_frequencies = 10; // Positional encode
+	inline bool use_gaussian_pe = false;
 
 	inline bool initial_live_update_state = false;
 
 	// Hyperparameters & Training State
 	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)
-	inline size_t batch_size = 8192;//65536;//8192;//32;
+	inline size_t batch_size = 256ull*256ull;//8192;//65536;//8192;//32;
 	inline bool shuffle_pixel_batch = true; // TODO: either make this an input parameter or make this the default if batch size isnt == to image size
 	inline size_t print_every_n_batches = 1;
 	//inline float initial_learning_rate = 0.0001f;
-	inline engineFloat initial_learning_rate = 0.005f;//WIRE //0.000025f; Siren
+	inline engineFloat initial_learning_rate = 0.005f;//0.005f;//WIRE //0.000025f; Siren
+	
+	// Hyperparameter to balance how much the network cares about slopes vs colors
+	// used by spatial gradient (use 0 to turn spatial gradient off)
+	//inline engineFloat spatialLossWeight = 0.f; // TODO: make a utils file so we can use this
 }
 
 namespace
@@ -119,30 +129,39 @@ namespace
 // ============================================================================
 	
 // MAKE SURE TO ADD TO THE PRINT AT THE BOTTOM WHEN ADDING ARGS!
-static void ParseCommandLine(const int argc, char** argv)
+static int ParseCommandLine(const int argc, char** argv)
 {
 	for (int i = 1; i < argc; ++i) // Start at 1 because argv[0] is the program name
 	{
 		std::string arg = argv[i];
-		if (arg == "--h" || arg == "-h" || arg == "help")
+		if (arg == "--help" || arg == "--h" || arg == "-h" || arg == "help")
 		{
 			std::cout << std::format(
 				"Usage:\n"
-				"  {:<10} | {}\n"
-				"  {:<10} | {}\n"
-				"  {:<10} | {}\n"
-				"  {:<10} | {}\n"
-				"  {:<10} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
 				"==================================================================================================\n",
 				"--i",			"Set input filename",
-				"--o",			"Set output path (can specify file aswell e.g. weights_biases.csv)",	
-				"--layers"		"Set the layers e.g. --layers 128 128 128 128 3"
+				"--o",			"Set output path (can specify file as well e.g. weights_biases.csv)",	
+				"--layers",		"Set the layers e.g. --layers 128 128 3",
+				"--act",		"Set the activation function(s) e.g. --act Wire Siren None",
+				"",				"Valid options are: " + ActFunc::DataBase::GetAllActNames(),
 				"--set-pe 0/ 1", "Enable positional encoding",
 				"--freq",		"Set positional encoding Frequencies",
+				"--set-gaussian-pe 0/1", "Set Gaussian Positional Encoding (does NOT use --freq)",
 				"--batch",		"Set batch Size",
 				"--lr",			"Set the learning Rate",
 				"--set-live 0/1", "Disable live viewer on start; Note: this can be re-enabled during runtime using 'v'"
 			);
+			return 0;
 		}
 		else if (arg == "--layers") 
 		{
@@ -153,6 +172,20 @@ static void ParseCommandLine(const int argc, char** argv)
 					config::custom_layer_dims.push_back(std::stoul(argv[i + 1]));
 				} catch (const std::exception& e) {
 					std::cerr << "Error parsing layer dimension: " << argv[i + 1] << "Error: " << e.what() << "\n";
+					// TODO maybe return -1;
+				}
+				i++; // Advance the loop
+			}
+		}
+		else if (arg == "--act")
+		{
+			// Keep reading the next arguments as long as they don't start with '-'
+			while (i + 1 < argc && argv[i + 1][0] != '-') {
+				try {
+					// Convert the string argument to an unsigned long integer (size_t)
+					config::custom_activations.push_back( ActFunc::DataBase::FindActFunc(argv[i + 1]) );
+				} catch (const std::exception& e) {
+					std::cerr << "Error parsing layer activation: " << argv[i + 1] << "Error: " << e.what() << "\n";
 				}
 				i++; // Advance the loop
 			}
@@ -198,6 +231,10 @@ static void ParseCommandLine(const int argc, char** argv)
 		{
 			config::pe_num_frequencies = std::stoi(argv[++i]); // Read next arg as int
 		}
+		else if (arg == "--set-gaussian-pe" && i + 1 < argc)
+		{
+			config::use_gaussian_pe = std::stoi(argv[++i]);
+		}
 		else if (arg == "--batch" && i + 1 < argc)
 		{
 			config::batch_size = std::stoull(argv[++i]); // Read next arg as size_t
@@ -213,28 +250,68 @@ static void ParseCommandLine(const int argc, char** argv)
 		else
 		{
 			std::cout << "Unknown or incomplete argument: " << arg << "\n";
+			//std::exit(127);
 		}
 	}
 	
-	// Print the final configuration state after parsing is complete
+	// C++23 Native Range Formatting doesnt work for some dammed reason
+	// std::string customLayersStr = config::custom_layer_dims.empty() 
+	// 	? "Default" 
+	// 	: std::format("{}", config::custom_layer_dims);
+	//
+	// std::string customActsStr = config::custom_activations.empty() 
+	// 		? "Default" 
+	// 		: std::format("{}", config::custom_activations | std::views::transform([](ActFunc::Base* act) { return act->GetName(); }));
+
+	std::string customLayersStr = "Default";
+	if (!config::custom_layer_dims.empty()) {
+		customLayersStr = "[";
+		customLayersStr += "Ninput, "; // TODO: replace this with the actual input size but its depending on what PE or any
+		for (size_t i = 0; i < config::custom_layer_dims.size(); ++i) {
+			customLayersStr += std::to_string(config::custom_layer_dims[i]);
+			if (i < config::custom_layer_dims.size() - 1) customLayersStr += ", ";
+		}
+		customLayersStr += "]";
+	}
+	
+	std::string customActsStr = "Default";
+	if (!config::custom_activations.empty()) {
+		customActsStr = "[";
+		customActsStr += ActFunc::None().GetName() + ", ";
+		for (size_t i = 0; i < config::custom_activations.size(); ++i) {
+			customActsStr += config::custom_activations[i]->GetName();
+			if (i < config::custom_activations.size() - 1) customActsStr += ", ";
+		}
+		customActsStr += "]";
+	}
+	
+	// Print the final configuration state
 	std::cout << std::format(
-		"=== Launch Configuration ===\n"
-		" Input file		  : {}\n"
-		" Output path		  : {}\n"
-		" Positional Encoding : {}\n"
-		" PE Frequencies      : {}\n"
-		" Batch Size          : {}\n"
-		" Learning Rate       : {:.4f}\n"
-		" Live Viewer         : {}\n"
-		"============================\n",
-		config::target_image_file,
-		(fs::path(config::output_path) / config::output_filename).string(),
-		config::use_positional_encoding ? "ON" : "OFF",
-		config::use_positional_encoding ? std::to_string(config::pe_num_frequencies) : "DISABLED",
-		config::batch_size,
-		config::initial_learning_rate,
-		config::initial_live_update_state ? "ON" : "OFF"
+	   "=== Launch Configuration ===\n"
+	   " Input file          : {}\n"
+	   " Output path         : {}\n"
+	   " Topology (Layers)   : {}\n"
+	   " Activations         : {}\n"
+	   " Positional Encoding : {}\n"
+	   " PE Frequencies      : {}\n"
+	   " Gaussian PE         : {}\n"
+	   " Batch Size          : {}\n"
+	   " Learning Rate       : {:.4f}\n"
+	   " Live Viewer         : {}\n"
+	   "============================\n",
+	   config::target_image_file,
+	   (fs::path(config::output_path) / config::output_filename).string(),
+	   customLayersStr,
+	   customActsStr,
+	   config::use_positional_encoding ? "ON" : "OFF",
+	   config::use_positional_encoding ? std::to_string(config::pe_num_frequencies) : "DISABLED",
+	   config::use_gaussian_pe ? "ON" : "OFF",
+	   config::batch_size,
+	   config::initial_learning_rate,
+	   config::initial_live_update_state ? "ON" : "OFF"
 	);
+	
+	return 1;
 }
 
 	// TODO: merge the 2 function below or something this is bad but we need one for the imagedataset and another for the coormapper
@@ -419,32 +496,32 @@ static size_t GetRandomImageIndex(const size_t totalImages)
 }
 
 // Executes a full epoch consisting of multiple mini-batches and returns the average cost.
-static engineFloat RunTrainingEpoch(Network& network,
-                              const std::vector<std::vector<engineFloat>>& images,
-                              const std::vector<std::vector<engineFloat>>& labels,
-                              size_t& currentImageIdx,
-                              const size_t printEveryNBatches,
-                              const size_t batchSize,
-                              engineFloat& learningRate)
-{
-	engineFloat totalCost = 0.0f;
-
-	for (size_t j = 0; j < printEveryNBatches; j++)
-	{
-		for (size_t i = 0; i < batchSize; i++)
-		{
-			engineFloat c = network.BackPropagate(images[currentImageIdx], labels[currentImageIdx]);
-			totalCost += c;
-
-			currentImageIdx = GetRandomImageIndex(images.size());
-		}
-
-		network.ConsumeDelta(learningRate);
-		learningRate *= static_cast<engineFloat>(std::pow(0.9999999, batchSize));
-	}
-
-	return totalCost / static_cast<engineFloat>(batchSize * printEveryNBatches);
-}
+// static engineFloat RunTrainingEpoch(Network& network,
+//                               const std::vector<std::vector<engineFloat>>& images,
+//                               const std::vector<std::vector<engineFloat>>& labels,
+//                               size_t& currentImageIdx,
+//                               const size_t printEveryNBatches,
+//                               const size_t batchSize,
+//                               engineFloat& learningRate)
+// {
+// 	engineFloat totalCost = 0.0f;
+//
+// 	for (size_t j = 0; j < printEveryNBatches; j++)
+// 	{
+// 		for (size_t i = 0; i < batchSize; i++)
+// 		{
+// 			engineFloat c = network.BackPropagate(images[currentImageIdx], labels[currentImageIdx]);
+// 			totalCost += c;
+//
+// 			currentImageIdx = GetRandomImageIndex(images.size());
+// 		}
+//
+// 		network.ConsumeDelta(learningRate);
+// 		learningRate *= static_cast<engineFloat>(std::pow(0.9999999, batchSize));
+// 	}
+//
+// 	return totalCost / static_cast<engineFloat>(batchSize * printEveryNBatches);
+// }
 }
 
 #include "NeuralImageRecreator.hpp"
@@ -455,7 +532,8 @@ static engineFloat RunTrainingEpoch(Network& network,
 int main(int argc, char** argv)
 {
 	// Parse the command line arguments right at startup
-	ParseCommandLine(argc, argv);
+	if ( int ret = ParseCommandLine(argc, argv); ret != 1 )
+		return ret; // Returns 0 on help, -1 if we went very wrong
 	
 	// Seed Random Number Generator
 	auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();

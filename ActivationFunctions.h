@@ -12,12 +12,33 @@ namespace ActFunc
 	{
 	public:
 		virtual std::string GetName() const = 0;
+		
 		virtual engineFloat Execute(engineFloat x) const = 0;
 		virtual engineFloat ExecuteDerivative(engineFloat x) const = 0;
 		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const = 0;
+		
+		// Dual-Weight Forward Pass
+		// Default fallback: Ignore the scale Z and just run the standard Execute
+		virtual engineFloat ExecuteDual(engineFloat zFreq, engineFloat zScale) const 
+		{
+			return Execute(zFreq); 
+		}
+		// Dual-Weight Backward Pass
+		// Returns a pair: { Derivative_wrt_Freq, Derivative_wrt_Scale }
+		// Default fallback: Return the standard derivative for freq, and 0.0 for scale
+		virtual std::pair<engineFloat, engineFloat> ExecuteDualDerivative(engineFloat zFreq, engineFloat zScale) const
+		{
+			return { ExecuteDerivative(zFreq), 0.f };
+		}
+		virtual std::tuple<engineFloat, engineFloat, engineFloat> ExecuteDualSecondDerivative(engineFloat zFreq, engineFloat zScale) const
+		{
+			return { ExecuteSecondDerivative(zFreq), 0.f, 0.f };
+		}
+		
 		virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const = 0;
 		// Generally biases are safer to initialize as straight 0
 		virtual engineFloat GenerateInitialBiases(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) { return 0.0f; }
+		
 		virtual engineFloat GetLearningRateMultiplier() const { return 1.0f; }
 	};
 
@@ -70,22 +91,22 @@ namespace ActFunc
 	// 		return k_name;
 	// 	}
 	//
-	// 	virtual EngineFloat Execute(EngineFloat x) const override
+	// 	virtual engineFloat Execute(engineFloat x) const override
 	// 	{
 	// 		// Squash numbers into a 0.0 to 1.0 range
 	// 		return 0.5f * (x / (1.0f + std::abs(x)) + 1.0f);
 	// 	}
 	//
-	// 	virtual EngineFloat ExecuteDerivative(EngineFloat x) const override
+	// 	virtual engineFloat ExecuteDerivative(engineFloat x) const override
 	// 	{
-	// 		const EngineFloat denom = 1.0f + std::abs(x);
+	// 		const engineFloat denom = 1.0f + std::abs(x);
 	// 		return 0.5f / (denom * denom);
 	// 	}
 	//
-	// 	virtual EngineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
+	// 	virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
 	// 	{
 	// 		// Standard Xavier initialization
-	// 		const EngineFloat stddev = std::sqrt(2.0f / static_cast<EngineFloat>(fanIn + fanOut));
+	// 		const engineFloat stddev = std::sqrt(2.0f / static_cast<engineFloat>(fanIn + fanOut));
 	// 		std::uniform_real_distribution distribution(-stddev, stddev);
 	// 		return distribution(generator);
 	// 	}
@@ -216,7 +237,7 @@ namespace ActFunc
 	{
 	public:
 		static constexpr const char* k_name{ "Siren" };
-		static constexpr engineFloat k_w0 = 30.0f; // SIREN frequency hyperparameter (omega_naught)
+		static constexpr engineFloat k_w0 = 30.f;//30.0f; // SIREN frequency hyperparameter (omega_naught)
 
 		virtual std::string GetName() const override
 		{
@@ -254,7 +275,7 @@ namespace ActFunc
 		}
 
 		// TODO-LKrikilion: mess around with this value a bit on a better machine 
-		virtual engineFloat GetLearningRateMultiplier() const override { return 1.0f; }//0.0001f; }
+		virtual engineFloat GetLearningRateMultiplier() const override { return 2.f; }//0.0001f; }
 	};
 	
 	// For debugging
@@ -299,31 +320,25 @@ namespace ActFunc
 	public:
 		static constexpr const char* k_name{ "Wire" };
     
-		// Hyperparameters from the WIRE paper
-		static constexpr engineFloat k_w0 = 20.0f; // Frequency (controls sharpness)
-		static constexpr engineFloat k_s = 30.0f;  // Scale (controls localization/smoothness)
+		// Hyperparameters from the WIRE paper & python files
+		// https://github.com/vishwa91/wire/blob/main/wire_image_denoise.py
+		// We suggest omega0 = 4 and sigma0 = 4 for denoising, and omega0=20, sigma0=30 for image representation
+		static constexpr engineFloat k_w0 = 4.f;//30.f;//16.f;//20.0f; // Frequency (controls sharpness)
+		static constexpr engineFloat k_s = 4.f;//45.f;//24.f;//30.0f;  // Scale (controls localization/smoothness)
 
 		virtual std::string GetName() const override { return k_name; }
-
-		virtual engineFloat Execute(engineFloat x) const override
+		
+		// Standard pass (Used for the very first layer which doesn't have dual weights)
+		engineFloat Execute(engineFloat z) const override
 		{
-			engineFloat s2 = k_s * k_s;
-			engineFloat E = std::exp(-s2 * x * x);
-			engineFloat C = std::cos(k_w0 * x);
-			return E * C;
+			return ExecuteDual(z, z);
 		}
 
-		virtual engineFloat ExecuteDerivative(engineFloat x) const override
+		engineFloat ExecuteDerivative(engineFloat z) const override
 		{
-			engineFloat s2 = k_s * k_s;
-			engineFloat E = std::exp(-s2 * x * x);
-			engineFloat S = std::sin(k_w0 * x);
-			engineFloat C = std::cos(k_w0 * x);
-        
-			// Product rule: d/dx [e^(-s^2 x^2) * cos(w0 x)]
-			return E * (-2.0f * s2 * x * C - k_w0 * S);
+			return ExecuteDualDerivative(z, z).first; // Just grab the freq derivative
 		}
-
+		
 		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
 		{
 			engineFloat s2 = k_s * k_s;
@@ -337,11 +352,57 @@ namespace ActFunc
 			return E * (term1 * C + term2 * S);
 		}
 
-		virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
+		// Dual weight pass
+		engineFloat ExecuteDual(engineFloat zFreq, engineFloat zScale) const override
+		{
+			engineFloat s_squared = k_s * k_s;
+			engineFloat window = std::exp(-s_squared * (zScale * zScale));
+			engineFloat wave = std::cos(k_w0 * zFreq);
+        
+			return window * wave;
+		}
+
+		std::pair<engineFloat, engineFloat> ExecuteDualDerivative(engineFloat zFreq, engineFloat zScale) const override
+		{
+			engineFloat s_squared = k_s * k_s;
+			engineFloat window = std::exp(-s_squared * (zScale * zScale));
+			engineFloat wave = std::cos(k_w0 * zFreq);
+			engineFloat out = window * wave;
+        
+			// Derivative with respect to the frequency Z
+			engineFloat d_freq = window * (-k_w0 * std::sin(k_w0 * zFreq));
+        
+			// Derivative with respect to the scale (envelope) Z
+			engineFloat d_scale = -2.0f * s_squared * zScale * out; 
+
+			return { d_freq, d_scale };
+		}
+		
+		// Im very unsure on my math on this one... but were not using it at the moment so TODO: later :D
+		std::tuple<engineFloat, engineFloat, engineFloat> ExecuteDualSecondDerivative(engineFloat zFreq, engineFloat zScale) const override
+		{
+			engineFloat s_squared = k_s * k_s;
+			engineFloat window = std::exp(-s_squared * (zScale * zScale));
+			engineFloat wave = std::cos(k_w0 * zFreq);
+			engineFloat out = window * wave;
+        
+			// Second derivative w.r.t Frequency (zFreq, zFreq)
+			engineFloat d2_freq = - (k_w0 * k_w0) * out;
+
+			// Second derivative w.r.t Scale (zScale, zScale)
+			engineFloat d2_scale = window * wave * (4.0f * s_squared * s_squared * zScale * zScale - 2.0f * s_squared);
+
+			// Mixed partial derivative (zFreq, zScale)
+			engineFloat d2_mixed = -2.0f * s_squared * zScale * window * (-k_w0 * std::sin(k_w0 * zFreq));
+
+			return { d2_freq, d2_scale, d2_mixed };
+		}
+
+		engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
 		{
 			// https://github.com/vishwa91/wire/blob/main/modules/wire.py
 			// PyTorch default nn.Linear initialization: U(-sqrt(1/fan_in), sqrt(1/fan_in))
-			const engineFloat bound = 1.0f / std::sqrt(static_cast<engineFloat>(fanIn));
+			const engineFloat bound = static_cast<engineFloat>(1.0 / std::sqrt(static_cast<double>(fanIn)));
 			std::uniform_real_distribution<engineFloat> distribution(-bound, bound);
 			return distribution(generator);
 		}

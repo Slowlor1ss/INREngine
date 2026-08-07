@@ -1,5 +1,7 @@
 #include "ActFuncDataBase.h"
 
+#include <ranges>
+
 namespace ActFunc
 {
 	DataBase* DataBase::m_instance = nullptr;
@@ -26,5 +28,22 @@ namespace ActFunc
 	Base* DataBase::FindActFunc(const std::string& name)
 	{
 		return DataBase::GetOrCreateInstance()->m_map.at(name).get();
+	}
+	
+	std::string DataBase::GetAllActNames()
+	{
+		DataBase* instance = DataBase::GetOrCreateInstance();
+		std::string names;
+		
+		names.reserve(128); 
+		std::string_view separator = "";
+		for (const auto& key : std::views::keys(instance->m_map))
+		{
+			names += separator;
+			names += key;
+			separator = ", ";
+		}
+
+		return names;
 	}
 }
