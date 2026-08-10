@@ -4,14 +4,17 @@
 #include <algorithm>
 #include <random>
 
+#include "GpuActivations.cuh"
 #include "Types.h"
 
+// See GpuActivations.cuh for implementations and hyperparameters
 namespace ActFunc
 {
 	class Base
 	{
 	public:
 		virtual std::string GetName() const = 0;
+		virtual GpuActType GetGpuType() const = 0;
 		
 		virtual engineFloat Execute(engineFloat x) const = 0;
 		virtual engineFloat ExecuteDerivative(engineFloat x) const = 0;
@@ -47,6 +50,7 @@ namespace ActFunc
 	public:
 
 		static constexpr const char* k_name{ "None" };
+		virtual GpuActType GetGpuType() const override { return GpuActType::None; }
 
 		virtual std::string GetName() const override
 		{
@@ -55,19 +59,19 @@ namespace ActFunc
 
 		virtual engineFloat Execute(engineFloat x) const override
 		{
-			return x;
+			return SharedAct::None(x);
 		}
 
 		virtual engineFloat ExecuteDerivative(engineFloat x) const override
 		{
-			return 1;
+			return SharedAct::NoneDeriv(x);
 		}
 		
 		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
 		{
 			// The first derivative of f(x)=x is 1.0. 
 			// The derivative of a constant 1.0 is 0.0.
-			return 0.0f; 
+			return SharedAct::NoneSecondDeriv(x); 
 		}
 
 		virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
@@ -117,6 +121,7 @@ namespace ActFunc
 	public:
 
 		static constexpr const char* k_name{ "Sigmoid" };
+		virtual GpuActType GetGpuType() const override { return GpuActType::Sigmoid; }
 
 		virtual std::string GetName() const override
 		{
@@ -125,19 +130,17 @@ namespace ActFunc
 
 		virtual engineFloat Execute(engineFloat x) const override
 		{
-			return 1.0f / (1.0f + std::exp(-x));
+			return SharedAct::Sigmoid(x);
 		}
 
 		virtual engineFloat ExecuteDerivative(engineFloat x) const override
 		{
-			engineFloat s = Execute(x);
-			return s * (1.0f - s);
+			return SharedAct::SigmoidDeriv(x);
 		}
 		
 		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
 		{
-			engineFloat sig = 1.0f / (1.0f + std::exp(-x));
-			return sig * (1.0f - sig) * (1.0f - 2.0f * sig);
+			return SharedAct::SigmoidSecondDeriv(x);
 		}
 
 		virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
@@ -156,6 +159,7 @@ namespace ActFunc
 	public:
 
 		static constexpr const char* k_name{ "ReLU" };
+		virtual GpuActType GetGpuType() const override { return GpuActType::ReLU; }
 
 		virtual std::string GetName() const override
 		{
@@ -164,17 +168,17 @@ namespace ActFunc
 
 		virtual engineFloat Execute(engineFloat x) const override
 		{
-			return std::max((engineFloat)0, x);
+			return SharedAct::ReLU(x);
 		}
 
 		virtual engineFloat ExecuteDerivative(engineFloat x) const override
 		{
-			return x > 0.0f ? 1.0f : 0.0f;
+			return SharedAct::ReLUDeriv(x);
 		}
 		
 		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
 		{
-			return 0.0f;
+			return SharedAct::ReLUSecondDeriv(x);
 		}
 
 		virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
@@ -190,10 +194,11 @@ namespace ActFunc
 
 	class LeakyReLU : public Base
 	{
-		static constexpr engineFloat k_leakySlope = 0.1f;
+		//static constexpr engineFloat k_leakySlope = 0.1f;
 	public:
 
 		static constexpr const char* k_name{ "LeakyReLU" };
+		virtual GpuActType GetGpuType() const override { return GpuActType::LeakyReLU; }
 
 		virtual std::string GetName() const override
 		{
@@ -202,24 +207,17 @@ namespace ActFunc
 
 		virtual engineFloat Execute(engineFloat x) const override
 		{
-			if (x >= 0.0f)
-			{
-				return x;
-			}
-			else
-			{
-				return x * k_leakySlope;
-			}
+			return SharedAct::LeakyReLU(x);
 		}
 
 		virtual engineFloat ExecuteDerivative(engineFloat x) const override
 		{
-			return x >= 0.0f ? 1.0f : k_leakySlope;
+			return SharedAct::LeakyReLUDeriv(x);
 		}
 		
 		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
 		{
-			return 0.0f;
+			return SharedAct::LeakyReLUSecondDeriv(x);
 		}
 
 		virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
@@ -238,7 +236,8 @@ namespace ActFunc
 	{
 	public:
 		static constexpr const char* k_name{ "Siren" };
-		static constexpr engineFloat k_w0 = 30.f;//30.0f; // SIREN frequency hyperparameter (omega_naught)
+		virtual GpuActType GetGpuType() const override { return GpuActType::Siren; }
+		//static constexpr engineFloat k_w0 = 30.f;//30.0f; // SIREN frequency hyperparameter (omega_naught)
 
 		virtual std::string GetName() const override
 		{
@@ -247,18 +246,17 @@ namespace ActFunc
 
 		virtual engineFloat Execute(engineFloat x) const override
 		{
-			return std::sin(k_w0 * x);
+			return SharedAct::Siren(x);
 		}
 
 		virtual engineFloat ExecuteDerivative(engineFloat x) const override
 		{
-			return k_w0 * std::cos(k_w0 * x);
+			return SharedAct::SirenDeriv(x);
 		}
 
 		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
 		{
-		    // Second derivative of sin(w0 * x)
-		    return -1.0f * (k_w0 * k_w0) * std::sin(k_w0 * x);
+			return SharedAct::SirenSecondDeriv(x);
 		}
 
 		virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
@@ -269,7 +267,7 @@ namespace ActFunc
 			// https://deepwiki.com/vsitzmann/siren#key-properties-of-siren
 			const engineFloat bound = (layerIndex == 1
 				                    ? 1.0f / static_cast<engineFloat>(fanIn)
-				                    : std::sqrt(6.0f / static_cast<engineFloat>(fanIn)) / k_w0);
+				                    : std::sqrt(6.0f / static_cast<engineFloat>(fanIn)) / SharedAct::Config::Siren_w0);
 
 			std::uniform_real_distribution distribution(-bound, bound);
 			return distribution(generator);
@@ -284,25 +282,22 @@ namespace ActFunc
 	{
 	public:
 		static constexpr const char* k_name{ "Tanh" };
+		virtual GpuActType GetGpuType() const override { return GpuActType::Tanh; }
 		virtual std::string GetName() const override { return k_name; }
 
 		virtual engineFloat Execute(engineFloat x) const override
 		{
-			return std::tanh(x);
+			return SharedAct::Tanh(x);
 		}
 
 		virtual engineFloat ExecuteDerivative(engineFloat x) const override
 		{
-			engineFloat t = std::tanh(x);
-			// f'(x) = 1 - tanh(x)^2
-			return 1.0f - (t * t);
+			return SharedAct::TanhDeriv(x);
 		}
 
 		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
 		{
-			engineFloat t = std::tanh(x);
-			// f''(x) = -2 * tanh(x) * (1 - tanh(x)^2)
-			return -2.0f * t * (1.0f - (t * t));
+			return SharedAct::TanhSecondDeriv(x);
 		}
 
 		virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
@@ -322,12 +317,13 @@ namespace ActFunc
 	{
 	public:
 		static constexpr const char* k_name{ "Wire" };
+		virtual GpuActType GetGpuType() const override { return GpuActType::Wire; }
     
 		// Hyperparameters from the WIRE paper & python files
 		// https://github.com/vishwa91/wire/blob/main/wire_image_denoise.py
 		// We suggest omega0 = 4 and sigma0 = 4 for denoising, and omega0=20, sigma0=30 for image representation
-		static constexpr engineFloat k_w0 = 20.f;//30.f;//16.f;//20.0f; // Frequency (controls sharpness)
-		static constexpr engineFloat k_s = 30.f;//45.f;//24.f;//30.0f;  // Scale (controls localization/smoothness)
+		//static constexpr engineFloat k_w0 = 20.f;//30.f;//16.f;//20.0f; // Frequency (controls sharpness)
+		//static constexpr engineFloat k_s = 30.f;//45.f;//24.f;//30.0f;  // Scale (controls localization/smoothness)
 
 		virtual std::string GetName() const override { return k_name; }
 		
@@ -341,64 +337,41 @@ namespace ActFunc
 		{
 			return ExecuteDualDerivative(z, z).first; // Just grab the freq derivative
 		}
-		
-		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
-		{
-			engineFloat s2 = k_s * k_s;
-			engineFloat E = std::exp(-s2 * x * x);
-			engineFloat S = std::sin(k_w0 * x);
-			engineFloat C = std::cos(k_w0 * x);
-
-			engineFloat term1 = (4.0f * s2 * s2 * x * x) - (2.0f * s2) - (k_w0 * k_w0);
-			engineFloat term2 = 4.0f * s2 * k_w0 * x;
-
-			return E * (term1 * C + term2 * S);
-		}
 
 		// Dual weight pass
 		engineFloat ExecuteDual(engineFloat zFreq, engineFloat zScale) const override
 		{
-			engineFloat s_squared = k_s * k_s;
-			engineFloat window = std::exp(-s_squared * (zScale * zScale));
-			engineFloat wave = std::cos(k_w0 * zFreq);
-        
-			return window * wave;
+			return SharedAct::Wire(zFreq, zScale);
+		}
+		
+		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
+		{
+			throw; //TODO
+			return std::get<0>(ExecuteDualSecondDerivative(x, x));
+			// engineFloat s2 = k_s * k_s;
+			// engineFloat E = std::exp(-s2 * x * x);
+			// engineFloat S = std::sin(k_w0 * x);
+			// engineFloat C = std::cos(k_w0 * x);
+			//
+			// engineFloat term1 = (4.0f * s2 * s2 * x * x) - (2.0f * s2) - (k_w0 * k_w0);
+			// engineFloat term2 = 4.0f * s2 * k_w0 * x;
+			//
+			// return E * (term1 * C + term2 * S);
 		}
 
 		std::pair<engineFloat, engineFloat> ExecuteDualDerivative(engineFloat zFreq, engineFloat zScale) const override
 		{
-			engineFloat s_squared = k_s * k_s;
-			engineFloat window = std::exp(-s_squared * (zScale * zScale));
-			engineFloat wave = std::cos(k_w0 * zFreq);
-			engineFloat out = window * wave;
-        
-			// Derivative with respect to the frequency Z
-			engineFloat d_freq = window * (-k_w0 * std::sin(k_w0 * zFreq));
-        
-			// Derivative with respect to the scale (envelope) Z
-			engineFloat d_scale = -2.0f * s_squared * zScale * out; 
-
-			return { d_freq, d_scale };
+			engineFloat dFreq, dScale;
+			SharedAct::WireDualDeriv(zFreq, zScale, dFreq, dScale);
+			return { dFreq, dScale };
 		}
 		
 		// Im very unsure on my math on this one... but were not using it at the moment so TODO: later :D
 		std::tuple<engineFloat, engineFloat, engineFloat> ExecuteDualSecondDerivative(engineFloat zFreq, engineFloat zScale) const override
 		{
-			engineFloat s_squared = k_s * k_s;
-			engineFloat window = std::exp(-s_squared * (zScale * zScale));
-			engineFloat wave = std::cos(k_w0 * zFreq);
-			engineFloat out = window * wave;
-        
-			// Second derivative w.r.t Frequency (zFreq, zFreq)
-			engineFloat d2_freq = - (k_w0 * k_w0) * out;
-
-			// Second derivative w.r.t Scale (zScale, zScale)
-			engineFloat d2_scale = window * wave * (4.0f * s_squared * s_squared * zScale * zScale - 2.0f * s_squared);
-
-			// Mixed partial derivative (zFreq, zScale)
-			engineFloat d2_mixed = -2.0f * s_squared * zScale * window * (-k_w0 * std::sin(k_w0 * zFreq));
-
-			return { d2_freq, d2_scale, d2_mixed };
+			engineFloat d2Freq, d2Scale, d2Mixed;
+			SharedAct::WireDualSecondDeriv(zFreq, zScale, d2Freq, d2Scale, d2Mixed);
+			return { d2Freq, d2Scale, d2Mixed };
 		}
 
 		engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override

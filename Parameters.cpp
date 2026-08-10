@@ -56,6 +56,8 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFu
 			weights_scale[i] = actFunc->GenerateInitialWeight( generator, fanIn, fanOut, lIdx );
 		}
 	}
+	
+	UploadToGPU();
 }
 
 // Note: this does not chnage the adams state paraeters!
@@ -211,10 +213,14 @@ void Parameters::Deserialize(std::istream& in)
 		v_biases_scale.resize(numVBiasesScale);
 		for (size_t i = 0; i < numVBiasesScale; ++i) in >> v_biases_scale[i];
 	}
+	
+	UploadToGPU();
 }
 
 void Parameters::Serialize(std::ostream& out)
 {
+	ReadbackFromGPU();
+	
     // Save Biases
     out << biases.size() << "\n";
     for (size_t i = 0; i < biases.size(); i++)
@@ -376,4 +382,20 @@ void Parameters::ApplyAdamUpdate(
 			biases_scale[i] -= learningRate * (m_hat / (std::sqrt(v_hat) + epsilon));
 		}
 	}
+}
+
+void Parameters::UploadToGPU()
+{
+	d_weights.Upload(weights);
+	d_biases.Upload(biases);
+	if (!weights_scale.empty()) d_weights_scale.Upload(weights_scale);
+	if (!biases_scale.empty()) d_biases_scale.Upload(biases_scale);
+}
+
+void Parameters::ReadbackFromGPU()
+{
+	d_weights.Readback(weights);
+	d_biases.Readback(biases);
+	if (!weights_scale.empty()) d_weights_scale.Readback(weights_scale);
+	if (!biases_scale.empty()) d_biases_scale.Readback(biases_scale);
 }

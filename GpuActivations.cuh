@@ -1,0 +1,154 @@
+#pragma once
+#include "Types.h"
+#include <cuda_runtime.h>
+#include <cmath>
+
+#ifdef __CUDACC__
+    #define __MATH_FUNC__ __host__ __device__ __forceinline__
+#else
+    #define __MATH_FUNC__ inline
+#endif
+
+// We need a simple enum because C++ virtual functions cannot run on the GPU
+enum class GpuActType {
+    None = 0,
+    Siren = 1,
+    Wire = 2,
+    ReLU = 3,
+    LeakyReLU = 4,
+    Sigmoid = 5,
+    Tanh = 6
+};
+
+// TODO: really we should make these functions __global__ or something and replace out cpu code to also use these for when running with --use_gpu off
+// right now i did a more or less lazy solution of calling the functions in ActivationFunctions.h but this could all be a lot cleaner
+namespace SharedAct 
+{
+    // Hyperparameters
+    namespace Config 
+    {
+        constexpr engineFloat Siren_w0 = 30.0f;
+        
+        constexpr engineFloat Wire_w0 = 20.0f;
+        constexpr engineFloat Wire_s = 30.0f;
+        constexpr engineFloat Wire_s_squared = Wire_s * Wire_s;
+        
+        constexpr engineFloat LeakyReLU_slope = 0.1f;
+    }
+    
+    // Forward Pass Activation Functions
+
+    // NONE (Linear)
+    __MATH_FUNC__ engineFloat None(engineFloat x) { 
+        return x; 
+    }
+    
+    __MATH_FUNC__ engineFloat NoneDeriv(engineFloat x) { 
+        return 1.0f; 
+    }
+    
+    __MATH_FUNC__ engineFloat NoneSecondDeriv(engineFloat x) { 
+        return 0.0f; 
+    }
+    
+    // SIGMOID
+    __MATH_FUNC__ engineFloat Sigmoid(engineFloat x) { 
+        return 1.0f / (1.0f + std::exp(-x)); 
+    }
+    
+    __MATH_FUNC__ engineFloat SigmoidDeriv(engineFloat x) { 
+        engineFloat s = Sigmoid(x);
+        return s * (1.0f - s);
+    }
+    
+    __MATH_FUNC__ engineFloat SigmoidSecondDeriv(engineFloat x) { 
+        engineFloat sig = Sigmoid(x);
+        return sig * (1.0f - sig) * (1.0f - 2.0f * sig);
+    }
+    
+    // RELU
+    __MATH_FUNC__ engineFloat ReLU(engineFloat x) { 
+        return std::max(static_cast<engineFloat>(0.0), x);
+    }
+    
+    __MATH_FUNC__ engineFloat ReLUDeriv(engineFloat x) { 
+        return x > 0.0f ? 1.0f : 0.0f; 
+    }
+    
+    __MATH_FUNC__ engineFloat ReLUSecondDeriv(engineFloat x) { 
+        return 0.0f; 
+    }
+    
+    // LEAKY RELU
+    __MATH_FUNC__ engineFloat LeakyReLU(engineFloat x) { 
+        return x >= 0.0f ? x : x * Config::LeakyReLU_slope; 
+    }
+    
+    __MATH_FUNC__ engineFloat LeakyReLUDeriv(engineFloat x) { 
+        return x >= 0.0f ? 1.0f : Config::LeakyReLU_slope; 
+    }
+    
+    __MATH_FUNC__ engineFloat LeakyReLUSecondDeriv(engineFloat x) { 
+        return 0.0f; 
+    }
+    
+    // TANH
+    __MATH_FUNC__ engineFloat Tanh(engineFloat x) { 
+        return std::tanh(x); 
+    }
+    
+    __MATH_FUNC__ engineFloat TanhDeriv(engineFloat x) { 
+        engineFloat t = std::tanh(x);
+        return 1.0f - (t * t);
+    }
+    
+    __MATH_FUNC__ engineFloat TanhSecondDeriv(engineFloat x) { 
+        engineFloat t = std::tanh(x);
+        return -2.0f * t * (1.0f - (t * t));
+    }
+    
+    // SIREN
+    __MATH_FUNC__ engineFloat Siren(engineFloat x) { 
+        return std::sin(Config::Siren_w0 * x); 
+    }
+    
+    __MATH_FUNC__ engineFloat SirenDeriv(engineFloat x) { 
+        return Config::Siren_w0 * std::cos(Config::Siren_w0 * x);
+    }
+    
+    __MATH_FUNC__ engineFloat SirenSecondDeriv(engineFloat x) { 
+        return -1.0f * (Config::Siren_w0 * Config::Siren_w0) * std::sin(Config::Siren_w0 * x);
+    }
+    
+    // WIRE (Dual-Weight)
+    __MATH_FUNC__ engineFloat Wire(engineFloat zFreq, engineFloat zScale) {
+        return std::exp(-Config::Wire_s_squared * (zScale * zScale)) * std::cos(Config::Wire_w0 * zFreq);
+    }
+
+    // Using pass-by-reference to avoid std::pair compatibility issues on the GPU
+    __MATH_FUNC__ void WireDualDeriv(
+        engineFloat zFreq, engineFloat zScale, 
+        engineFloat& out_dFreq, engineFloat& out_dScale) 
+    {
+        engineFloat window = std::exp(-Config::Wire_s_squared * (zScale * zScale));
+        engineFloat wave = std::cos(Config::Wire_w0 * zFreq);
+        engineFloat out = window * wave;
+        
+        out_dFreq = window * (-Config::Wire_w0 * std::sin(Config::Wire_w0 * zFreq));
+        out_dScale = -2.0f * Config::Wire_s_squared * zScale * out; 
+    }
+
+    // Using pass-by-reference to avoid std::tuple compatibility issues on the GPU
+    __MATH_FUNC__ void WireDualSecondDeriv(
+        engineFloat zFreq, engineFloat zScale, 
+        engineFloat& out_d2Freq, engineFloat& out_d2Scale, engineFloat& out_d2Mixed) 
+    {
+        engineFloat window = std::exp(-Config::Wire_s_squared * (zScale * zScale));
+        engineFloat wave = std::cos(Config::Wire_w0 * zFreq);
+        engineFloat out = window * wave;
+        
+        out_d2Freq = -(Config::Wire_w0 * Config::Wire_w0) * out;
+        out_d2Scale = window * wave * (4.0f * Config::Wire_s_squared * Config::Wire_s_squared * zScale * zScale - 2.0f * Config::Wire_s_squared);
+        out_d2Mixed = -2.0f * Config::Wire_s_squared * zScale * window * (-Config::Wire_w0 * std::sin(Config::Wire_w0 * zFreq));
+    }
+}

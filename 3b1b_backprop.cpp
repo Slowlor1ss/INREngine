@@ -21,6 +21,8 @@
 #include <string>
 #include <vector>
 
+#include "CudaManager.cuh"
+
 namespace fs = std::filesystem;
 
 // TODO: don't see the point for the database, just use them directly? to have a single instance? does that matter?
@@ -88,16 +90,16 @@ enum class UserAction : uint8_t {
 
 namespace config
 {
+	inline bool use_gpu = false;
 	inline bool benchmark_enabled = false;
+	
 	inline std::string target_image_file = "Training_Data/0064_x4.bmp";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
 	inline engineFloat output_image_scale = 1.f;
-	inline std::vector<size_t> custom_layer_dims = { 256, 256, 256, 256, 3 };
+	inline std::vector<size_t> custom_layer_dims = { 64, 64, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
-		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
-		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::None>()
@@ -151,9 +153,14 @@ static int ParseCommandLine(const int argc, char** argv)
 				"  {:<14} | {}\n"
 				"  {:<14} | {}\n"
 				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
 				"==================================================================================================\n",
 				"--i",			"Set input filename",
 				"--o",			"Set output path (can specify file as well e.g. weights_biases.csv)",	
+				"--gpu",		"Enable CUDA"
+				"--benchmark",	"Enable Benchmarking"
 				"--layers",		"Set the layers e.g. --layers 128 128 3",
 				"--act",		"Set the activation function(s) e.g. --act Wire Siren None",
 				"",				"Valid options are: " + ActFunc::DataBase::GetAllActNames(),
@@ -165,6 +172,14 @@ static int ParseCommandLine(const int argc, char** argv)
 				"--set-live 0/1", "Disable live viewer on start; Note: this can be re-enabled during runtime using 'v'"
 			);
 			return 0;
+		}
+		else if (arg == "--gpu" && i + 1 < argc)
+		{
+			config::use_gpu = std::stoi(argv[++i]);
+		}
+		else if (arg == "--benchmark" && i + 1 < argc)
+		{
+			config::benchmark_enabled = std::stoi(argv[++i]);
 		}
 		else if (arg == "--layers") 
 		{
@@ -295,6 +310,8 @@ static int ParseCommandLine(const int argc, char** argv)
 	   "=== Launch Configuration ===\n"
 	   " Input file          : {}\n"
 	   " Output path         : {}\n"
+	   " Use GPU		     : {}\n"
+	   " Benchmark			 : {}\n"
 	   " Topology (Layers)   : {}\n"
 	   " Activations         : {}\n"
 	   " Positional Encoding : {}\n"
@@ -306,6 +323,8 @@ static int ParseCommandLine(const int argc, char** argv)
 	   "============================\n",
 	   config::target_image_file,
 	   (fs::path(config::output_path) / config::output_filename).string(),
+	   config::use_gpu() ? "ON" : "OFF",
+	   config::benchmark_enabled() ? "ON" : "OFF",
 	   customLayersStr,
 	   customActsStr,
 	   config::use_positional_encoding ? "ON" : "OFF",
@@ -319,7 +338,7 @@ static int ParseCommandLine(const int argc, char** argv)
 	return 1;
 }
 
-	// TODO: merge the 2 function below or something this is bad but we need one for the imagedataset and another for the coormapper
+// TODO: merge the 2 function below or something this is bad but we need one for the imagedataset and another for the coormapper
 static ImageUtils::SpatialData PositionalEncodeWithDerivatives(engineFloat x, engineFloat y, int numFrequencies) 
 {
     ImageUtils::SpatialData result;
@@ -536,6 +555,9 @@ static size_t GetRandomImageIndex(const size_t totalImages)
 // ============================================================================
 int main(int argc, char** argv)
 {
+	// Forces cuBLAS to boot up immediately rather then upon first use
+	CudaManager::GetInstance(); 
+	
 	// Parse the command line arguments right at startup
 	if ( int ret = ParseCommandLine(argc, argv); ret != 1 )
 		return ret; // Returns 0 on help, -1 if we went very wrong
