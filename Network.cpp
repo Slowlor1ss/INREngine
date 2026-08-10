@@ -31,8 +31,24 @@ const std::vector<size_t>& neuronsPerLayer,
     	ActFunc::Base* actFunc = activations[i - 1];
 
         m_layers.push_back(std::make_unique<Layer>(neuronsPerLayer[i], actFunc, i, m_layers.back().get()));
-        //m_storedDelta.emplace_back(m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), i);
-    	// We pas sthe actfunc rather then none so we can chek for the stored deltas and by extend the local deltas weathe rthe act function is wire
+        
+    	// Fetch the default multiplier for this layer's activation function
+    	m_layers.back()->m_learningRateMultiplier = actFunc ? actFunc->GetLearningRateMultiplier() : 1.0f;
+    	
+    	if (m_layers.size() > 2)
+    	{
+    		Layer* outputLayer = m_layers.back().get();
+    		Layer* lastHiddenLayer = m_layers[m_layers.size() - 2].get();
+
+    		// If the output activation is "None", inherit from the last hidden layer
+    		if (outputLayer->m_activationFunction->GetName() == ActFunc::None::k_name)
+    		{
+    			outputLayer->m_learningRateMultiplier = lastHiddenLayer->m_learningRateMultiplier;
+    		}
+    	}
+    	
+    	//m_storedDelta.emplace_back(m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), i);
+    	// We pass the actfunc rather then none so we can chek for the stored deltas and by extend the local deltas weathe rthe act function is wire
     	// TODO: maybe a better solution
         m_storedDelta.emplace_back(m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), actFunc, i);
 		m_storedDelta.back().Clear(); // TODO: unsure
@@ -66,15 +82,16 @@ void Network::ConsumeDelta(engineFloat learningRate)
 	{
 		for (size_t i = 1; i < m_layers.size(); i++)
 		{
-			const engineFloat lr = learningRate * m_layers[i]->m_activationFunction->GetLearningRateMultiplier();
+			//const engineFloat lr = learningRate * m_layers[i]->m_activationFunction->GetLearningRateMultiplier();
+			const engineFloat lr = learningRate * m_layers[i]->m_learningRateMultiplier;
 			
 			if (m_layers[i]->m_params.biases.size() == m_storedDelta[i].biases.size()
 				&& m_layers[i]->m_params.weights.size() == m_storedDelta[i].weights.size())
 			{
-				// 1. Average the accumulated gradients over the batch
+				// Average the accumulated gradients over the batch
 				m_storedDelta[i] *= (1.0f / static_cast<engineFloat>(m_numStored));
 
-				// 2. Pass the averaged gradients to our new Adam optimizer!
+				// Pass the averaged gradients to our new Adam optimizer!
 				// (Note: ApplyAdamUpdate handles the learning rate and subtraction internally)
 				m_layers[i]->m_params.ApplyAdamUpdate(
 					m_storedDelta[i].weights, 
@@ -84,7 +101,7 @@ void Network::ConsumeDelta(engineFloat learningRate)
 					lr
 				);
 
-				// 3. Clear the delta buffer for the next batch
+				// Clear the delta buffer for the next batch
 				m_storedDelta[i].Clear();
 			}
 		}

@@ -1,5 +1,6 @@
 import subprocess
 import os
+import shutil
 import imageio.v3 as iio
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,111 +12,111 @@ runs = [
         "name": "Siren_Base_2x256",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/0064_x4.bmp", "--o", "../results/siren_base/0064_x4_siren_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "Siren", "Siren", "None", 
-                "--batch", "65536", "--lr", "0.000025", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     {
         "name": "Wire_Base_2x256",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/0064_x4.bmp", "--o", "../results/wire_base/0064_x4_wire_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "Wire", "Wire", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     {
         "name": "Siren_GPE_6x256_b8192",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/0064_x4.bmp", "--o", "../results/siren_6x256_GPE_b8192/0064_x4_siren_GPE_6x256_b8192.bmp", 
                 "--layers", "256", "256", "256", "256", "256", "256", "3", "--act", "Siren", "Siren", "Siren", "Siren", "Siren", "Siren", "None", 
-                "--batch", "8192", "--lr", "0.000025", "--set-live", "0", "--set-gaussian-pe", "1"]
+                "--batch", "8192", "--lr", "1", "--set-live", "0", "--set-gaussian-pe", "1"]
     },
     {
         "name": "Siren_PE_6x256_b8192",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/0064_x4.bmp", "--o", "../results/siren_6x256_PE_b8192/0064_x4_siren_PE_6x256_b8192.bmp", 
                 "--layers", "256", "256", "256", "256", "256", "256", "3", "--act", "Siren", "Siren", "Siren", "Siren", "Siren", "Siren", "None", 
-                "--batch", "8192", "--lr", "0.000025", "--set-live", "0", "--set-pe", "1"]
+                "--batch", "8192", "--lr", "1", "--set-live", "0", "--set-pe", "1"]
     },
     {
         "name": "LeakyReLU_Base_2x256",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/0064_x4.bmp", "--o", "../results/LeakyReLU_base/0064_x4_LeakyReLU_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "LeakyReLU", "LeakyReLU", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     {
         "name": "ReLU_Base_2x256",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/0064_x4.bmp", "--o", "../results/ReLU_base/0064_x4_ReLU_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "ReLU", "ReLU", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     {
         "name": "Sigmoid_Base_2x256",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/0064_x4.bmp", "--o", "../results/Sigmoid_base/0064_x4_Sigmoid_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "Sigmoid", "Sigmoid", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     {
         "name": "Tanh_Base_2x256",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/0064_x4.bmp", "--o", "../results/Tanh_base/0064_x4_Tanh_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "Tanh", "Tanh", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     # --- CAMERA DATASET ---
     {
         "name": "Siren_Base_2x256_Cam",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/camera.bmp", "--o", "../results/siren_base/camera_siren_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "Siren", "Siren", "None", 
-                "--batch", "65536", "--lr", "0.000025", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     {
         "name": "Wire_Base_2x256_Cam",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/camera.bmp", "--o", "../results/wire_base/camera_wire_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "Wire", "Wire", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     {
         "name": "Siren_GPE_6x256_b8192_Cam",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/camera.bmp", "--o", "../results/siren_6x256_GPE_b8192/camera_siren_GPE_6x256_b8192.bmp", 
                 "--layers", "256", "256", "256", "256", "256", "256", "3", "--act", "Siren", "Siren", "Siren", "Siren", "Siren", "Siren", "None", 
-                "--batch", "8192", "--lr", "0.000025", "--set-live", "0", "--set-gaussian-pe", "1"]
+                "--batch", "8192", "--lr", "1", "--set-live", "0", "--set-gaussian-pe", "1"]
     },
     {
         "name": "Siren_PE_6x256_b8192_Cam",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/camera.bmp", "--o", "../results/siren_6x256_PE_b8192/camera_siren_PE_6x256_b8192.bmp", 
                 "--layers", "256", "256", "256", "256", "256", "256", "3", "--act", "Siren", "Siren", "Siren", "Siren", "Siren", "Siren", "None", 
-                "--batch", "8192", "--lr", "0.000025", "--set-live", "0", "--set-pe", "1"]
+                "--batch", "8192", "--lr", "1", "--set-live", "0", "--set-pe", "1"]
     },
     {
         "name": "LeakyReLU_Base_2x256_Cam",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/camera.bmp", "--o", "../results/LeakyReLU_base/camera_LeakyReLU_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "LeakyReLU", "LeakyReLU", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     {
         "name": "ReLU_Base_2x256_Cam",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/camera.bmp", "--o", "../results/ReLU_base/camera_ReLU_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "ReLU", "ReLU", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     {
         "name": "Sigmoid_Base_2x256_Cam",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/camera.bmp", "--o", "../results/Sigmoid_base/camera_Sigmoid_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "Sigmoid", "Sigmoid", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     {
         "name": "Tanh_Base_2x256_Cam",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/camera.bmp", "--o", "../results/Tanh_base/camera_Tanh_2x256.bmp", 
                 "--layers", "256", "256", "3", "--act", "Tanh", "Tanh", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
     # BONUS
         {
         "name": "Wire_Base_2x626_Cam",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/0064_x4.bmp", "--o", "../results/wire_base/0064_x4_wire_2x626.bmp", 
                 "--layers", "526", "526", "3", "--act", "Wire", "Wire", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "1", "--set-live", "0"]
     },
         {
         "name": "Wire_Base_4x256_Cam",
         "cmd": ["../x64/Training/3b1b_backprop.exe", "--i", "../Training_Data/0064_x4.bmp", "--o", "../results/wire_base/0064_x4_wire_4x256.bmp", 
                 "--layers", "256", "256", "256", "256", "3", "--act", "Wire", "Wire", "Wire", "Wire", "None", 
-                "--batch", "65536", "--lr", "0.005", "--set-live", "0"]
+                "--batch", "65536", "--lr", "0.1", "--set-live", "0"]
     }
 ]
 
@@ -159,6 +160,33 @@ def plot_metrics(csv_file, output_path):
     plt.savefig(output_path)
     plt.close()
 
+def extract_best_images(csv_file, rgb_folder, grad_folder, output_rgb_path, output_grad_path):
+    """Finds the highest PSNR in the CSV and copies the corresponding RGB and Grad images."""
+    if not os.path.exists(csv_file): return
+    
+    df = pd.read_csv(csv_file)
+    if df.empty: return
+
+    # Find the exact row index where PSNR is the highest
+    best_idx = df['PSNR'].idxmax()
+    best_batch = int(df.loc[best_idx, 'Batch'])
+    best_psnr = float(df.loc[best_idx, 'PSNR'])
+    
+    # Reconstruct the C++ filename (e.g., step_01230.bmp)
+    best_image_name = f"step_{best_batch:05d}.bmp"
+    
+    # Copy RGB
+    best_rgb_src = Path(rgb_folder) / best_image_name
+    if best_rgb_src.exists():
+        shutil.copy2(best_rgb_src, output_rgb_path)
+        
+    # Copy Gradient
+    best_grad_src = Path(grad_folder) / best_image_name
+    if best_grad_src.exists():
+        shutil.copy2(best_grad_src, output_grad_path)
+        
+    print(f"Extracted Best Images (Batch {best_batch} @ {best_psnr:.2f} dB)")
+
 # --- Execute the Pipeline ---
 for run in runs:
     print(f"\n{'='*40}")
@@ -187,5 +215,12 @@ for run in runs:
     make_gif(bench_folder / "rgb", bench_folder / f"{run['name']}_rgb.gif")
     make_gif(bench_folder / "grad", bench_folder / f"{run['name']}_grad.gif")
     plot_metrics(bench_folder / "metrics.csv", bench_folder / f"{run['name']}_graph.png")
+    extract_best_images(
+        bench_folder / "metrics.csv", 
+        bench_folder / "rgb", 
+        bench_folder / "grad", 
+        bench_folder / f"{run['name']}_best_rgb.bmp",
+        bench_folder / f"{run['name']}_best_grad.bmp"
+    )
 
 print("\nAll benchmarking complete!")

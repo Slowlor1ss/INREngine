@@ -56,9 +56,11 @@ static engineFloat RunGradientGuidedTrainingEpoch(Network& network,
         //learningRate *= static_cast<engineFloat>(std::pow(0.9999999, batchSize));
 
     	// Calculate the decay factor just like the LambdaLR scheduler
-    	//engineFloat progress = min(static_cast<engineFloat>(currentEpoch) / maxEpochs, 1.0f);
-    	engineFloat progress = min(static_cast<engineFloat>(currentEpoch) / (maxEpochs*4ull), 1.0f); // im cheating in 8000 rather then using the 2000 as it just seems to work better TODO; look in to a slower degrading LR
-    	learningRate = config::initial_learning_rate * std::pow(0.1f, progress);
+    	engineFloat progress = min(static_cast<engineFloat>(currentEpoch) / maxEpochs, 1.0f);
+    	//engineFloat progress = min(static_cast<engineFloat>(currentEpoch) / (maxEpochs, 1.0f); // im cheating in 8000 rather then using the 2000 as it just seems to work better TODO; look in to a slower degrading LR
+    	// TEST: Decay to 50% (0.5f) of the initial learning rate by the final epoch
+    	// instead of a 10% (0.1f)
+    	learningRate = config::initial_learning_rate * std::pow(0.5f, progress);
 
     	currentEpoch++;
     }

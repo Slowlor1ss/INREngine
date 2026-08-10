@@ -88,14 +88,16 @@ enum class UserAction : uint8_t {
 
 namespace config
 {
-	inline bool benchmark_enabled = true;
+	inline bool benchmark_enabled = false;
 	inline std::string target_image_file = "Training_Data/0064_x4.bmp";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
 	inline engineFloat output_image_scale = 1.f;
-	inline std::vector<size_t> custom_layer_dims = { 526, 526, 3 };
+	inline std::vector<size_t> custom_layer_dims = { 256, 256, 256, 256, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
+		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::None>()
@@ -116,7 +118,7 @@ namespace config
 	inline bool shuffle_pixel_batch = true; // TODO: either make this an input parameter or make this the default if batch size isnt == to image size
 	inline size_t print_every_n_batches = 10;
 	//inline float initial_learning_rate = 0.0001f;
-	inline engineFloat initial_learning_rate = 0.005f;//0.005f;//WIRE //0.000025f; Siren
+	inline engineFloat initial_learning_rate = 0.1f;//0.005f;//0.005f;//WIRE //0.000025f; Siren
 	
 	// Hyperparameter to balance how much the network cares about slopes vs colors
 	// used by spatial gradient (use 0 to turn spatial gradient off)

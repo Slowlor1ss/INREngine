@@ -148,6 +148,7 @@ namespace ActFunc
 		    return distribution(generator);
 		}
 
+		virtual engineFloat GetLearningRateMultiplier() const override { return 0.001f; }
 	};
 
 	class ReLU : public Base
@@ -184,7 +185,7 @@ namespace ActFunc
 			return distribution(generator);
 		}
 
-		virtual engineFloat GetLearningRateMultiplier() const override { return 0.01f; }
+		virtual engineFloat GetLearningRateMultiplier() const override { return 0.0005f; }
 	};
 
 	class LeakyReLU : public Base
@@ -229,7 +230,7 @@ namespace ActFunc
 			return distribution(generator);
 		}
 
-		virtual engineFloat GetLearningRateMultiplier() const override { return 0.01f; }
+		virtual engineFloat GetLearningRateMultiplier() const override { return 0.0005f; }
 	};
 
 	// Heavily based on https://deepwiki.com/vsitzmann/siren
@@ -275,7 +276,7 @@ namespace ActFunc
 		}
 
 		// TODO-LKrikilion: mess around with this value a bit on a better machine 
-		virtual engineFloat GetLearningRateMultiplier() const override { return 1.f; }//0.0001f; }
+		virtual engineFloat GetLearningRateMultiplier() const override { return 0.0001f; }//0.0001f; }
 	};
 	
 	// For debugging
@@ -311,6 +312,8 @@ namespace ActFunc
 			std::uniform_real_distribution<engineFloat> dist(-limit, limit);
 			return dist(generator);
 		}
+		
+		virtual engineFloat GetLearningRateMultiplier() const override { return 0.001f; }
 	};
 	
 	// https://vishwa91.github.io/wire
@@ -417,6 +420,6 @@ namespace ActFunc
 			
 		// TODO: when we start using the LR multiplyer again
 		// # WIRE works best at 5e-3 to 2e-2 (Source: https://github.com/vishwa91/wire/blob/main/wire_image_denoise.py)
-		virtual engineFloat GetLearningRateMultiplier() const override { return 1.0f; }
+		virtual engineFloat GetLearningRateMultiplier() const override { return 0.005f; }
 	};
 }

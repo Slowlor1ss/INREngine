@@ -49,6 +49,8 @@ protected:
 
 	// final activation
 	std::vector<engineFloat> m_activations;
+	
+	engineFloat m_learningRateMultiplier = 1.0f;
 
 	friend class Network;
 };
