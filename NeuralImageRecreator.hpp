@@ -56,7 +56,7 @@ static engineFloat RunGradientGuidedTrainingEpoch(Network& network,
         //learningRate *= static_cast<engineFloat>(std::pow(0.9999999, batchSize));
 
     	// Calculate the decay factor just like the LambdaLR scheduler
-    	engineFloat progress = min(static_cast<engineFloat>(currentEpoch) / maxEpochs, 1.0f);
+    	engineFloat progress = std::min(static_cast<engineFloat>(currentEpoch) / maxEpochs, 1.0f);
     	//engineFloat progress = min(static_cast<engineFloat>(currentEpoch) / (maxEpochs, 1.0f); // im cheating in 8000 rather then using the 2000 as it just seems to work better TODO; look in to a slower degrading LR
     	// TEST: Decay to 50% (0.5f) of the initial learning rate by the final epoch
     	// instead of a 10% (0.1f)
@@ -163,9 +163,10 @@ void NeuralImageRecreator()
 	// };
 	
 	// Pass the activation functions dynamically!
-	Network network{ 
-		layerDims, 
-		config::custom_activations
+	Network network{
+		layerDims,
+		config::custom_activations,
+		CostFunc::DataBase::FindCostFunc(CostFunc::Charbonnier::k_name)
 		//ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		// TODO: look in to this more maybe just use sigmoid as its basically the same or none as its more truthfully ig
 		// and the docmentation says to just use a linear or sine https://deepwiki.com/vsitzmann/siren/2-siren-architecture#sinelayer-and-network-structure

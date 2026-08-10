@@ -98,5 +98,15 @@
     <ClInclude Include="WindowRenderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="cublas_utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="ForwardPass.cu" />
+    <CudaCompile Include="CudaManager.cuh" />
+    <CudaCompile Include="ForwardPass.cuh" />
+    <CudaCompile Include="GpuActivations.cuh" />
+    <CudaCompile Include="GpuBuffer.cuh" />
   </ItemGroup>
 </Project>

@@ -12,6 +12,7 @@ namespace CostFunc
 			m_instance = &instance;
 			instance.m_map.emplace(MSE::k_name, std::make_unique<MSE>());
 			instance.m_map.emplace(L1::k_name, std::make_unique<L1>());
+			instance.m_map.emplace(Charbonnier::k_name, std::make_unique<Charbonnier>());
 		}
 
 		return m_instance;

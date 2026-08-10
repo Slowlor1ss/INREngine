@@ -276,7 +276,7 @@ namespace ActFunc
 		// TODO-LKrikilion: mess around with this value a bit on a better machine 
 		virtual engineFloat GetLearningRateMultiplier() const override { return 0.0001f; }//0.0001f; }
 	};
-	
+
 	// For debugging
 	class Tanh : public Base
 	{
@@ -347,7 +347,8 @@ namespace ActFunc
 		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
 		{
 			throw; //TODO
-			return std::get<0>(ExecuteDualSecondDerivative(x, x));
+			//return std::get<0>(ExecuteDualSecondDerivative(x, x));
+
 			// engineFloat s2 = k_s * k_s;
 			// engineFloat E = std::exp(-s2 * x * x);
 			// engineFloat S = std::sin(k_w0 * x);
@@ -394,5 +395,60 @@ namespace ActFunc
 		// TODO: when we start using the LR multiplyer again
 		// # WIRE works best at 5e-3 to 2e-2 (Source: https://github.com/vishwa91/wire/blob/main/wire_image_denoise.py)
 		virtual engineFloat GetLearningRateMultiplier() const override { return 0.005f; }
+	};
+
+	// https://arxiv.org/abs/2312.02434 -- FINER: variable-periodic sine activation
+	// Same weight init as Siren, but the bias is initialized over a wider range
+	// which is what unlocks the extra frequency range vs plain Siren
+	class Finer : public Base
+	{
+	public:
+		static constexpr const char* k_name{ "Finer" };
+		virtual GpuActType GetGpuType() const override { return GpuActType::Finer; }
+
+		virtual std::string GetName() const override
+		{
+			return k_name;
+		}
+
+		virtual engineFloat Execute(engineFloat x) const override
+		{
+			return SharedAct::Finer(x);
+		}
+
+		virtual engineFloat ExecuteDerivative(engineFloat x) const override
+		{
+			return SharedAct::FinerDeriv(x);
+		}
+
+		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
+		{
+			return SharedAct::FinerSecondDeriv(x);
+		}
+
+		virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
+		{
+			// Same weight init as Siren -- FINER's paper keeps SIREN's weight
+			// scheme and only changes the bias initialization.
+			const engineFloat bound = (layerIndex == 1
+				                    ? 1.0f / static_cast<engineFloat>(fanIn)
+				                    : std::sqrt(6.0f / static_cast<engineFloat>(fanIn)) / SharedAct::Config::Finer_w0);
+
+			std::uniform_real_distribution distribution(-bound, bound);
+			return distribution(generator);
+		}
+
+		// This is the important bit: FINER's extra frequency range comes from
+		// initializing biases over a wide range instead of 0, so different
+		// neurons start on different "cycles" of sin((|x|+1)x). Leaving this at
+		// the Base class default of 0 throws away most of FINER's benefit over
+		// plain Siren.
+		virtual engineFloat GenerateInitialBiases(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) override
+		{
+			std::uniform_real_distribution<engineFloat> distribution(-SharedAct::Config::Finer_bias_k, SharedAct::Config::Finer_bias_k);
+			return distribution(generator);
+		}
+
+		virtual engineFloat GetLearningRateMultiplier() const override { return 0.0001f; }
 	};
 }

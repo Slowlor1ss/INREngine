@@ -49,7 +49,7 @@ __global__ void ApplyActivationKernel(
             default:                    act = SharedAct::None(zFreq); break;
         }
         
-        d_activations[idx] = act
+        d_activations[idx] = act;
     }
 }
 

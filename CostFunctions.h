@@ -39,6 +39,34 @@ namespace CostFunc
 		}
 	};
 
+	class Charbonnier : public Base
+	{
+	public:
+		static constexpr const char* k_name{ "Charbonnier" };
+		// Small epsilon in normalized [0,1] pixel space -- big enough to keep the
+		// gradient well-behaved near zero error, small enough to stay close to L1.
+		static constexpr engineFloat k_epsilon{ 1e-3f };
+		static constexpr engineFloat k_epsilonSquared{ k_epsilon * k_epsilon };
+
+		virtual std::string GetName() const override
+		{
+			return k_name;
+		}
+
+		virtual engineFloat Execute(engineFloat activation, engineFloat target) const override
+		{
+			engineFloat diff = activation - target;
+			return std::sqrt(diff * diff + k_epsilonSquared);
+		}
+
+		virtual engineFloat ExecuteDerivative(engineFloat activation, engineFloat target) const override
+		{
+			engineFloat diff = activation - target;
+			// d/d(activation) sqrt(diff^2 + eps^2) = diff / sqrt(diff^2 + eps^2)
+			return diff / std::sqrt(diff * diff + k_epsilonSquared);
+		}
+	};
+
 	class L1 : public Base
 	{
 	public:

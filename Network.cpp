@@ -338,23 +338,16 @@ void Network::BackPropagateGradientGuided(
     std::vector<engineFloat> errorGradX(outputActivations.size());
     std::vector<engineFloat> errorGradY(outputActivations.size());
 
-    //for (size_t i = 0; i < outputActivations.size(); ++i) {
-    //    // Derivative of (Prediction - Target)^2 is 2 * (Prediction - Target)
-    //    colorError[i] = 2.0f * (outputActivations[i] - target.values[i]);
-    //    errorGradX[i] = 2.0f * (outputGradX[i] - target.gradX[i]);
-    //    errorGradY[i] = 2.0f * (outputGradY[i] - target.gradY[i]);
-    //}
-
 	// A hyperparameter to balance how much the network cares about slopes vs colors.
     // 0.01f is a great starting point so the massive slopes don't nuke the colors.
     constexpr engineFloat spatialLossWeight = 0.f;//0.0001f;//0.00001f; //TODO: RENABLE
 
     for (size_t i = 0; i < outputActivations.size(); ++i) {
-        colorError[i] = 2.0f * (outputActivations[i] - target.values[i]);
-        
+        colorError[i] = m_costFunction->ExecuteDerivative(outputActivations[i], target.values[i]);
+
         // Scale down the spatial errors!
-        errorGradX[i] = 2.0f * (outputGradX[i] - target.gradX[i]) * spatialLossWeight;
-        errorGradY[i] = 2.0f * (outputGradY[i] - target.gradY[i]) * spatialLossWeight;
+        errorGradX[i] = m_costFunction->ExecuteDerivative(outputGradX[i], target.gradX[i]) * spatialLossWeight;
+        errorGradY[i] = m_costFunction->ExecuteDerivative(outputGradY[i], target.gradY[i]) * spatialLossWeight;
     }
 
     // ------

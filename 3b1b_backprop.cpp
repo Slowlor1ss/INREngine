@@ -1,4 +1,6 @@
 #include "Network.h"
+// This vexes me
+#define NOMINMAX 
 #include "WindowRenderer.h"
 #include "ImageGenerator.h"
 #include "CostFuncDataBase.h"
@@ -159,8 +161,8 @@ static int ParseCommandLine(const int argc, char** argv)
 				"==================================================================================================\n",
 				"--i",			"Set input filename",
 				"--o",			"Set output path (can specify file as well e.g. weights_biases.csv)",	
-				"--gpu",		"Enable CUDA"
-				"--benchmark",	"Enable Benchmarking"
+				"--gpu",		"Enable CUDA",
+				"--benchmark",	"Enable Benchmarking",
 				"--layers",		"Set the layers e.g. --layers 128 128 3",
 				"--act",		"Set the activation function(s) e.g. --act Wire Siren None",
 				"",				"Valid options are: " + ActFunc::DataBase::GetAllActNames(),
@@ -323,8 +325,8 @@ static int ParseCommandLine(const int argc, char** argv)
 	   "============================\n",
 	   config::target_image_file,
 	   (fs::path(config::output_path) / config::output_filename).string(),
-	   config::use_gpu() ? "ON" : "OFF",
-	   config::benchmark_enabled() ? "ON" : "OFF",
+	   config::use_gpu ? "ON" : "OFF",
+	   config::benchmark_enabled ? "ON" : "OFF",
 	   customLayersStr,
 	   customActsStr,
 	   config::use_positional_encoding ? "ON" : "OFF",

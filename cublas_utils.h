@@ -43,7 +43,7 @@
         }                                                                                          \
     } while (0)
 #else
-#define CUBLAS_CHECK(err) (err);
+#define CUDA_CHECK(err) (err);
 #endif
 
 // cublas API error checking
@@ -145,7 +145,8 @@ template <> struct traits<cuDoubleComplex> {
 
 template <typename T> void print_matrix(const int &m, const int &n, const T *A, const int &lda);
 
-template <> void print_matrix(const int &m, const int &n, const float *A, const int &lda) {
+template <>
+inline void print_matrix(const int &m, const int &n, const float *A, const int &lda) {
     for (int i = 0; i < m; i++) {
         for (int j = 0; j < n; j++) {
             std::printf("%0.2f ", A[j * lda + i]);
@@ -154,7 +155,8 @@ template <> void print_matrix(const int &m, const int &n, const float *A, const 
     }
 }
 
-template <> void print_matrix(const int &m, const int &n, const double *A, const int &lda) {
+template <>
+inline void print_matrix(const int &m, const int &n, const double *A, const int &lda) {
     for (int i = 0; i < m; i++) {
         for (int j = 0; j < n; j++) {
             std::printf("%0.2f ", A[j * lda + i]);
@@ -163,7 +165,8 @@ template <> void print_matrix(const int &m, const int &n, const double *A, const
     }
 }
 
-template <> void print_matrix(const int &m, const int &n, const cuComplex *A, const int &lda) {
+template <>
+inline void print_matrix(const int &m, const int &n, const cuComplex *A, const int &lda) {
     for (int i = 0; i < m; i++) {
         for (int j = 0; j < n; j++) {
             std::printf("%0.2f + %0.2fj ", A[j * lda + i].x, A[j * lda + i].y);
@@ -173,7 +176,7 @@ template <> void print_matrix(const int &m, const int &n, const cuComplex *A, co
 }
 
 template <>
-void print_matrix(const int &m, const int &n, const cuDoubleComplex *A, const int &lda) {
+inline void print_matrix(const int &m, const int &n, const cuDoubleComplex *A, const int &lda) {
     for (int i = 0; i < m; i++) {
         for (int j = 0; j < n; j++) {
             std::printf("%0.2f + %0.2fj ", A[j * lda + i].x, A[j * lda + i].y);
@@ -184,7 +187,8 @@ void print_matrix(const int &m, const int &n, const cuDoubleComplex *A, const in
 
 template <typename T> void print_packed_matrix(cublasFillMode_t uplo, const int &n, const T *A);
 
-template <> void print_packed_matrix(cublasFillMode_t uplo, const int &n, const float *A) {
+template <>
+inline void print_packed_matrix(cublasFillMode_t uplo, const int &n, const float *A) {
     size_t off = 0;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -199,7 +203,8 @@ template <> void print_packed_matrix(cublasFillMode_t uplo, const int &n, const 
     }
 }
 
-template <> void print_packed_matrix(cublasFillMode_t uplo, const int &n, const double *A) {
+template <>
+inline void print_packed_matrix(cublasFillMode_t uplo, const int &n, const double *A) {
     size_t off = 0;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -214,7 +219,8 @@ template <> void print_packed_matrix(cublasFillMode_t uplo, const int &n, const 
     }
 }
 
-template <> void print_packed_matrix(cublasFillMode_t uplo, const int &n, const cuComplex *A) {
+template <>
+inline void print_packed_matrix(cublasFillMode_t uplo, const int &n, const cuComplex *A) {
     size_t off = 0;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -230,7 +236,8 @@ template <> void print_packed_matrix(cublasFillMode_t uplo, const int &n, const 
     }
 }
 
-template <> void print_packed_matrix(cublasFillMode_t uplo, const int &n, const cuDoubleComplex *A) {
+template <>
+inline void print_packed_matrix(cublasFillMode_t uplo, const int &n, const cuDoubleComplex *A) {
     size_t off = 0;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -248,28 +255,32 @@ template <> void print_packed_matrix(cublasFillMode_t uplo, const int &n, const 
 
 template <typename T> void print_vector(const int &m, const T *A);
 
-template <> void print_vector(const int &m, const float *A) {
+template <>
+inline void print_vector(const int &m, const float *A) {
     for (int i = 0; i < m; i++) {
         std::printf("%0.2f ", A[i]);
     }
     std::printf("\n");
 }
 
-template <> void print_vector(const int &m, const double *A) {
+template <>
+inline void print_vector(const int &m, const double *A) {
     for (int i = 0; i < m; i++) {
         std::printf("%0.2f ", A[i]);
     }
     std::printf("\n");
 }
 
-template <> void print_vector(const int &m, const cuComplex *A) {
+template <>
+inline void print_vector(const int &m, const cuComplex *A) {
     for (int i = 0; i < m; i++) {
         std::printf("%0.2f + %0.2fj ", A[i].x, A[i].y);
     }
     std::printf("\n");
 }
 
-template <> void print_vector(const int &m, const cuDoubleComplex *A) {
+template <>
+inline void print_vector(const int &m, const cuDoubleComplex *A) {
     for (int i = 0; i < m; i++) {
         std::printf("%0.2f + %0.2fj ", A[i].x, A[i].y);
     }
@@ -317,7 +328,7 @@ template <typename T> void make_diag_dominant_matrix(int m, int n, T *A, int lda
 
 // Returns cudaDataType value as defined in library_types.h for the string
 // containing type name
-cudaDataType get_cuda_library_type(std::string type_string) {
+inline cudaDataType get_cuda_library_type(std::string type_string) {
     if (type_string.compare("CUDA_R_16F") == 0)
         return CUDA_R_16F;
     else if (type_string.compare("CUDA_C_16F") == 0)
@@ -355,7 +366,7 @@ static inline int ceildiv(int a, int b) {
 }
 
 // This function provides the workspace size for a given problem shape and emulation configuration
-size_t getFixedPointWorkspaceSizeInBytes(int m, int n, int k, int batchCount, bool isComplex,
+inline size_t getFixedPointWorkspaceSizeInBytes(int m, int n, int k, int batchCount, bool isComplex,
                                         cudaEmulationMantissaControl mantissaControl, int maxMantissaBitCount) {
 
     constexpr double MULTIPLIER = 1.25;

@@ -20,6 +20,7 @@ namespace ActFunc
 			instance.m_map.emplace(Siren::k_name, std::make_unique<Siren>());
 			instance.m_map.emplace(Tanh::k_name, std::make_unique<Tanh>());
 			instance.m_map.emplace(Wire::k_name, std::make_unique<Wire>());
+			instance.m_map.emplace(Finer::k_name, std::make_unique<Finer>());
 		}
 
 		return m_instance;

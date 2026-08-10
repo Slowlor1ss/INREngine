@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include "Types.h"
 #include <cuda_runtime.h>
 #include <cmath>
@@ -12,12 +13,13 @@
 // We need a simple enum because C++ virtual functions cannot run on the GPU
 enum class GpuActType {
     None = 0,
-    Siren = 1,
-    Wire = 2,
-    ReLU = 3,
-    LeakyReLU = 4,
-    Sigmoid = 5,
-    Tanh = 6
+    Sigmoid = 1,
+    ReLU = 2,
+    LeakyReLU = 3,
+    Siren = 4,
+    Tanh = 5,
+    Wire = 6,
+    Finer = 7,
 };
 
 // TODO: really we should make these functions __global__ or something and replace out cpu code to also use these for when running with --use_gpu off
@@ -34,6 +36,12 @@ namespace SharedAct
         constexpr engineFloat Wire_s_squared = Wire_s * Wire_s;
         
         constexpr engineFloat LeakyReLU_slope = 0.1f;
+
+        // FINER (variable-periodic sine): sin(w0 * (|x|+1) * x)
+        constexpr engineFloat Finer_w0 = 30.0f;
+        // Bias init range for FINER -- this is what actually gives it its extra
+        // frequency range over SIREN, see GenerateInitialBiases below.
+        constexpr engineFloat Finer_bias_k = 2.5f;
     }
     
     // Forward Pass Activation Functions
@@ -120,6 +128,35 @@ namespace SharedAct
         return -1.0f * (Config::Siren_w0 * Config::Siren_w0) * std::sin(Config::Siren_w0 * x);
     }
     
+    // FINER
+    // sigma(x) = sin(w0 * (|x|+1) * x)
+    // Same idea as SIREN, but the effective frequency grows with |x| instead of
+    // being fixed at w0, so a single layer can access far more of the sine's
+    // frequency range without changing weight scale. Frequency range is tuned by
+    // the bias initialization (see GenerateInitialBiases) instead of weight scale.
+    __MATH_FUNC__ engineFloat Finer(engineFloat x) {
+        const engineFloat scale = std::abs(x) + 1.0f;
+        return std::sin(Config::Finer_w0 * scale * x);
+    }
+
+    __MATH_FUNC__ engineFloat FinerDeriv(engineFloat x) {
+        const engineFloat absX = std::abs(x);
+        const engineFloat scale = absX + 1.0f;
+        const engineFloat g = Config::Finer_w0 * scale * x;         // inner function
+        const engineFloat gPrime = Config::Finer_w0 * (1.0f + 2.0f * absX); // d/dx of scale*x
+        return std::cos(g) * gPrime;
+    }
+
+    __MATH_FUNC__ engineFloat FinerSecondDeriv(engineFloat x) {
+        const engineFloat absX = std::abs(x);
+        const engineFloat scale = absX + 1.0f;
+        const engineFloat sign = (x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f);
+        const engineFloat g = Config::Finer_w0 * scale * x;
+        const engineFloat gPrime = Config::Finer_w0 * (1.0f + 2.0f * absX);
+        const engineFloat gDoublePrime = Config::Finer_w0 * 2.0f * sign;
+        return (-std::sin(g) * gPrime * gPrime) + (std::cos(g) * gDoublePrime);
+    }
+
     // WIRE (Dual-Weight)
     __MATH_FUNC__ engineFloat Wire(engineFloat zFreq, engineFloat zScale) {
         return std::exp(-Config::Wire_s_squared * (zScale * zScale)) * std::cos(Config::Wire_w0 * zFreq);

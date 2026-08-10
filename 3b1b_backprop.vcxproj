@@ -125,6 +125,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <ShowIncludes>true</ShowIncludes>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -141,6 +142,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <ShowIncludes>true</ShowIncludes>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -159,6 +161,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <ShowIncludes>true</ShowIncludes>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -175,6 +178,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <ShowIncludes>true</ShowIncludes>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -192,6 +196,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <ShowIncludes>true</ShowIncludes>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -213,6 +218,7 @@
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <FloatingPointModel>Fast</FloatingPointModel>
+      <ShowIncludes>true</ShowIncludes>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -226,7 +232,9 @@
     <ClCompile Include="3b1b_backprop.cpp" />
     <ClCompile Include="ActFuncDataBase.cpp" />
     <ClCompile Include="CostFuncDataBase.cpp" />
-    <ClCompile Include="ForwardPass.cu" />
+    <CudaCompile Include="ForwardPass.cu">
+      <FileType>Document</FileType>
+    </CudaCompile>
     <ClCompile Include="ImageGenerator.cpp" />
     <ClCompile Include="ImageUtils.cpp" />
     <ClCompile Include="Layer.cpp" />
@@ -241,13 +249,13 @@
     <ClInclude Include="CostFuncDataBase.h" />
     <ClInclude Include="CostFunctions.h" />
     <ClInclude Include="cublas_utils.h" />
-    <ClInclude Include="CudaManager.cuh" />
-    <ClInclude Include="ForwardPass.cuh" />
+    <CudaCompile Include="CudaManager.cuh" />
+    <CudaCompile Include="ForwardPass.cuh" />
     <ClInclude Include="Gemini\BMPParser.h" />
     <ClInclude Include="Gemini\CustomFileReader.h" />
     <ClInclude Include="Gemini\MNISTReader.h" />
-    <ClInclude Include="GpuActivations.cuh" />
-    <ClInclude Include="GpuBuffer.cuh" />
+    <CudaCompile Include="GpuActivations.cuh" />
+    <CudaCompile Include="GpuBuffer.cuh" />
     <ClInclude Include="ImageGenerator.h" />
     <ClInclude Include="ImageUtils.h" />
     <ClInclude Include="Layer.h" />
