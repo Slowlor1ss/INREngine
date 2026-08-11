@@ -8,8 +8,6 @@ __global__ void OutputErrorKernel(
     const engineFloat* d_outputAct, const engineFloat* d_outputGradX, const engineFloat* d_outputGradY,
     const engineFloat* d_targetAct, const engineFloat* d_targetGradX, const engineFloat* d_targetGradY,
     engineFloat* d_colorError, engineFloat* d_errorGradX, engineFloat* d_errorGradY,
-    engineFloat spatialLossWeight,
-    GpuCostType costType)
     engineFloat spatialLossWeight, GpuCostType costType)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
