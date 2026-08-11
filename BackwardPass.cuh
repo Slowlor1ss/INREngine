@@ -25,13 +25,13 @@ void CalculateOutputErrorGPU(
 // Calculate the weight/bias updates and pass the error backwards
 void RunBackwardLayerGPU(
     cublasHandle_t handle,
-    int batchSize, int numNeurons, int prevNeurons,
+    int batchSize, int numNeurons, int prevNumNeurons,
     const engineFloat* d_colorErrorIn, const engineFloat* d_errorGradXIn, const engineFloat* d_errorGradYIn,
     const engineFloat* d_prevAct, const engineFloat* d_prevGradX, const engineFloat* d_prevGradY,
     const engineFloat* d_weights, const engineFloat* d_weightsScale,
     const engineFloat* d_preActFreq, const engineFloat* d_preActScale,
     
-    // factored intermediate buffers
+    // Factored intermediate buffers
     engineFloat* d_deltaAFreq, engineFloat* d_deltaXFreq, engineFloat* d_deltaYFreq,
     engineFloat* d_deltaAScale, engineFloat* d_deltaXScale, engineFloat* d_deltaYScale,
 

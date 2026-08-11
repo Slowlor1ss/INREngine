@@ -191,8 +191,24 @@ namespace SharedAct
     
     //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
     
+    // GPU KERNEL FORWARD ROUTER
+    __MATH_FUNC__ engineFloat Execute(GpuActType actType, engineFloat zFreq, engineFloat zScale)
+    {
+        switch (actType) {
+        case GpuActType::Sigmoid:   return Sigmoid(zFreq);
+        case GpuActType::ReLU:      return ReLU(zFreq);
+        case GpuActType::LeakyReLU: return LeakyReLU(zFreq);
+        case GpuActType::Siren:     return Siren(zFreq);
+        case GpuActType::Wire:      return Wire(zFreq, zScale);
+        case GpuActType::Tanh:      return Tanh(zFreq);
+        case GpuActType::Finer:     return Finer(zFreq);
+        case GpuActType::None:
+        default:                    return None(zFreq);
+        }
+    }
+    
     // GPU KERNEL DERIVATIVE ROUTER
-    __MATH_FUNC__ void GetDerivatives(
+    __MATH_FUNC__ void ExecuteDerivatives(
         GpuActType actType, engineFloat zFreq, engineFloat zScale,
         engineFloat& deriv1Freq, engineFloat& deriv1Scale,
         engineFloat& deriv2Freq, engineFloat& deriv2Scale, engineFloat& deriv2Mixed)
@@ -206,9 +222,9 @@ namespace SharedAct
             WireDualDeriv(zFreq, zScale, deriv1Freq, deriv1Scale);
             WireDualSecondDeriv(zFreq, zScale, deriv2Freq, deriv2Scale, deriv2Mixed);
             break;
-        case GpuActType::Siren:
-            deriv1Freq = SirenDeriv(zFreq);
-            deriv2Freq = SirenSecondDeriv(zFreq);
+        case GpuActType::Sigmoid:
+            deriv1Freq = SigmoidDeriv(zFreq);
+            deriv2Freq = SigmoidSecondDeriv(zFreq);
             break;
         case GpuActType::ReLU:
             deriv1Freq = ReLUDeriv(zFreq);
@@ -218,14 +234,17 @@ namespace SharedAct
             deriv1Freq = LeakyReLUDeriv(zFreq);
             deriv2Freq = LeakyReLUSecondDeriv(zFreq);
             break;
-        case GpuActType::Sigmoid:
-            deriv1Freq = SigmoidDeriv(zFreq);
-            deriv2Freq = SigmoidSecondDeriv(zFreq);
+        case GpuActType::Siren:
+            deriv1Freq = SirenDeriv(zFreq);
+            deriv2Freq = SirenSecondDeriv(zFreq);
             break;
         case GpuActType::Tanh:
             deriv1Freq = TanhDeriv(zFreq);
             deriv2Freq = TanhSecondDeriv(zFreq);
             break;
+        case GpuActType::Finer:
+            deriv1Freq = FinerDeriv(zFreq);
+            deriv2Freq = FinerSecondDeriv(zFreq);
         case GpuActType::None:
         default:
             deriv1Freq = NoneDeriv(zFreq);

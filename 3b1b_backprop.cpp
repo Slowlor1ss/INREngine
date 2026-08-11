@@ -92,7 +92,7 @@ enum class UserAction : uint8_t {
 
 namespace config
 {
-	inline bool use_gpu = false;
+	inline bool use_gpu = true;
 	inline bool benchmark_enabled = false;
 	
 	inline std::string target_image_file = "Training_Data/0064_x4.bmp";

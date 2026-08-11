@@ -22,6 +22,8 @@ public:
 
 	void SetCostFunction(CostFunc::Base* costFunc) { m_costFunction = costFunc; }
 	CostFunc::Base* GetCostFunction() const { return m_costFunction; }
+	const std::vector<std::unique_ptr<Layer>>& GetLayers() const { return m_layers; }
+	std::vector<Parameters>& GetStoredDeltas() { return m_storedDelta; }
 
 	//engineFloat CalculateCost(const std::vector<engineFloat>& inputActivation,const std::vector<engineFloat>& preferredOutput);
 	//std::vector<engineFloat> Propagate(const std::vector<engineFloat>& inputActivation);

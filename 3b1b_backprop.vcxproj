@@ -232,10 +232,13 @@
     <ClCompile Include="3b1b_backprop.cpp" />
     <ClCompile Include="ActFuncDataBase.cpp" />
     <CudaCompile Include="BackwardPass.cu" />
+    <CudaCompile Include="AdamOptimizer.cu" />
     <ClCompile Include="CostFuncDataBase.cpp" />
     <CudaCompile Include="ForwardPass.cu">
       <FileType>Document</FileType>
     </CudaCompile>
+    <ClCompile Include="GpuDataset.cpp" />
+    <ClCompile Include="GpuNetwork.cpp" />
     <ClCompile Include="ImageGenerator.cpp" />
     <ClCompile Include="ImageUtils.cpp" />
     <ClCompile Include="Layer.cpp" />
@@ -258,6 +261,8 @@
     <ClInclude Include="Gemini\MNISTReader.h" />
     <CudaCompile Include="GpuActivations.cuh" />
     <CudaCompile Include="GpuBuffer.cuh" />
+    <ClInclude Include="GpuDataset.h" />
+    <ClInclude Include="GpuNetwork.h" />
     <ClInclude Include="ImageGenerator.h" />
     <ClInclude Include="ImageUtils.h" />
     <ClInclude Include="Layer.h" />
@@ -270,7 +275,8 @@
     <ClInclude Include="WindowRenderer.h" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="GpuCostFunctions.cuh" />
+    <CudaCompile Include="AdamOptimizer.cuh" />
+    <CudaCompile Include="GpuCostFunctions.cuh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

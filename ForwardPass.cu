@@ -4,111 +4,94 @@
 
 #include "GpuActivations.cuh"
 
-// RAW CUDA KERNEL: Adds biases and applies activations
-__global__ void ApplyActivationKernel(
-    int batchSize, int numNeurons,
-    const engineFloat* d_preActFreqIn, const engineFloat* d_preActScaleIn,
+// Add biases and apply activations
+__global__ void ForwardLayerKernel(
+    int batchSize, int numNeurons, int prevNeurons,
+    const engineFloat* d_weights, const engineFloat* d_weightsScale,
     const engineFloat* d_biases, const engineFloat* d_biasesScale,
-    engineFloat* d_preActFreqOut, engineFloat* d_preActScaleOut,
-    engineFloat* d_activations,
+    const engineFloat* d_prevAct, const engineFloat* d_prevGradX, const engineFloat* d_prevGradY,
+    engineFloat* d_preActFreq, engineFloat* d_preActScale,
+    engineFloat* d_activations, engineFloat* d_gradX, engineFloat* d_gradY,
     GpuActType actType, bool hasDualWeights)
 {
-    // Calculate which exact pixel and neuron this specific GPU thread is responsible for
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int totalElements = batchSize * numNeurons;
+    // 1 Thread = 1 Pixel in the batch
+    const int batchIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (batchIdx >= batchSize) return;
 
-    if (idx < totalElements)
+    for (int i = 0; i < numNeurons; ++i)
     {
-        // Find which neuron this is so we can apply the correct bias
-        int neuronIdx = idx % numNeurons;
-
-        // Add the Bias
-        engineFloat zFreq = d_preActFreqIn[idx] + d_biases[neuronIdx];
-        engineFloat zScale = 0.0f;
+        // Start sums with the layer biases
+        engineFloat zFreq = d_biases[i];
+        engineFloat zScale = hasDualWeights ? d_biasesScale[i] : 0.0f;
         
-        if (hasDualWeights && d_preActScaleIn != nullptr && d_biasesScale != nullptr) {
-            zScale = d_preActScaleIn[idx] + d_biasesScale[neuronIdx];
-        }
+        engineFloat gradXZFreq = 0.0f, gradXZScale = 0.0f;
+        engineFloat gradYZFreq = 0.0f, gradYZScale = 0.0f;
 
-        // Save the pre-activations (Z) for Backprop
-        d_preActFreqOut[idx] = zFreq;
-        if (hasDualWeights) d_preActScaleOut[idx] = zScale;
+        const int weightStart = i * prevNeurons;
 
-        // Apply the Activation Function
-        engineFloat act = zFreq; // Default to 'None'
-
-        switch (actType)
+        // Multiply weights by previous layer's activations and slopes
+        for (int j = 0; j < prevNeurons; ++j)
         {
-            case GpuActType::Wire:      act = SharedAct::Wire(zFreq, zScale); break;
-            case GpuActType::Siren:     act = SharedAct::Siren(zFreq); break;
-            case GpuActType::ReLU:      act = SharedAct::ReLU(zFreq); break;
-            case GpuActType::LeakyReLU: act = SharedAct::LeakyReLU(zFreq); break;
-            case GpuActType::Sigmoid:   act = SharedAct::Sigmoid(zFreq); break;
-            case GpuActType::Tanh:      act = SharedAct::Tanh(zFreq); break;
-            case GpuActType::None:
-            default:                    act = SharedAct::None(zFreq); break;
+            const int prevIdx = batchIdx * prevNeurons + j;
+            const engineFloat pA  = d_prevAct[prevIdx];
+            const engineFloat pGX = d_prevGradX[prevIdx];
+            const engineFloat pGY = d_prevGradY[prevIdx];
+
+            // Freq updates
+            const engineFloat wF = d_weights[weightStart + j];
+            zFreq      += wF * pA;
+            gradXZFreq += wF * pGX;
+            gradYZFreq += wF * pGY;
+
+            // Scale updates
+            if (hasDualWeights) {
+                const engineFloat wS = d_weightsScale[weightStart + j];
+                zScale      += wS * pA;
+                gradXZScale += wS * pGX;
+                gradYZScale += wS * pGY;
+            }
         }
-        
-        d_activations[idx] = act;
+
+        // Save pre-activations (required for Backward Pass)
+        const int currIdx = batchIdx * numNeurons + i;
+        d_preActFreq[currIdx] = zFreq;
+        if (hasDualWeights) {
+            d_preActScale[currIdx] = zScale;
+        }
+
+        // Execute Forward Activation & Derivatives
+        d_activations[currIdx] = SharedAct::Execute(actType, zFreq, zScale);
+
+        engineFloat deriv1Freq, deriv1Scale, deriv2Freq, deriv2Scale, deriv2Mixed;
+        SharedAct::ExecuteDerivatives(actType, zFreq, zScale, deriv1Freq, deriv1Scale, deriv2Freq, deriv2Scale, deriv2Mixed);
+
+        // Chain Rule: Multiply spatial sums by the activation's first derivative
+        d_gradX[currIdx] = (gradXZFreq * deriv1Freq) + (gradXZScale * deriv1Scale);
+        d_gradY[currIdx] = (gradYZFreq * deriv1Freq) + (gradYZScale * deriv1Scale);
     }
 }
 
-
-// cuBLAS MANAGER: Handles the Matrix Math and launches the Kernel above
-void RunLayerForwardPassGPU(
-    cublasHandle_t handle,
+void RunForwardLayerGPU(
     int batchSize, int numNeurons, int prevNeurons,
-    const engineFloat* d_prevAct, const engineFloat* d_weights, const engineFloat* d_weights_scale,
-    const engineFloat* d_biases, const engineFloat* d_biases_scale,
-    engineFloat* d_preActFreq, engineFloat* d_preActScale, engineFloat* d_activations,
+    const engineFloat* d_weights, const engineFloat* d_weightsScale,
+    const engineFloat* d_biases, const engineFloat* d_biasesScale,
+    const engineFloat* d_prevAct, const engineFloat* d_prevGradX, const engineFloat* d_prevGradY,
+    engineFloat* d_preActFreq, engineFloat* d_preActScale,
+    engineFloat* d_activations, engineFloat* d_gradX, engineFloat* d_gradY,
     GpuActType actType, bool hasDualWeights)
 {
-    const engineFloat alpha = 1.0f;
-    const engineFloat beta = 0.0f; // Overwrite the output buffer completely
-
-    // https://docs.nvidia.com/cuda/cublas/index.html#cublas-level-3-function-reference
-    // cuBLAS Matrix Multiplication (Z_freq = W * A_prev)
-    // Row-Major to Col-Major translation: Z^T = W * A^T
-    CUBLAS_CHECK(cublasSgemm(
-        handle,
-        CUBLAS_OP_T, CUBLAS_OP_N, // C++ Stores Row-Major order, but cuBLAS reads matrices Column-Major order so we need these flags
-        numNeurons, batchSize, prevNeurons, // m = Number of rows of matrix op(A) and C. // n = Number of columns of matrix op(B) and C. // k = Number of columns of op(A) and rows of op(B).
-        &alpha, // <type> scalar used for multiplication.
-        d_weights, prevNeurons,
-        d_prevAct, prevNeurons,
-        &beta,
-        d_preActFreq, numNeurons
-    ));
-
-    // Dual-Weight Multiplication (Z_scale = W_scale * A_prev)
-    if (hasDualWeights && d_weights_scale != nullptr)
-    {
-        CUBLAS_CHECK(cublasSgemm(
-            handle,
-            CUBLAS_OP_T, CUBLAS_OP_N,
-            numNeurons, batchSize, prevNeurons,
-            &alpha,
-            d_weights_scale, prevNeurons,
-            d_prevAct, prevNeurons,
-            &beta,
-            d_preActScale, numNeurons
-        ));
-    }
-
-    // Launch the Custom Activation Kernel
-    int totalElements = batchSize * numNeurons;
+    // Launch exactly one thread per pixel in the batch
     int threadsPerBlock = 256;
-    int blocksPerGrid = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
+    int blocksPerGrid = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
 
-    ApplyActivationKernel<<<blocksPerGrid, threadsPerBlock>>>(
-        batchSize, numNeurons,
+    ForwardLayerKernel<<<blocksPerGrid, threadsPerBlock>>>(
+        batchSize, numNeurons, prevNeurons,
+        d_weights, d_weightsScale, d_biases, d_biasesScale,
+        d_prevAct, d_prevGradX, d_prevGradY,
         d_preActFreq, d_preActScale,
-        d_biases, d_biases_scale,
-        d_preActFreq, d_preActScale,
-        d_activations,
+        d_activations, d_gradX, d_gradY,
         actType, hasDualWeights
     );
 
-    // Ensure the GPU finishes the kernel before the CPU tries to move to the next layer
     CUDA_CHECK(cudaDeviceSynchronize());
 }

@@ -2,6 +2,9 @@
 #include <numeric> // Put this at the very top of your file
 #include <random>
 
+#include "GpuDataset.h"
+#include "GpuNetwork.h"
+
 // Assuming 'mse' is your mean squared error for the current batch
 inline engineFloat CalculatePSNR(engineFloat mse) {
 	if (mse <= 0.0000001f) return 100.0f; // Prevent divide by zero (perfect image)
@@ -66,6 +69,59 @@ static engineFloat RunGradientGuidedTrainingEpoch(Network& network,
     }
 
     return totalCost / static_cast<engineFloat>(printEveryNBatches);
+}
+
+static engineFloat RunGPUTrainingEpoch(
+    Network& cpuNetwork, 
+    GpuNetwork& gpuNet, 
+    GpuDataset& gpuData,
+    size_t totalPixels,
+    size_t inputChannels,
+    size_t targetChannels,
+    size_t& currentImageIdx,
+    const size_t printEveryNBatches,
+    const size_t batchSize,
+    engineFloat& learningRate,
+    TrainingThreadPool& threadPool,
+    const std::vector<ImageUtils::SpatialData>& activeInputs,
+    const std::vector<ImageUtils::SpatialData>& activeTargets)
+{
+    // A hyperparameter to balance how much the network cares about slopes vs colors.
+    constexpr engineFloat spatialLossWeight = 0.0f; // Adjust this if you want spatial gradients enabled
+
+    for (size_t j = 0; j < printEveryNBatches; j++)
+    {
+        // Calculate the flat array offsets for this specific batch
+        int inOffset = currentImageIdx * inputChannels;
+        int tarOffset = currentImageIdx * targetChannels;
+        
+        // Execute purely on the GPU (No PCIe transfer!)
+        gpuNet.TrainBatchGPU(
+            gpuData.d_inputAct + inOffset,
+            gpuData.d_inputGradX + inOffset,
+            gpuData.d_inputGradY + inOffset,
+            gpuData.d_targetAct + tarOffset,
+            gpuData.d_targetGradX + tarOffset,
+            gpuData.d_targetGradY + tarOffset,
+            spatialLossWeight,
+            learningRate
+        );
+        
+        // Move forward in the dataset
+        currentImageIdx = (currentImageIdx + batchSize) % totalPixels;
+
+        // Decay learning rate identically to the CPU version
+        engineFloat progress = std::min(static_cast<engineFloat>(currentEpoch) / maxEpochs, 1.0f);
+        learningRate = config::initial_learning_rate * std::pow(0.5f, progress);
+        currentEpoch++;
+    }
+    
+    // Download parameters to CPU so the Visualizer and Checkpointing work!
+    gpuNet.DownloadParametersToCPU(cpuNetwork);
+    
+    // Quickly run a single batch on the CPU ThreadPool just to calculate the Cost/PSNR metrics for the console
+    engineFloat cost = threadPool.RunBatch(activeInputs, activeTargets, currentImageIdx, batchSize) / static_cast<engineFloat>(batchSize);
+    return cost;
 }
 
 void NeuralImageRecreator()
@@ -178,6 +234,44 @@ void NeuralImageRecreator()
 	if (numThreads == 0) numThreads = 8;
 	TrainingThreadPool threadPool(numThreads, network);
 
+	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+	std::unique_ptr<GpuNetwork> gpuNet = nullptr;
+	std::unique_ptr<GpuDataset> gpuData = nullptr;
+
+	const auto& activeInputs = config::shuffle_pixel_batch ? shuffledInputs : inputSpatialData;
+	const auto& activeTargets = config::shuffle_pixel_batch ? shuffledTargets : targetSpatialData;
+	const size_t totalPixels = activeInputs.size();
+	const size_t inChan = inputLayerSize;
+	const size_t tarChan = activeTargets.empty() ? 3 : activeTargets[0].values.size();
+
+	if (config::use_gpu)
+	{
+		std::cout << "Initializing GPU Pipeline...\n";
+		gpuNet = std::make_unique<GpuNetwork>(network, config::batch_size);
+		gpuData = std::make_unique<GpuDataset>(totalPixels, inChan, tarChan);
+		
+		std::cout << "Flattening dataset for VRAM transfer...\n";
+		std::vector<engineFloat> flatInAct(totalPixels * inChan), flatInGradX(totalPixels * inChan), flatInGradY(totalPixels * inChan);
+		std::vector<engineFloat> flatTarAct(totalPixels * tarChan), flatTarGradX(totalPixels * tarChan), flatTarGradY(totalPixels * tarChan);
+		
+		for (size_t i = 0; i < totalPixels; ++i) {
+			for (size_t c = 0; c < inChan; ++c) {
+				flatInAct[i * inChan + c] = activeInputs[i].values[c];
+				flatInGradX[i * inChan + c] = activeInputs[i].gradX[c];
+				flatInGradY[i * inChan + c] = activeInputs[i].gradY[c];
+			}
+			for (size_t c = 0; c < tarChan; ++c) {
+				flatTarAct[i * tarChan + c] = activeTargets[i].values[c];
+				flatTarGradX[i * tarChan + c] = activeTargets[i].gradX[c];
+				flatTarGradY[i * tarChan + c] = activeTargets[i].gradY[c];
+			}
+		}
+		
+		gpuData->UploadData(flatInAct, flatInGradX, flatInGradY, flatTarAct, flatTarGradX, flatTarGradY);
+		std::cout << "GPU Dataset Uploaded.\n";
+	}
+	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+	
 	ImageWindow rendererWindow(int(data.width * config::output_image_scale), int(data.height * config::output_image_scale));
 
 	// Load Weights Checkpoint (Validates dimensions vs current layerDims automatically)
@@ -185,6 +279,12 @@ void NeuralImageRecreator()
 	if (!config::benchmark_enabled)
 	{
 		LoadCheckpoint(network, weightsFile);
+		// If we loaded CPU weights from disk, we need to push them into the GPU
+		if (config::use_gpu) { 
+			// TODO: maybe do this better
+			// We can simply destroy and recreate the gpuNet to pull the new weights
+			gpuNet = std::make_unique<GpuNetwork>(network, config::batch_size);
+		}
 	}
 	
 	// Display Interactive Controls
@@ -208,10 +308,21 @@ void NeuralImageRecreator()
 
 		// Perform batch training step
 		engineFloat cost;
-		if( config::shuffle_pixel_batch )
-			cost = RunGradientGuidedTrainingEpoch(network, shuffledInputs, shuffledTargets, currentImage, config::print_every_n_batches, config::batch_size, learningRate, threadPool);
+		if (config::use_gpu) 
+		{
+			cost = RunGPUTrainingEpoch(
+				network, *gpuNet, *gpuData, totalPixels, inChan, tarChan, 
+				currentImage, config::print_every_n_batches, config::batch_size, 
+				learningRate, threadPool, activeInputs, activeTargets
+			);
+		}
 		else
-			cost = RunGradientGuidedTrainingEpoch(network, inputSpatialData, targetSpatialData, currentImage, config::print_every_n_batches, config::batch_size, learningRate, threadPool);
+		{
+			if( config::shuffle_pixel_batch )
+				cost = RunGradientGuidedTrainingEpoch(network, shuffledInputs, shuffledTargets, currentImage, config::print_every_n_batches, config::batch_size, learningRate, threadPool);
+			else
+				cost = RunGradientGuidedTrainingEpoch(network, inputSpatialData, targetSpatialData, currentImage, config::print_every_n_batches, config::batch_size, learningRate, threadPool);
+		}
 
 		engineFloat currentPSNR = CalculatePSNR(cost);
 		
