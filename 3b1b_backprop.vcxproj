@@ -231,6 +231,7 @@
   <ItemGroup>
     <ClCompile Include="3b1b_backprop.cpp" />
     <ClCompile Include="ActFuncDataBase.cpp" />
+    <CudaCompile Include="BackwardPass.cu" />
     <ClCompile Include="CostFuncDataBase.cpp" />
     <CudaCompile Include="ForwardPass.cu">
       <FileType>Document</FileType>
@@ -246,6 +247,7 @@
   <ItemGroup>
     <ClInclude Include="ActFuncDataBase.h" />
     <ClInclude Include="ActivationFunctions.h" />
+    <CudaCompile Include="BackwardPass.cuh" />
     <ClInclude Include="CostFuncDataBase.h" />
     <ClInclude Include="CostFunctions.h" />
     <ClInclude Include="cublas_utils.h" />
@@ -266,6 +268,9 @@
     <ClInclude Include="TrainingThreadPool.h" />
     <ClInclude Include="Types.h" />
     <ClInclude Include="WindowRenderer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="GpuCostFunctions.cuh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

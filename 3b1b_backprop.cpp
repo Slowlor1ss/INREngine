@@ -102,8 +102,8 @@ namespace config
 	inline engineFloat output_image_scale = 1.f;
 	inline std::vector<size_t> custom_layer_dims = { 64, 64, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
-		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
-		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::Finer>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::Finer>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::None>()
 	};
 
@@ -312,8 +312,8 @@ static int ParseCommandLine(const int argc, char** argv)
 	   "=== Launch Configuration ===\n"
 	   " Input file          : {}\n"
 	   " Output path         : {}\n"
-	   " Use GPU		     : {}\n"
-	   " Benchmark			 : {}\n"
+	   " Use GPU             : {}\n"
+	   " Benchmark           : {}\n"
 	   " Topology (Layers)   : {}\n"
 	   " Activations         : {}\n"
 	   " Positional Encoding : {}\n"

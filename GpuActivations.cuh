@@ -188,4 +188,49 @@ namespace SharedAct
         out_d2Scale = window * wave * (4.0f * Config::Wire_s_squared * Config::Wire_s_squared * zScale * zScale - 2.0f * Config::Wire_s_squared);
         out_d2Mixed = -2.0f * Config::Wire_s_squared * zScale * window * (-Config::Wire_w0 * std::sin(Config::Wire_w0 * zFreq));
     }
+    
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    
+    // GPU KERNEL DERIVATIVE ROUTER
+    __MATH_FUNC__ void GetDerivatives(
+        GpuActType actType, engineFloat zFreq, engineFloat zScale,
+        engineFloat& deriv1Freq, engineFloat& deriv1Scale,
+        engineFloat& deriv2Freq, engineFloat& deriv2Scale, engineFloat& deriv2Mixed)
+    {
+        // Default fallbacks
+        deriv1Freq = 1.0f; deriv1Scale = 0.0f;
+        deriv2Freq = 0.0f; deriv2Scale = 0.0f; deriv2Mixed = 0.0f;
+
+        switch (actType) {
+        case GpuActType::Wire:
+            WireDualDeriv(zFreq, zScale, deriv1Freq, deriv1Scale);
+            WireDualSecondDeriv(zFreq, zScale, deriv2Freq, deriv2Scale, deriv2Mixed);
+            break;
+        case GpuActType::Siren:
+            deriv1Freq = SirenDeriv(zFreq);
+            deriv2Freq = SirenSecondDeriv(zFreq);
+            break;
+        case GpuActType::ReLU:
+            deriv1Freq = ReLUDeriv(zFreq);
+            deriv2Freq = ReLUSecondDeriv(zFreq);
+            break;
+        case GpuActType::LeakyReLU:
+            deriv1Freq = LeakyReLUDeriv(zFreq);
+            deriv2Freq = LeakyReLUSecondDeriv(zFreq);
+            break;
+        case GpuActType::Sigmoid:
+            deriv1Freq = SigmoidDeriv(zFreq);
+            deriv2Freq = SigmoidSecondDeriv(zFreq);
+            break;
+        case GpuActType::Tanh:
+            deriv1Freq = TanhDeriv(zFreq);
+            deriv2Freq = TanhSecondDeriv(zFreq);
+            break;
+        case GpuActType::None:
+        default:
+            deriv1Freq = NoneDeriv(zFreq);
+            deriv2Freq = NoneSecondDeriv(zFreq);
+            break;
+        }
+    }
 }
