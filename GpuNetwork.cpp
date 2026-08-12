@@ -208,7 +208,17 @@ std::vector<engineFloat> GpuNetwork::PredictGPU(
     // Grab the final layer
     GpuLayer& outputLayer = m_layers.back();
     size_t outputBytes = m_batchSize * outputLayer.numNeurons * sizeof(engineFloat);
-    
+
+    // TODO: probably not needed as cudaMemcpy blocks
+    //CUDA_CHECK(cudaDeviceSynchronize());
+#ifndef _TRAINING
+	cudaError_t launchErr = cudaPeekAtLastError();
+	if ( launchErr != cudaSuccess ) {
+		printf( "\n[cudaPeekAtLastError] PredictGPU failed: %s\n", cudaGetErrorString( launchErr ) );
+		__debugbreak();
+	}
+#endif
+
     // Allocate a CPU vector and copy the results back
     std::vector<engineFloat> predictions(m_batchSize * outputLayer.numNeurons);
     CUDA_CHECK(cudaMemcpy(predictions.data(), outputLayer.d_activations, outputBytes, cudaMemcpyDeviceToHost));
@@ -283,8 +293,10 @@ void GpuNetwork::AllocateLayerMemory(GpuLayer& layer, int batchSize)
     CUDA_CHECK(cudaMalloc(&layer.d_gradY, batchNeuronBytes));
 
     if (layer.hasDualWeights) {
-        CUDA_CHECK(cudaMalloc(&layer.d_preActScale, batchNeuronBytes));
-    }
+	    CUDA_CHECK(cudaMalloc(&layer.d_preActScale, batchNeuronBytes));
+	    CUDA_CHECK(cudaMalloc(&layer.d_rawSlopeXScale, batchNeuronBytes));
+	    CUDA_CHECK(cudaMalloc(&layer.d_rawSlopeYScale, batchNeuronBytes));
+	}
 
     // Backward Pass Buffers (Factored Terms)
     if (layer.prevNeurons > 0) {
@@ -343,6 +355,8 @@ void GpuNetwork::FreeLayerMemory(GpuLayer& layer)
     SafeFree(layer.d_activations);
     SafeFree(layer.d_gradX);
     SafeFree(layer.d_gradY);
+    SafeFree(layer.d_rawSlopeXScale);
+	SafeFree(layer.d_rawSlopeYScale);
 
     // Backward Buffers
     SafeFree(layer.d_deltaAFreq);
@@ -382,6 +396,7 @@ void GpuNetwork::ForwardPass(const engineFloat* d_batchInputAct, const engineFlo
 
         // Launch the Forward Kernel for this specific layer
         RunForwardLayerGPU(
+            m_cublasHandle,
             m_batchSize, 
             curr.numNeurons, 
             prev.numNeurons,
@@ -397,6 +412,8 @@ void GpuNetwork::ForwardPass(const engineFloat* d_batchInputAct, const engineFlo
             curr.d_activations, 
             curr.d_gradX, 
             curr.d_gradY,
+            curr.d_rawSlopeXScale,
+            curr.d_rawSlopeYScale,
             curr.actType, 
             curr.hasDualWeights
         );
@@ -486,7 +503,7 @@ void GpuNetwork::ApplyGradientsGPU(engineFloat baseLearningRate)
     }
     
     // Ensure all weight updates finish before the next forward pass starts
-    CUDA_CHECK(cudaDeviceSynchronize());
+    //CUDA_CHECK(cudaDeviceSynchronize());
 }
 
 // Kept for debugging purposes

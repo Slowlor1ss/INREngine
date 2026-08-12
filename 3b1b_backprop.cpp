@@ -100,7 +100,7 @@ namespace config
 	inline std::string output_filename = target_image_file;
 
 	inline engineFloat output_image_scale = 1.f;
-	inline std::vector<size_t> custom_layer_dims = { 512, 512, 3 };
+	inline std::vector<size_t> custom_layer_dims = { 64, 64, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
 		ActFunc::DataBase::FindActFunc<ActFunc::Finer>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::Finer>(),

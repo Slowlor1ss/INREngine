@@ -126,6 +126,19 @@ static engineFloat RunGPUTrainingEpoch(
 
 void NeuralImageRecreator()
 {
+	if(config::use_gpu)
+	{
+		int deviceCount = 0;
+	    CUDA_CHECK(cudaGetDeviceCount(&deviceCount));
+	    std::cout << "\nCUDA devices: " << deviceCount << "\n";
+	    for (int i = 0; i < deviceCount; i++)
+	    {
+	        cudaDeviceProp prop{};
+	        cudaGetDeviceProperties(&prop, i);
+	        std::cout << "GPU " << i << ": " << prop.name << "\n\n";
+	    }
+	}
+
 	// Load Input Data & Derive Checkpoint Filename
 	const std::string weightsFile = GetCheckpointFilename(config::output_filename, config::output_path);
 

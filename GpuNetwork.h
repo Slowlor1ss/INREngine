@@ -42,11 +42,15 @@ struct GpuLayer
     engineFloat* d_v_biasesScale = nullptr;
 
     // Forward pass buffers (Size: batchSize * numNeurons)
-    engineFloat* d_preActFreq = nullptr;
-    engineFloat* d_preActScale = nullptr;
-    engineFloat* d_activations = nullptr;
-    engineFloat* d_gradX = nullptr;
-    engineFloat* d_gradY = nullptr;
+	engineFloat* d_preActFreq = nullptr;
+	engineFloat* d_preActScale = nullptr;
+	engineFloat* d_activations = nullptr;
+	engineFloat* d_gradX = nullptr; // Also used as GEMM scratch for the raw Freq X-slope
+	engineFloat* d_gradY = nullptr; // Also used as GEMM scratch for the raw Freq Y-slope
+
+	// Forward pass GEMM scratch, dual-weight layers only (Size: batchSize * numNeurons)
+	engineFloat* d_rawSlopeXScale = nullptr;
+	engineFloat* d_rawSlopeYScale = nullptr;
 
     // Backward pass buffers (Size: batchSize * numNeurons)
     engineFloat* d_deltaAFreq = nullptr;

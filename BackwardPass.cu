@@ -199,8 +199,6 @@ void RunBackwardLayerGPU(
         d_deltaBiases, d_deltaBiasesScale,
         actType, hasDualWeights
     );
-    CUDA_CHECK(cudaDeviceSynchronize());
-
     // cublas Matrix Multiplications (dW = Delta * Prev^T)
     const engineFloat alpha = 1.0f;
     const engineFloat betaAccumulate = 1.0f; 
