@@ -9,9 +9,19 @@ struct Parameters : public Serializable
 {
 	Parameters() = default;
 	Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFunc, size_t layerIdx);
+
+	// Disable copy operations (cannot shallow-copy GPU memory)
+	Parameters(const Parameters&) = delete;
+	Parameters& operator=(const Parameters&) = delete;
+
+	// Enable move operations (noexcept is required for std::vector reallocations)
+	Parameters(Parameters&&) noexcept = default;
+	Parameters& operator=(Parameters&&) noexcept = default;
+
 	Parameters& operator+=(const Parameters& other);
 	Parameters& operator*=(engineFloat other);
 	
+	Parameters Clone() const;
 	void Clear();
 	std::vector<engineFloat> weights; // Position (actual real weights)
 	std::vector<engineFloat> biases;

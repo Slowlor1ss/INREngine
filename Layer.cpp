@@ -22,7 +22,13 @@ Layer::Layer(size_t numNeurons, ActFunc::Base* func, size_t layerIdx, Layer* pre
 void Layer::SetParams(const Parameters& params)
 {
 	// check num neurons and weights
-	m_params = params;
+	//m_params = params;
+	m_params = params.Clone();
+}
+
+void Layer::SetParams( Parameters && params ) 
+{
+	m_params = std::move( params );
 }
 
 void Layer::Serialize(std::ostream& out)

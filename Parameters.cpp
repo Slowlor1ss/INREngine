@@ -100,6 +100,30 @@ Parameters& Parameters::operator*=(engineFloat other)
 	return *this;
 }
 
+Parameters Parameters::Clone() const {
+	Parameters p;
+	p.layerIdx = layerIdx;
+	p.adam_t = adam_t;
+
+	p.weights = weights;
+	p.biases = biases;
+	p.weights_scale = weights_scale;
+	p.biases_scale = biases_scale;
+
+	p.m_weights = m_weights;
+	p.v_weights = v_weights;
+	p.m_biases = m_biases;
+	p.v_biases = v_biases;
+
+	p.m_weights_scale = m_weights_scale;
+	p.v_weights_scale = v_weights_scale;
+	p.m_biases_scale = m_biases_scale;
+	p.v_biases_scale = v_biases_scale;
+
+	p.UploadToGPU();
+	return p;
+}
+
 void Parameters::Clear()
 {
 	// Zero out parameters

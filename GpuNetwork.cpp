@@ -17,16 +17,58 @@ void GpuNetwork::TrainBatchGPU(
     engineFloat spatialLossWeight,
     engineFloat learningRate)
 {
+#ifndef _TRAINING
+    {
+        static int batchCounter = 0;
+        cudaError_t ghostErr = cudaGetLastError();
+        if ( ghostErr != cudaSuccess ) {
+            printf( "\n[GHOST CAUGHT] Error arrived before Batch %d started: %s\n", batchCounter, cudaGetErrorString( ghostErr ) );
+            __debugbreak();
+        }
+        batchCounter++;
+    }
+#endif
+
     // Pushes the batch of pixels through the network to calculate colors and spatial slopes.
     ForwardPass(d_batchInputAct, d_batchInputGradX, d_batchInputGradY);
     
+#ifndef _TRAINING
+    {
+        cudaError_t launchErr = cudaGetLastError();
+        if ( launchErr != cudaSuccess ) {
+            printf( "\n[FATAL KERNEL ABORT] ForwardPass failed to launch: %s\n", cudaGetErrorString( launchErr ) );
+            __debugbreak();
+        }
+    }
+#endif
+
     // Calculates the error against the target image and uses cublas to accumulate 
     // the gradients into the d_delta buffers.
     BackwardPass(d_batchTargetAct, d_batchTargetGradX, d_batchTargetGradY, spatialLossWeight);
 
+#ifndef _TRAINING
+    {
+        cudaError_t launchErr = cudaGetLastError();
+        if ( launchErr != cudaSuccess ) {
+            printf( "\n[FATAL KERNEL ABORT] BackwardPass failed to launch: %s\n", cudaGetErrorString( launchErr ) );
+            __debugbreak();
+        }
+    }
+#endif
+    
     // Apply gradients (ADAM OPTIMIZER)
     // Updates all weights, momentum, and velocity in VRAM (auto-clears the deltas to 0.0f)
     ApplyGradientsGPU(learningRate);
+
+#ifndef _TRAINING
+    {
+        cudaError_t launchErr = cudaGetLastError();
+        if ( launchErr != cudaSuccess ) {
+            printf( "\n[FATAL KERNEL ABORT] ApplyGradientsGPU failed to launch: %s\n", cudaGetErrorString( launchErr ) );
+            __debugbreak();
+        }
+    }
+#endif
 }
 
 // Initialize cublas and mirror the CPU network structure to VRAM
@@ -41,41 +83,78 @@ GpuNetwork::GpuNetwork(const Network& cpuNetwork, int batchSize)
     // Mirror every layer to the GPU
     const auto& cpuLayers = cpuNetwork.GetLayers(); 
 
-    for (const auto& layer : cpuLayers)
+    // Use an index-based loop so we can peek at layer [i - 1]
+    for (size_t i = 0; i < cpuLayers.size(); ++i)
     {
-        const auto* cpuLayer = layer.get();
+        const auto* cpuLayer = cpuLayers[i].get();
         GpuLayer gpuLayer;
 
-        // TODO: make num neurons in Network int as cuda blas requires int's
         gpuLayer.numNeurons = static_cast<int>(cpuLayer->GetNumNeurons());
-        gpuLayer.prevNeurons = static_cast<int>(cpuLayer->GetNumWeightsToPrevious());
+        
+        // TODO: this explicit split is probably not needed num neurons should be 0 when using getnumneurons but check to be sure
+        if (i == 0) {
+            gpuLayer.prevNeurons = 0; // Layer 0 has no previous layer
+        } else {
+            gpuLayer.prevNeurons = static_cast<int>(cpuLayers[i - 1]->GetNumNeurons());
+        }
         
         if (cpuLayer->GetActivationFunction()) {
             gpuLayer.actType = cpuLayer->GetActivationFunction()->GetGpuType();
         } else {
             gpuLayer.actType = GpuActType::None;
         }
+        
+        gpuLayer.learningRateMultiplier = cpuLayer->GetLearningrateMultiplier();
 
         const auto& params = cpuLayer->GetParams();
         gpuLayer.hasDualWeights = !params.weights_scale.empty();
 
         // Allocate the VRAM for this layer
         AllocateLayerMemory(gpuLayer, m_batchSize);
-
-        // Copy persistent weights/biases from CPU to GPU
+        
         const size_t bSize = gpuLayer.numNeurons * sizeof(engineFloat);
+        
+        // Verify Biases
+#ifndef _TRAINING
+        if (params.biases.size() != static_cast<size_t>(gpuLayer.numNeurons)) {
+            std::cout << "[FATAL GPU ERROR] Bias dimension mismatch!\n"
+                      << "Layer Expected: " << gpuLayer.numNeurons << " biases, but CPU has: " << params.biases.size() << "\n";
+            __debugbreak(); 
+        }
+#endif
         CUDA_CHECK(cudaMemcpy(gpuLayer.d_biases, params.biases.data(), bSize, cudaMemcpyHostToDevice));
         
         if (gpuLayer.hasDualWeights) {
+#ifndef _TRAINING
+            if (params.biases_scale.size() != static_cast<size_t>(gpuLayer.numNeurons)) {
+                std::cout << "[FATAL GPU ERROR] Bias Scale dimension mismatch!\n";
+                __debugbreak();
+            }
+#endif
             CUDA_CHECK(cudaMemcpy(gpuLayer.d_biasesScale, params.biases_scale.data(), bSize, cudaMemcpyHostToDevice));
         }
 
+        // Verify Weights
         if (gpuLayer.prevNeurons > 0) 
         {
-            const size_t wSize = static_cast<size_t>(gpuLayer.numNeurons) * gpuLayer.prevNeurons * sizeof(engineFloat);
+            const size_t expectedWeights = static_cast<size_t>(gpuLayer.numNeurons) * gpuLayer.prevNeurons;
+            const size_t wSize = expectedWeights * sizeof(engineFloat);
+#ifndef _TRAINING
+            if (params.weights.size() != expectedWeights) {
+                std::cout << "[FATAL GPU ERROR] Weight dimension mismatch!\n"
+                          << "Layer Expected: " << expectedWeights << " weights, but CPU has: " << params.weights.size() << "\n";
+                __debugbreak();
+            }
+#endif
             CUDA_CHECK(cudaMemcpy(gpuLayer.d_weights, params.weights.data(), wSize, cudaMemcpyHostToDevice));
             
             if (gpuLayer.hasDualWeights) {
+#ifndef _TRAINING
+                if (params.weights_scale.size() != expectedWeights) {
+                    std::cout << "[FATAL GPU ERROR] Weight Scale dimension mismatch!\n";
+                    __debugbreak();
+                }
+#endif
                 CUDA_CHECK(cudaMemcpy(gpuLayer.d_weightsScale, params.weights_scale.data(), wSize, cudaMemcpyHostToDevice));
             }
         }
@@ -102,7 +181,7 @@ void GpuNetwork::DownloadParametersToCPU(Network& cpuNetwork)
     {
         GpuLayer& gpuLayer = m_layers[i];
         auto* cpuLayer = cpuLayers[i].get();
-        auto& cpuParams = cpuLayer->GetParams(); 
+        Parameters& cpuParams = cpuLayer->GetParams(); 
 
         size_t wSize = gpuLayer.numNeurons * gpuLayer.prevNeurons * sizeof(engineFloat);
         size_t bSize = gpuLayer.numNeurons * sizeof(engineFloat);
@@ -386,21 +465,23 @@ void GpuNetwork::ApplyGradientsGPU(engineFloat baseLearningRate)
         int numWeights = layer.numNeurons * layer.prevNeurons;
         int numBiases = layer.numNeurons;
 
+        engineFloat actualLR = baseLearningRate * layer.learningRateMultiplier;
+        
         // Update Weights
         RunAdamOptimizerGPU(numWeights, layer.d_weights, layer.d_deltaWeights, 
-                            layer.d_m_weights, layer.d_v_weights, baseLearningRate, layer.adam_t);
+                            layer.d_m_weights, layer.d_v_weights, actualLR, layer.adam_t, m_batchSize);
 
         // Update Biases
         RunAdamOptimizerGPU(numBiases, layer.d_biases, layer.d_deltaBiases, 
-                            layer.d_m_biases, layer.d_v_biases, baseLearningRate, layer.adam_t);
+                            layer.d_m_biases, layer.d_v_biases, actualLR, layer.adam_t, m_batchSize);
 
         // Update Dual Weights (if applicable)
         if (layer.hasDualWeights) {
             RunAdamOptimizerGPU(numWeights, layer.d_weightsScale, layer.d_deltaWeightsScale, 
-                                layer.d_m_weightsScale, layer.d_v_weightsScale, baseLearningRate, layer.adam_t);
+                                layer.d_m_weightsScale, layer.d_v_weightsScale, actualLR, layer.adam_t, m_batchSize);
 
             RunAdamOptimizerGPU(numBiases, layer.d_biasesScale, layer.d_deltaBiasesScale, 
-                                layer.d_m_biasesScale, layer.d_v_biasesScale, baseLearningRate, layer.adam_t);
+                                layer.d_m_biasesScale, layer.d_v_biasesScale, actualLR, layer.adam_t, m_batchSize);
         }
     }
     

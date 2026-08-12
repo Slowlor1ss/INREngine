@@ -45,7 +45,16 @@ public:
 	
 	//engineFloat BackPropagate(const std::vector<engineFloat>& inputActivation,const std::vector<engineFloat>& preferredOutput);
 
-	std::vector<Parameters> CreateEmptyDeltaBuffer() const { return m_storedDelta; }
+	//std::vector<Parameters> CreateEmptyDeltaBuffer() const { return m_storedDelta; }
+	std::vector<Parameters> CreateEmptyDeltaBuffer() const {
+		std::vector<Parameters> emptyDeltas;
+		emptyDeltas.reserve( m_storedDelta.size() );
+		for ( const auto & delta : m_storedDelta ) {
+			emptyDeltas.emplace_back( delta.Clone() );
+		}
+		return emptyDeltas;
+	}
+
 	void AccumulateWorkerDeltas(const std::vector<Parameters>& workerDeltas, size_t workerNumStored);
 	void BackPropagateGradientGuided(
 	    const ImageUtils::SpatialData& target,

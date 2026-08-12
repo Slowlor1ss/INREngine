@@ -62,8 +62,8 @@ namespace SharedCost
     __MATH_FUNC__ engineFloat Execute(GpuCostType costType, engineFloat activation, engineFloat target) {
         switch (costType) {
             case GpuCostType::MSE:         return MSE(activation, target);
-            case GpuCostType::Charbonnier: return Charbonnier(activation, target);
             case GpuCostType::L1:          return L1(activation, target);
+            case GpuCostType::Charbonnier: return Charbonnier(activation, target);
             default:                       return MSE(activation, target);
         }
     }
@@ -71,8 +71,8 @@ namespace SharedCost
     __MATH_FUNC__ engineFloat ExecuteDerivative(GpuCostType costType, engineFloat activation, engineFloat target) {
         switch (costType) {
             case GpuCostType::MSE:         return MSEDeriv(activation, target);
-            case GpuCostType::Charbonnier: return CharbonnierDeriv(activation, target);
             case GpuCostType::L1:          return L1Deriv(activation, target);
+            case GpuCostType::Charbonnier: return CharbonnierDeriv(activation, target);
             default:                       return MSEDeriv(activation, target);
         }
     }

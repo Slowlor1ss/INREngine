@@ -106,7 +106,7 @@ static engineFloat RunGPUTrainingEpoch(
             spatialLossWeight,
             learningRate
         );
-        
+    	
         // Move forward in the dataset
         currentImageIdx = (currentImageIdx + batchSize) % totalPixels;
 
@@ -223,6 +223,8 @@ void NeuralImageRecreator()
 		layerDims,
 		config::custom_activations,
 		CostFunc::DataBase::FindCostFunc(CostFunc::Charbonnier::k_name)
+		//CostFunc::DataBase::FindCostFunc(CostFunc::MSE::k_name)
+		
 		//ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		// TODO: look in to this more maybe just use sigmoid as its basically the same or none as its more truthfully ig
 		// and the docmentation says to just use a linear or sine https://deepwiki.com/vsitzmann/siren/2-siren-architecture#sinelayer-and-network-structure
@@ -244,26 +246,33 @@ void NeuralImageRecreator()
 	const size_t inChan = inputLayerSize;
 	const size_t tarChan = activeTargets.empty() ? 3 : activeTargets[0].values.size();
 
+	// Calculate Padded Dataset Size (must be a multiple of batch_size)
+	const size_t numBatches = (totalPixels + config::batch_size - 1) / config::batch_size;
+	const size_t paddedPixels = numBatches * config::batch_size;
+	
 	if (config::use_gpu)
 	{
 		std::cout << "Initializing GPU Pipeline...\n";
 		gpuNet = std::make_unique<GpuNetwork>(network, config::batch_size);
-		gpuData = std::make_unique<GpuDataset>(totalPixels, inChan, tarChan);
+		gpuData = std::make_unique<GpuDataset>(paddedPixels, inChan, tarChan);
 		
 		std::cout << "Flattening dataset for VRAM transfer...\n";
-		std::vector<engineFloat> flatInAct(totalPixels * inChan), flatInGradX(totalPixels * inChan), flatInGradY(totalPixels * inChan);
-		std::vector<engineFloat> flatTarAct(totalPixels * tarChan), flatTarGradX(totalPixels * tarChan), flatTarGradY(totalPixels * tarChan);
+		std::vector<engineFloat> flatInAct(paddedPixels * inChan), flatInGradX(paddedPixels * inChan), flatInGradY(paddedPixels * inChan);
+		std::vector<engineFloat> flatTarAct(paddedPixels * tarChan), flatTarGradX(paddedPixels * tarChan), flatTarGradY(paddedPixels * tarChan);
 		
-		for (size_t i = 0; i < totalPixels; ++i) {
+		for (size_t i = 0; i < paddedPixels; ++i) {
+			// Wrap around to the start of the image if we need extra pixels to fill the final batch
+			size_t srcIdx = i % totalPixels;
+			
 			for (size_t c = 0; c < inChan; ++c) {
-				flatInAct[i * inChan + c] = activeInputs[i].values[c];
-				flatInGradX[i * inChan + c] = activeInputs[i].gradX[c];
-				flatInGradY[i * inChan + c] = activeInputs[i].gradY[c];
+				flatInAct[i * inChan + c] = activeInputs[srcIdx].values[c];
+				flatInGradX[i * inChan + c] = activeInputs[srcIdx].gradX[c];
+				flatInGradY[i * inChan + c] = activeInputs[srcIdx].gradY[c];
 			}
 			for (size_t c = 0; c < tarChan; ++c) {
-				flatTarAct[i * tarChan + c] = activeTargets[i].values[c];
-				flatTarGradX[i * tarChan + c] = activeTargets[i].gradX[c];
-				flatTarGradY[i * tarChan + c] = activeTargets[i].gradY[c];
+				flatTarAct[i * tarChan + c] = activeTargets[srcIdx].values[c];
+				flatTarGradX[i * tarChan + c] = activeTargets[srcIdx].gradX[c];
+				flatTarGradY[i * tarChan + c] = activeTargets[srcIdx].gradY[c];
 			}
 		}
 		
@@ -311,7 +320,7 @@ void NeuralImageRecreator()
 		if (config::use_gpu) 
 		{
 			cost = RunGPUTrainingEpoch(
-				network, *gpuNet, *gpuData, totalPixels, inChan, tarChan, 
+				network, *gpuNet, *gpuData, paddedPixels, inChan, tarChan, 
 				currentImage, config::print_every_n_batches, config::batch_size, 
 				learningRate, threadPool, activeInputs, activeTargets
 			);

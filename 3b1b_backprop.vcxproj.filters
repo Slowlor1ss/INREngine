@@ -45,6 +45,12 @@
     <ClCompile Include="WindowRenderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="GpuDataset.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="GpuNetwork.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CostFunctions.h">
@@ -101,6 +107,12 @@
     <ClInclude Include="cublas_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GpuDataset.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GpuNetwork.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="ForwardPass.cu" />
@@ -108,5 +120,10 @@
     <CudaCompile Include="ForwardPass.cuh" />
     <CudaCompile Include="GpuActivations.cuh" />
     <CudaCompile Include="GpuBuffer.cuh" />
+    <CudaCompile Include="BackwardPass.cu" />
+    <CudaCompile Include="AdamOptimizer.cu" />
+    <CudaCompile Include="BackwardPass.cuh" />
+    <CudaCompile Include="AdamOptimizer.cuh" />
+    <CudaCompile Include="GpuCostFunctions.cuh" />
   </ItemGroup>
 </Project>

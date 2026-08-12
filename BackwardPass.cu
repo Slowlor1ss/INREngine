@@ -10,14 +10,26 @@ __global__ void OutputErrorKernel(
     engineFloat* d_colorError, engineFloat* d_errorGradX, engineFloat* d_errorGradY,
     engineFloat spatialLossWeight, GpuCostType costType)
 {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    //int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int totalElements = batchSize * numNeurons;
-
-    if (idx < totalElements)
+    int stride = blockDim.x * gridDim.x;
+    
+    // if (idx < totalElements)
+    // {
+    //     
+    //     // Dynamically calculate Color Error
+    //     d_colorError[idx] = SharedCost::ExecuteDerivative(costType, d_outputAct[idx], d_targetAct[idx]);
+    //     
+    //     // Dynamically calculate scaled Spatial Errors
+    //     d_errorGradX[idx] = SharedCost::ExecuteDerivative(costType, d_outputGradX[idx], d_targetGradX[idx]) * spatialLossWeight;
+    //     d_errorGradY[idx] = SharedCost::ExecuteDerivative(costType, d_outputGradY[idx], d_targetGradY[idx]) * spatialLossWeight;
+    // }
+    
+    // Every thread processes one element, then steps forward by 'stride' until all elements are done
+    for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < totalElements; idx += stride)
     {
         // Dynamically calculate Color Error
         d_colorError[idx] = SharedCost::ExecuteDerivative(costType, d_outputAct[idx], d_targetAct[idx]);
-        
         // Dynamically calculate scaled Spatial Errors
         d_errorGradX[idx] = SharedCost::ExecuteDerivative(costType, d_outputGradX[idx], d_targetGradX[idx]) * spatialLossWeight;
         d_errorGradY[idx] = SharedCost::ExecuteDerivative(costType, d_outputGradY[idx], d_targetGradY[idx]) * spatialLossWeight;
@@ -32,9 +44,17 @@ void CalculateOutputErrorGPU(
     engineFloat* d_colorError, engineFloat* d_errorGradX, engineFloat* d_errorGradY,
     engineFloat spatialLossWeight, GpuCostType costType)
 {
-    int totalElements = batchSize * numNeurons;
     int threadsPerBlock = 256;
-    int blocksPerGrid = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
+    //int totalElements = batchSize * numNeurons;
+    //int blocksPerGrid = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
+    
+    // Cache the device's SM count once so we don't query the driver repeatedly
+    static int numSMs = 0;
+    if (numSMs == 0) {
+        cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
+    }
+    // Launch exactly 4 blocks per SM to fill 100% of GPU hardware waves without partial waves
+    int blocksPerGrid = numSMs * 4;
 
     OutputErrorKernel<<<blocksPerGrid, threadsPerBlock>>>(
         batchSize, numNeurons,
@@ -44,7 +64,7 @@ void CalculateOutputErrorGPU(
         spatialLossWeight, costType
     );
 
-    CUDA_CHECK(cudaDeviceSynchronize());
+    //CUDA_CHECK(cudaDeviceSynchronize());
 }
 
 // FACTORED DELTA KERNEL
@@ -215,25 +235,25 @@ void RunBackwardLayerGPU(
     
     // nextColorError = W^T * deltaA (We overwrite the buffer, hence beta = 0.0)
     // even more matrix x matrix multiplications:
-    CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
+    CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
         &alpha, d_weights, prevNumNeurons, d_deltaAFreq, numNeurons, &betaOverwrite, d_nextColorError, prevNumNeurons));
         
-    CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
+    CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
         &alpha, d_weights, prevNumNeurons, d_deltaXFreq, numNeurons, &betaOverwrite, d_nextErrorGradX, prevNumNeurons));
         
-    CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
+    CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
         &alpha, d_weights, prevNumNeurons, d_deltaYFreq, numNeurons, &betaOverwrite, d_nextErrorGradY, prevNumNeurons));
 
     if (hasDualWeights) {
         // If dual weights exist, accumulate the scale side into the same nextError buffers!
         // final matrix x matrix multiplications:
-        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
+        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
             &alpha, d_weightsScale, prevNumNeurons, d_deltaAScale, numNeurons, &betaAccumulate, d_nextColorError, prevNumNeurons));
             
-        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
+        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
             &alpha, d_weightsScale, prevNumNeurons, d_deltaXScale, numNeurons, &betaAccumulate, d_nextErrorGradX, prevNumNeurons));
             
-        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
+        CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, prevNumNeurons, batchSize, numNeurons,
             &alpha, d_weightsScale, prevNumNeurons, d_deltaYScale, numNeurons, &betaAccumulate, d_nextErrorGradY, prevNumNeurons));
     }
 }

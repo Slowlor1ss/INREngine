@@ -245,6 +245,7 @@ namespace SharedAct
         case GpuActType::Finer:
             deriv1Freq = FinerDeriv(zFreq);
             deriv2Freq = FinerSecondDeriv(zFreq);
+            break;
         case GpuActType::None:
         default:
             deriv1Freq = NoneDeriv(zFreq);

@@ -11,6 +11,7 @@ public:
 	virtual ~Layer() = default;
 
 	void SetParams(const Parameters& params);
+	void SetParams( Parameters && params );
 
 	size_t GetNumNeurons() const
 	{
@@ -21,8 +22,11 @@ public:
 	{
 		return m_params.weights.size();
 	}
+	
+	float GetLearningrateMultiplier() const { return m_learningRateMultiplier; }
 
 	const Parameters& GetParams() const { return m_params; }
+	Parameters& GetParams() { return m_params; }
 	ActFunc::Base* GetActivationFunction() const { return m_activationFunction; }
 
 	// Inherited via Serializable

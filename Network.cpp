@@ -16,8 +16,6 @@ const std::vector<size_t>& neuronsPerLayer,
 			"must be exactly one less than the number of layers."
 		);
 	}
-	
-    m_costFunction = (costFunc != nullptr) ? costFunc : CostFunc::DataBase::FindCostFunc<CostFunc::L1>();
 
     m_layers.push_back(std::make_unique<InitialLayer>(neuronsPerLayer[0]));
     m_storedDelta.emplace_back(m_layers.front()->GetNumNeurons(), m_layers.front()->GetNumWeightsToPrevious(), ActFunc::DataBase::FindActFunc<ActFunc::None>(), 0);
@@ -52,6 +50,7 @@ const std::vector<size_t>& neuronsPerLayer,
     	// TODO: maybe a better solution
         m_storedDelta.emplace_back(m_layers.back()->GetNumNeurons(), m_layers.back()->GetNumWeightsToPrevious(), actFunc, i);
 		m_storedDelta.back().Clear(); // TODO: unsure
+        m_costFunction = ( costFunc != nullptr ) ? costFunc : CostFunc::DataBase::FindCostFunc<CostFunc::L1>();
     	m_costDeltas.emplace_back(neuronsPerLayer[i], 0.0f);
     }
 }
@@ -145,7 +144,7 @@ void Network::Deserialize(std::istream& in)
 
 	for (size_t i = 0; i < m_layers.size(); ++i)
 	{
-		m_layers[i]->SetParams(loadedParams[i]);
+		m_layers[i]->SetParams( std::move( loadedParams[i]));
 	}
 }
 

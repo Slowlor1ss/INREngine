@@ -14,6 +14,7 @@ struct GpuLayer
     int prevNeurons = 0;
     GpuActType actType = GpuActType::None;
     bool hasDualWeights = false;
+    engineFloat learningRateMultiplier = 1.0f;
 
     // Persistent parameters (Size: numNeurons * prevNeurons)
     engineFloat* d_weights = nullptr;
@@ -106,6 +107,6 @@ private:
     int m_batchSize;
     cublasHandle_t m_cublasHandle;
     GpuCostType m_costType;
-    
+
     std::vector<GpuLayer> m_layers;
 };
