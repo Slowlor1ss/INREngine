@@ -99,7 +99,7 @@ static engineFloat RunGPUTrainingEpoch(
         int inOffset = currentImageIdx * inputChannels;
         int tarOffset = currentImageIdx * targetChannels;
 
-    	PROFILE_PUSH("GPU Batch %d", currentEpoch);
+    	PROFILE_PUSH_FMT("GPU Batch %zu", currentEpoch);
         // Execute purely on the GPU (No PCIe transfer!)
         gpuNet.TrainBatchGPU(
             gpuData.d_inputAct + inOffset,

@@ -69,80 +69,76 @@ void CalculateOutputErrorGPU(
 
 // FACTORED DELTA KERNEL
 __global__ void ComputeDeltaTermsKernel(
-    int batchSize, int numNeurons, int prevNeuronsCount,
+    int batchSize, int numNeurons,
     const engineFloat* d_colorErrorIn, const engineFloat* d_errorGradXIn, const engineFloat* d_errorGradYIn,
-    const engineFloat* d_prevGradX, const engineFloat* d_prevGradY,
-    const engineFloat* d_weights, const engineFloat* d_weightsScale,
     const engineFloat* d_preActFreq, const engineFloat* d_preActScale,
-    engineFloat* d_deltaAFreq, engineFloat* d_deltaXFreq, engineFloat* d_deltaYFreq,
-    engineFloat* d_deltaAScale, engineFloat* d_deltaXScale, engineFloat* d_deltaYScale,
+    engineFloat* d_deltaAFreq, engineFloat* d_deltaXFreq, engineFloat* d_deltaYFreq, // XFreq/YFreq: raw slope IN, final delta OUT
+    engineFloat* d_deltaAScale, engineFloat* d_deltaXScale, engineFloat* d_deltaYScale, // same in-place pattern
     engineFloat* d_deltaBiases, engineFloat* d_deltaBiasesScale,
     GpuActType actType, bool hasDualWeights)
 {
-int totalElements = batchSize * numNeurons;
+    int totalElements = batchSize * numNeurons;
     int stride = blockDim.x * gridDim.x;
-    
-    // Grid-stride loop prevents tail effects by letting threads loop if elements > grid size
+
+    // Grid-stride loop prevents tail effects and ensures the limited blocks process the entire batch
     for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < totalElements; idx += stride)
     {
-        int batchIdx = idx / numNeurons;
         int neuronIdx = idx % numNeurons;
 
         engineFloat zFreq = d_preActFreq[idx];
         engineFloat zScale = hasDualWeights ? d_preActScale[idx] : 0.0f;
-        
-        // Get Derivatives
+
+        // Get Activation Derivatives
         engineFloat deriv1Freq, deriv1Scale, deriv2Freq, deriv2Scale, deriv2Mixed;
         SharedAct::ExecuteDerivatives(actType, zFreq, zScale, deriv1Freq, deriv1Scale, deriv2Freq, deriv2Scale, deriv2Mixed);
 
-        // Calculate Raw Slopes
-        engineFloat rawSlopeXFreq = 0.0f, rawSlopeXScale = 0.0f;
-        engineFloat rawSlopeYFreq = 0.0f, rawSlopeYScale = 0.0f;
-        int weightStart = neuronIdx * prevNeuronsCount;
-
-        for (int j = 0; j < prevNeuronsCount; ++j) {
-            int prevIdx = batchIdx * prevNeuronsCount + j;
-            engineFloat wF = d_weights[weightStart + j]; 
-            rawSlopeXFreq += wF * d_prevGradX[prevIdx];
-            rawSlopeYFreq += wF * d_prevGradY[prevIdx];
-
-            if (hasDualWeights) {
-                engineFloat wS = d_weightsScale[weightStart + j]; 
-                rawSlopeXScale += wS * d_prevGradX[prevIdx];
-                rawSlopeYScale += wS * d_prevGradY[prevIdx];
-            }
-        }
+        // Raw slopes were parked here by the cuBLAS GEMMs above
+        engineFloat rawSlopeXFreq = d_deltaXFreq[idx];
+        engineFloat rawSlopeYFreq = d_deltaYFreq[idx];
+        engineFloat rawSlopeXScale = hasDualWeights ? d_deltaXScale[idx] : 0.0f;
+        engineFloat rawSlopeYScale = hasDualWeights ? d_deltaYScale[idx] : 0.0f;
 
         engineFloat cErr = d_colorErrorIn[idx];
         engineFloat xErr = d_errorGradXIn[idx];
         engineFloat yErr = d_errorGradYIn[idx];
 
-        // Compute Factored Terms
-        engineFloat deltaAF = cErr * deriv1Freq + xErr * (deriv2Freq * rawSlopeXFreq + deriv2Mixed * rawSlopeXScale) 
+        // Compute Factored Terms in O(1) time
+        engineFloat deltaAF = cErr * deriv1Freq + xErr * (deriv2Freq * rawSlopeXFreq + deriv2Mixed * rawSlopeXScale)
                                                 + yErr * (deriv2Freq * rawSlopeYFreq + deriv2Mixed * rawSlopeYScale);
         engineFloat deltaXF = xErr * deriv1Freq;
         engineFloat deltaYF = yErr * deriv1Freq;
 
         d_deltaAFreq[idx] = deltaAF;
-        d_deltaXFreq[idx] = deltaXF;
+        d_deltaXFreq[idx] = deltaXF; // Overwrite raw slope with final value (safe, this thread owns idx exclusively)
         d_deltaYFreq[idx] = deltaYF;
-        
-        // deltaA is mathematically identical to the bias gradient (should be at least...)
+
         atomicAdd(&d_deltaBiases[neuronIdx], deltaAF);
 
         if (hasDualWeights) {
-            engineFloat deltaAS = cErr * deriv1Scale + xErr * (deriv2Scale * rawSlopeXScale + deriv2Mixed * rawSlopeXFreq) 
+            engineFloat deltaAS = cErr * deriv1Scale + xErr * (deriv2Scale * rawSlopeXScale + deriv2Mixed * rawSlopeXFreq)
                                                      + yErr * (deriv2Scale * rawSlopeYScale + deriv2Mixed * rawSlopeYFreq);
             engineFloat deltaXS = xErr * deriv1Scale;
             engineFloat deltaYS = yErr * deriv1Scale;
-            
+
             d_deltaAScale[idx] = deltaAS;
             d_deltaXScale[idx] = deltaXS;
             d_deltaYScale[idx] = deltaYS;
-            
+
             atomicAdd(&d_deltaBiasesScale[neuronIdx], deltaAS);
         }
     }
+}
+
+static void RunWeightGemm( // same helper as ForwardPass.cu TODO: move to a shared header
+    cublasHandle_t handle, int batchSize, int numNeurons, int prevNeurons,
+    const engineFloat* d_weights, const engineFloat* d_prevBuffer, engineFloat* d_out)
+{
+    const engineFloat alpha = 1.0f;
+    const engineFloat beta = 0.0f;
+    CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N,
+        numNeurons, batchSize, prevNeurons,
+        &alpha, d_weights, prevNeurons, d_prevBuffer, prevNeurons,
+        &beta, d_out, numNeurons));
 }
 
 // CUBLAS matrix calcualtions
@@ -186,6 +182,16 @@ void RunBackwardLayerGPU(
     engineFloat* d_deltaBiases, engineFloat* d_deltaBiasesScale,
     GpuActType actType, bool hasDualWeights)
 {
+    // Raw slopes, computed as GEMMs instead of a per-thread loop.
+    // Scratch: written here, overwritten with final delta values by the kernel below.
+    RunWeightGemm(handle, batchSize, numNeurons, prevNumNeurons, d_weights, d_prevGradX, d_deltaXFreq);
+    RunWeightGemm(handle, batchSize, numNeurons, prevNumNeurons, d_weights, d_prevGradY, d_deltaYFreq);
+
+    if (hasDualWeights) {
+        RunWeightGemm(handle, batchSize, numNeurons, prevNumNeurons, d_weightsScale, d_prevGradX, d_deltaXScale);
+        RunWeightGemm(handle, batchSize, numNeurons, prevNumNeurons, d_weightsScale, d_prevGradY, d_deltaYScale);
+    }
+    
     int threadsPerBlock = 256;
     
     // Cache the device's SM count once so we don't query the driver repeatedly
@@ -199,10 +205,11 @@ void RunBackwardLayerGPU(
 
     // Calculate Deltas
     ComputeDeltaTermsKernel<<<blocksPerGrid, threadsPerBlock>>>(
-        batchSize, numNeurons, prevNumNeurons,
+        batchSize, numNeurons, //prevNumNeurons,
         d_colorErrorIn, d_errorGradXIn, d_errorGradYIn,
-        d_prevGradX, d_prevGradY,
-        d_weights, d_weightsScale, d_preActFreq, d_preActScale,
+        //d_prevGradX, d_prevGradY,
+        //d_weights, d_weightsScale, 
+        d_preActFreq, d_preActScale,
         d_deltaAFreq, d_deltaXFreq, d_deltaYFreq,
         d_deltaAScale, d_deltaXScale, d_deltaYScale,
         d_deltaBiases, d_deltaBiasesScale,
