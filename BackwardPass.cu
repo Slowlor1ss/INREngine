@@ -79,67 +79,69 @@ __global__ void ComputeDeltaTermsKernel(
     engineFloat* d_deltaBiases, engineFloat* d_deltaBiasesScale,
     GpuActType actType, bool hasDualWeights)
 {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int totalElements = batchSize * numNeurons;
+int totalElements = batchSize * numNeurons;
+    int stride = blockDim.x * gridDim.x;
     
-    if (idx >= totalElements) return;
+    // Grid-stride loop prevents tail effects by letting threads loop if elements > grid size
+    for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < totalElements; idx += stride)
+    {
+        int batchIdx = idx / numNeurons;
+        int neuronIdx = idx % numNeurons;
 
-    int batchIdx = idx / numNeurons;
-    int neuronIdx = idx % numNeurons;
+        engineFloat zFreq = d_preActFreq[idx];
+        engineFloat zScale = hasDualWeights ? d_preActScale[idx] : 0.0f;
+        
+        // Get Derivatives
+        engineFloat deriv1Freq, deriv1Scale, deriv2Freq, deriv2Scale, deriv2Mixed;
+        SharedAct::ExecuteDerivatives(actType, zFreq, zScale, deriv1Freq, deriv1Scale, deriv2Freq, deriv2Scale, deriv2Mixed);
 
-    engineFloat zFreq = d_preActFreq[idx];
-    engineFloat zScale = hasDualWeights ? d_preActScale[idx] : 0.0f;
-    
-    // Get Derivatives
-    engineFloat deriv1Freq, deriv1Scale, deriv2Freq, deriv2Scale, deriv2Mixed;
-    SharedAct::ExecuteDerivatives(actType, zFreq, zScale, deriv1Freq, deriv1Scale, deriv2Freq, deriv2Scale, deriv2Mixed);
+        // Calculate Raw Slopes
+        engineFloat rawSlopeXFreq = 0.0f, rawSlopeXScale = 0.0f;
+        engineFloat rawSlopeYFreq = 0.0f, rawSlopeYScale = 0.0f;
+        int weightStart = neuronIdx * prevNeuronsCount;
 
-    // Calculate Raw Slopes
-    engineFloat rawSlopeXFreq = 0.0f, rawSlopeXScale = 0.0f;
-    engineFloat rawSlopeYFreq = 0.0f, rawSlopeYScale = 0.0f;
-    int weightStart = neuronIdx * prevNeuronsCount;
+        for (int j = 0; j < prevNeuronsCount; ++j) {
+            int prevIdx = batchIdx * prevNeuronsCount + j;
+            engineFloat wF = d_weights[weightStart + j]; 
+            rawSlopeXFreq += wF * d_prevGradX[prevIdx];
+            rawSlopeYFreq += wF * d_prevGradY[prevIdx];
 
-    for (int j = 0; j < prevNeuronsCount; ++j) {
-        int prevIdx = batchIdx * prevNeuronsCount + j;
-        engineFloat wF = d_weights[weightStart + j]; 
-        rawSlopeXFreq += wF * d_prevGradX[prevIdx];
-        rawSlopeYFreq += wF * d_prevGradY[prevIdx];
+            if (hasDualWeights) {
+                engineFloat wS = d_weightsScale[weightStart + j]; 
+                rawSlopeXScale += wS * d_prevGradX[prevIdx];
+                rawSlopeYScale += wS * d_prevGradY[prevIdx];
+            }
+        }
+
+        engineFloat cErr = d_colorErrorIn[idx];
+        engineFloat xErr = d_errorGradXIn[idx];
+        engineFloat yErr = d_errorGradYIn[idx];
+
+        // Compute Factored Terms
+        engineFloat deltaAF = cErr * deriv1Freq + xErr * (deriv2Freq * rawSlopeXFreq + deriv2Mixed * rawSlopeXScale) 
+                                                + yErr * (deriv2Freq * rawSlopeYFreq + deriv2Mixed * rawSlopeYScale);
+        engineFloat deltaXF = xErr * deriv1Freq;
+        engineFloat deltaYF = yErr * deriv1Freq;
+
+        d_deltaAFreq[idx] = deltaAF;
+        d_deltaXFreq[idx] = deltaXF;
+        d_deltaYFreq[idx] = deltaYF;
+        
+        // deltaA is mathematically identical to the bias gradient (should be at least...)
+        atomicAdd(&d_deltaBiases[neuronIdx], deltaAF);
 
         if (hasDualWeights) {
-            engineFloat wS = d_weightsScale[weightStart + j]; 
-            rawSlopeXScale += wS * d_prevGradX[prevIdx];
-            rawSlopeYScale += wS * d_prevGradY[prevIdx];
+            engineFloat deltaAS = cErr * deriv1Scale + xErr * (deriv2Scale * rawSlopeXScale + deriv2Mixed * rawSlopeXFreq) 
+                                                     + yErr * (deriv2Scale * rawSlopeYScale + deriv2Mixed * rawSlopeYFreq);
+            engineFloat deltaXS = xErr * deriv1Scale;
+            engineFloat deltaYS = yErr * deriv1Scale;
+            
+            d_deltaAScale[idx] = deltaAS;
+            d_deltaXScale[idx] = deltaXS;
+            d_deltaYScale[idx] = deltaYS;
+            
+            atomicAdd(&d_deltaBiasesScale[neuronIdx], deltaAS);
         }
-    }
-
-    engineFloat cErr = d_colorErrorIn[idx];
-    engineFloat xErr = d_errorGradXIn[idx];
-    engineFloat yErr = d_errorGradYIn[idx];
-
-    // Compute Factored Terms
-    engineFloat deltaAF = cErr * deriv1Freq + xErr * (deriv2Freq * rawSlopeXFreq + deriv2Mixed * rawSlopeXScale) 
-                                            + yErr * (deriv2Freq * rawSlopeYFreq + deriv2Mixed * rawSlopeYScale);
-    engineFloat deltaXF = xErr * deriv1Freq;
-    engineFloat deltaYF = yErr * deriv1Freq;
-
-    d_deltaAFreq[idx] = deltaAF;
-    d_deltaXFreq[idx] = deltaXF;
-    d_deltaYFreq[idx] = deltaYF;
-    
-    // deltaA is mathematically identical to the bias gradient (should be at least...)
-    atomicAdd(&d_deltaBiases[neuronIdx], deltaAF);
-
-    if (hasDualWeights) {
-        engineFloat deltaAS = cErr * deriv1Scale + xErr * (deriv2Scale * rawSlopeXScale + deriv2Mixed * rawSlopeXFreq) 
-                                                 + yErr * (deriv2Scale * rawSlopeYScale + deriv2Mixed * rawSlopeYFreq);
-        engineFloat deltaXS = xErr * deriv1Scale;
-        engineFloat deltaYS = yErr * deriv1Scale;
-        
-        d_deltaAScale[idx] = deltaAS;
-        d_deltaXScale[idx] = deltaXS;
-        d_deltaYScale[idx] = deltaYS;
-        
-        atomicAdd(&d_deltaBiasesScale[neuronIdx], deltaAS);
     }
 }
 
@@ -184,9 +186,16 @@ void RunBackwardLayerGPU(
     engineFloat* d_deltaBiases, engineFloat* d_deltaBiasesScale,
     GpuActType actType, bool hasDualWeights)
 {
-    int totalElements = batchSize * numNeurons;
     int threadsPerBlock = 256;
-    int blocksPerGrid = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
+    
+    // Cache the device's SM count once so we don't query the driver repeatedly
+    static int numSMs = 0;
+    if (numSMs == 0) {
+        cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
+    }
+    
+    // Launch exactly 4 blocks per SM to fill 100% of GPU hardware waves without partial waves
+    int blocksPerGrid = numSMs * 4;
 
     // Calculate Deltas
     ComputeDeltaTermsKernel<<<blocksPerGrid, threadsPerBlock>>>(
@@ -199,9 +208,10 @@ void RunBackwardLayerGPU(
         d_deltaBiases, d_deltaBiasesScale,
         actType, hasDualWeights
     );
+
     // cublas Matrix Multiplications (dW = Delta * Prev^T)
     const engineFloat alpha = 1.0f;
-    const engineFloat betaAccumulate = 1.0f; 
+    const engineFloat betaAccumulate = 1.0f;
 
     // Weight Updates (Freq) - Accumulates into d_deltaWeights
     // matrix x matrix multiplications:

@@ -407,3 +407,4 @@ weights_biases_SarahDoYouHaveAnyGamesOnYoPhone.csv
 *.csv
 /benchmark_*
 /results*
+/NsightOUT
