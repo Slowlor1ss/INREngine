@@ -7,6 +7,7 @@ enum class GpuCostType;
 
 // Calculate the starting errors at the output layer
 void CalculateOutputErrorGPU(
+    cudaStream_t stream,
     int batchSize, 
     int numNeurons,
     const engineFloat* d_outputAct,
@@ -24,7 +25,7 @@ void CalculateOutputErrorGPU(
 
 // Calculate the weight/bias updates and pass the error backwards
 void RunBackwardLayerGPU(
-    cublasHandle_t handle,
+    cublasHandle_t handle, cudaStream_t stream,
     int batchSize, int numNeurons, int prevNumNeurons,
     const engineFloat* d_colorErrorIn, const engineFloat* d_errorGradXIn, const engineFloat* d_errorGradYIn,
     const engineFloat* d_prevAct, const engineFloat* d_prevGradX, const engineFloat* d_prevGradY,

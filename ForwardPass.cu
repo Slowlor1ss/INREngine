@@ -69,7 +69,7 @@ static void RunWeightGemm(
 }
 
 void RunForwardLayerGPU(
-    cublasHandle_t handle,
+    cublasHandle_t handle, cudaStream_t stream,
     int batchSize, int numNeurons, int prevNeurons,
     const engineFloat* d_weights, const engineFloat* d_weightsScale,
     const engineFloat* d_biases, const engineFloat* d_biasesScale,
@@ -99,7 +99,7 @@ void RunForwardLayerGPU(
     int threadsPerBlock = 256;
     int blocksPerGrid = numSMs * 4;
 
-    ForwardFinishKernel<<<blocksPerGrid, threadsPerBlock>>>(
+    ForwardFinishKernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
         batchSize, numNeurons,
         d_biases, d_biasesScale,
         d_preActFreq, d_preActScale,

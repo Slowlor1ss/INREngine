@@ -2,11 +2,12 @@
 #include "Types.h"
 
 void RunAdamOptimizerGPU(
+    cudaStream_t stream,
     const int numElements,
     engineFloat* d_params,
     engineFloat* d_gradients,
     engineFloat* d_m,
     engineFloat* d_v,
-    engineFloat learningRate,
+    const engineFloat* d_learningRate,
     const int t, int batchSize
 );

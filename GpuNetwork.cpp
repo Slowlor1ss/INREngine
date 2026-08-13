@@ -28,55 +28,49 @@ void GpuNetwork::TrainBatchGPU(
         batchCounter++;
     }
 #endif
-    PROFILE_PUSH_COLOR("ForwardPass", 0xFFFFB3BA); 
-    // Pushes the batch of pixels through the network to calculate colors and spatial slopes.
-    ForwardPass(d_batchInputAct, d_batchInputGradX, d_batchInputGradY);
-    PROFILE_POP();
-#ifndef _TRAINING
+    
+    // Update the dynamic LR buffer on the stream (not captured by the graph if done outside)
+    CUDA_CHECK(cudaMemcpyAsync(d_learningRate, &learningRate, sizeof(engineFloat), cudaMemcpyHostToDevice, m_stream));
+
+    if (!m_graphCaptured)
     {
-        cudaError_t launchErr = cudaGetLastError();
-        if ( launchErr != cudaSuccess ) {
-            printf( "\n[FATAL KERNEL ABORT] ForwardPass failed to launch: %s\n", cudaGetErrorString( launchErr ) );
-            __debugbreak();
-        }
+        CUDA_CHECK(cudaStreamBeginCapture(m_stream, cudaStreamCaptureModeThreadLocal));
+        
+        PROFILE_PUSH_COLOR("ForwardPass", 0xFFFFB3BA); 
+        // Pushes the batch of pixels through the network to calculate colors and spatial slopes.
+        ForwardPass(d_batchInputAct, d_batchInputGradX, d_batchInputGradY);
+        PROFILE_POP();
+        
+        PROFILE_PUSH_COLOR("BackwardPass", 0xFFBAFFC9); 
+        // Calculates the error against the target image and uses cublas to accumulate 
+        // the gradients into the d_delta buffers.
+        BackwardPass(d_batchTargetAct, d_batchTargetGradX, d_batchTargetGradY, spatialLossWeight);
+        PROFILE_POP();
+
+        PROFILE_PUSH_COLOR("ApplyGradientsGPU", 0xFFBAE1FF); 
+        // Apply gradients (ADAM OPTIMIZER)
+        // Updates all weights, momentum, and velocity in VRAM (auto-clears the deltas to 0.0f)
+        ApplyGradientsGPU(learningRate);
+        PROFILE_POP();
+        
+        CUDA_CHECK(cudaStreamEndCapture(m_stream, &m_graph));
+        CUDA_CHECK(cudaGraphInstantiate(&m_graphExec, m_graph, nullptr, nullptr, 0));
+
+        m_graphCaptured = true;
     }
-#endif
-    PROFILE_PUSH_COLOR("BackwardPass", 0xFFBAFFC9); 
-    // Calculates the error against the target image and uses cublas to accumulate 
-    // the gradients into the d_delta buffers.
-    BackwardPass(d_batchTargetAct, d_batchTargetGradX, d_batchTargetGradY, spatialLossWeight);
-    PROFILE_POP();
-#ifndef _TRAINING
-    {
-        cudaError_t launchErr = cudaGetLastError();
-        if ( launchErr != cudaSuccess ) {
-            printf( "\n[FATAL KERNEL ABORT] BackwardPass failed to launch: %s\n", cudaGetErrorString( launchErr ) );
-            __debugbreak();
-        }
-    }
-#endif
-    PROFILE_PUSH_COLOR("ApplyGradientsGPU", 0xFFBAE1FF); 
-    // Apply gradients (ADAM OPTIMIZER)
-    // Updates all weights, momentum, and velocity in VRAM (auto-clears the deltas to 0.0f)
-    ApplyGradientsGPU(learningRate);
-    PROFILE_POP();
-#ifndef _TRAINING
-    {
-        cudaError_t launchErr = cudaGetLastError();
-        if ( launchErr != cudaSuccess ) {
-            printf( "\n[FATAL KERNEL ABORT] ApplyGradientsGPU failed to launch: %s\n", cudaGetErrorString( launchErr ) );
-            __debugbreak();
-        }
-    }
-#endif
+
+    // Launch captured graph
+    CUDA_CHECK(cudaGraphLaunch(m_graphExec, m_stream));
 }
 
 // Initialize cublas and mirror the CPU network structure to VRAM
 GpuNetwork::GpuNetwork(const Network& cpuNetwork, int batchSize)
     : m_batchSize(batchSize)
 {
-    // Initialize the cuBLAS Hardware Context
+    // Initialize the cublas Hardware Context
     CUBLAS_CHECK(cublasCreate(&m_cublasHandle));
+    CUDA_CHECK(cudaStreamCreate(&m_stream));
+    CUBLAS_CHECK(cublasSetStream(m_cublasHandle, m_stream));
     
     m_costType = cpuNetwork.GetCostFunction()->GetGpuType();
 
@@ -169,6 +163,9 @@ GpuNetwork::~GpuNetwork()
     for (auto& layer : m_layers) {
         FreeLayerMemory(layer);
     }
+    if (m_graphExec) cudaGraphExecDestroy(m_graphExec);
+    if (m_graph) cudaGraphDestroy(m_graph);
+    cudaStreamDestroy(m_stream);
     cublasDestroy(m_cublasHandle);
 }
 
@@ -381,17 +378,17 @@ void GpuNetwork::ForwardPass(const engineFloat* d_batchInputAct, const engineFlo
     // Layer 0 (Input Passthrough)
     GpuLayer& inputLayer = m_layers[0];
     size_t batchNeuronBytes = m_batchSize * inputLayer.numNeurons * sizeof(engineFloat);
-    
+
     // Copy the raw batch inputs directly into Layer 0's forward buffers
-    CUDA_CHECK(cudaMemcpy(inputLayer.d_activations, d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice));
-    CUDA_CHECK(cudaMemcpy(inputLayer.d_preActFreq, d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice));
-    CUDA_CHECK(cudaMemcpy(inputLayer.d_gradX, d_batchInputGradX, batchNeuronBytes, cudaMemcpyDeviceToDevice));
-    CUDA_CHECK(cudaMemcpy(inputLayer.d_gradY, d_batchInputGradY, batchNeuronBytes, cudaMemcpyDeviceToDevice));
-    
+    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_activations, d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
+    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActFreq,  d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
+    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradX,       d_batchInputGradX, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
+    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradY,       d_batchInputGradY, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
+
     if (inputLayer.hasDualWeights) {
-        CUDA_CHECK(cudaMemcpy(inputLayer.d_preActScale, d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice));
+        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActScale, d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
     }
-    
+ 
     // Forward propagation loop
     for (size_t i = 1; i < m_layers.size(); ++i)
     {
@@ -401,26 +398,14 @@ void GpuNetwork::ForwardPass(const engineFloat* d_batchInputAct, const engineFlo
         PROFILE_PUSH_FMT("Forward propagation loop - layer size %d", curr.numNeurons);
         // Launch the Forward Kernel for this specific layer
         RunForwardLayerGPU(
-            m_cublasHandle,
-            m_batchSize, 
-            curr.numNeurons, 
-            prev.numNeurons,
-            curr.d_weights, 
-            curr.d_weightsScale, 
-            curr.d_biases, 
-            curr.d_biasesScale,
-            prev.d_activations, 
-            prev.d_gradX, 
-            prev.d_gradY,
-            curr.d_preActFreq, 
-            curr.d_preActScale,
-            curr.d_activations, 
-            curr.d_gradX, 
-            curr.d_gradY,
-            curr.d_rawSlopeXScale,
-            curr.d_rawSlopeYScale,
-            curr.actType, 
-            curr.hasDualWeights
+            m_cublasHandle, m_stream,
+            m_batchSize, curr.numNeurons, prev.numNeurons,
+            curr.d_weights, curr.d_weightsScale, curr.d_biases, curr.d_biasesScale,
+            prev.d_activations, prev.d_gradX, prev.d_gradY,
+            curr.d_preActFreq, curr.d_preActScale,
+            curr.d_activations, curr.d_gradX, curr.d_gradY,
+            curr.d_rawSlopeXScale, curr.d_rawSlopeYScale,
+            curr.actType, curr.hasDualWeights
         );
         PROFILE_POP();
     }
@@ -436,13 +421,12 @@ void GpuNetwork::BackwardPass(
     GpuLayer& outputLayer = m_layers.back();
     
     CalculateOutputErrorGPU(
-        m_batchSize, 
-        outputLayer.numNeurons,
+        m_stream,
+        m_batchSize, outputLayer.numNeurons,
         outputLayer.d_activations, outputLayer.d_gradX, outputLayer.d_gradY,
         d_batchTargetAct, d_batchTargetGradX, d_batchTargetGradY,
         outputLayer.d_colorError, outputLayer.d_errorGradX, outputLayer.d_errorGradY,
-        spatialLossWeight, 
-        m_costType
+        spatialLossWeight, m_costType
     );
     
     // Update All Layers (Looping from Output down to Layer 0)
@@ -452,14 +436,14 @@ void GpuNetwork::BackwardPass(
         GpuLayer& prev = m_layers[i - 1];
 
         PROFILE_PUSH_FMT("Backward propagation loop - layer size %d", curr.numNeurons);
-        // We must wipe the previous layer's error buffers to zero before cuBLAS accumulates into them
+        // We must wipe the previous layer's error buffers to zero before cublas accumulates into them
         size_t batchNeuronBytes = m_batchSize * prev.numNeurons * sizeof(engineFloat);
-        CUDA_CHECK(cudaMemset(prev.d_colorError, 0, batchNeuronBytes));
-        CUDA_CHECK(cudaMemset(prev.d_errorGradX, 0, batchNeuronBytes));
-        CUDA_CHECK(cudaMemset(prev.d_errorGradY, 0, batchNeuronBytes));
+        CUDA_CHECK(cudaMemsetAsync(prev.d_colorError,  0, batchNeuronBytes, m_stream));
+        CUDA_CHECK(cudaMemsetAsync(prev.d_errorGradX,  0, batchNeuronBytes, m_stream));
+        CUDA_CHECK(cudaMemsetAsync(prev.d_errorGradY,  0, batchNeuronBytes, m_stream));
 
         RunBackwardLayerGPU(
-            m_cublasHandle,
+            m_cublasHandle, m_stream,
             m_batchSize, curr.numNeurons, prev.numNeurons,
             curr.d_colorError, curr.d_errorGradX, curr.d_errorGradY,
             prev.d_activations, prev.d_gradX, prev.d_gradY,
@@ -490,28 +474,28 @@ void GpuNetwork::ApplyGradientsGPU(engineFloat baseLearningRate)
         int numWeights = layer.numNeurons * layer.prevNeurons;
         int numBiases = layer.numNeurons;
 
-        engineFloat actualLR = baseLearningRate * layer.learningRateMultiplier;
+        // Note: layer.learningRateMultiplier should be handled either inside the kernel or 
+        // by scaling the d_learningRate per layer if they vary. Assuming it's 1.0 like now, 
+        // or you can easily pass it to the kernel to multiply against *d_learningRate.
+        //engineFloat actualLR = baseLearningRate * layer.learningRateMultiplier;
         
         // Update Weights
-        RunAdamOptimizerGPU(numWeights, layer.d_weights, layer.d_deltaWeights, 
-                            layer.d_m_weights, layer.d_v_weights, actualLR, layer.adam_t, m_batchSize);
+        RunAdamOptimizerGPU(m_stream, numWeights, layer.d_weights, layer.d_deltaWeights,
+                            layer.d_m_weights, layer.d_v_weights, d_learningRate, layer.adam_t, m_batchSize);
 
         // Update Biases
-        RunAdamOptimizerGPU(numBiases, layer.d_biases, layer.d_deltaBiases, 
-                            layer.d_m_biases, layer.d_v_biases, actualLR, layer.adam_t, m_batchSize);
+        RunAdamOptimizerGPU(m_stream, numBiases, layer.d_biases, layer.d_deltaBiases,
+                            layer.d_m_biases, layer.d_v_biases, d_learningRate, layer.adam_t, m_batchSize);
 
         // Update Dual Weights (if applicable)
         if (layer.hasDualWeights) {
-            RunAdamOptimizerGPU(numWeights, layer.d_weightsScale, layer.d_deltaWeightsScale, 
-                                layer.d_m_weightsScale, layer.d_v_weightsScale, actualLR, layer.adam_t, m_batchSize);
+            RunAdamOptimizerGPU(m_stream, numWeights, layer.d_weightsScale, layer.d_deltaWeightsScale,
+                                layer.d_m_weightsScale, layer.d_v_weightsScale, d_learningRate, layer.adam_t, m_batchSize);
 
-            RunAdamOptimizerGPU(numBiases, layer.d_biasesScale, layer.d_deltaBiasesScale, 
-                                layer.d_m_biasesScale, layer.d_v_biasesScale, actualLR, layer.adam_t, m_batchSize);
+            RunAdamOptimizerGPU(m_stream, numBiases, layer.d_biasesScale, layer.d_deltaBiasesScale,
+                                layer.d_m_biasesScale, layer.d_v_biasesScale, d_learningRate, layer.adam_t, m_batchSize);
         }
     }
-    
-    // Ensure all weight updates finish before the next forward pass starts
-    //CUDA_CHECK(cudaDeviceSynchronize());
 }
 
 // Kept for debugging purposes

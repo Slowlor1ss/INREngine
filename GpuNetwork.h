@@ -108,9 +108,19 @@ private:
     void AllocateLayerMemory(GpuLayer& gpuLayer, int batchSize);
     void FreeLayerMemory(GpuLayer& gpuLayer);
 
+private:
     int m_batchSize;
     cublasHandle_t m_cublasHandle;
     GpuCostType m_costType;
+
+    // Stream & Graph State
+    cudaStream_t m_stream = nullptr;
+    cudaGraph_t m_graph = nullptr;
+    cudaGraphExec_t m_graphExec = nullptr;
+    bool m_graphCaptured = false;
+
+    // Dynamic Graph Parameters
+    engineFloat* d_learningRate = nullptr;
 
     std::vector<GpuLayer> m_layers;
 };

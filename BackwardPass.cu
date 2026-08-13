@@ -38,7 +38,7 @@ __global__ void OutputErrorKernel(
 
 // HOST LAUNCHER FUNCTION
 void CalculateOutputErrorGPU(
-    int batchSize, int numNeurons,
+    cudaStream_t stream, int batchSize, int numNeurons,
     const engineFloat* d_outputAct, const engineFloat* d_outputGradX, const engineFloat* d_outputGradY,
     const engineFloat* d_targetAct, const engineFloat* d_targetGradX, const engineFloat* d_targetGradY,
     engineFloat* d_colorError, engineFloat* d_errorGradX, engineFloat* d_errorGradY,
@@ -56,7 +56,7 @@ void CalculateOutputErrorGPU(
     // Launch exactly 4 blocks per SM to fill 100% of GPU hardware waves without partial waves
     int blocksPerGrid = numSMs * 4;
 
-    OutputErrorKernel<<<blocksPerGrid, threadsPerBlock>>>(
+    OutputErrorKernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
         batchSize, numNeurons,
         d_outputAct, d_outputGradX, d_outputGradY,
         d_targetAct, d_targetGradX, d_targetGradY,
@@ -169,7 +169,7 @@ static void RunWeightGemm( // same helper as ForwardPass.cu TODO: move to a shar
 // The batchSize dimension collapses, leaving a single accumulated gradient
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 void RunBackwardLayerGPU(
-    cublasHandle_t handle,
+    cublasHandle_t handle, cudaStream_t stream,
     int batchSize, int numNeurons, int prevNumNeurons,
     const engineFloat* d_colorErrorIn, const engineFloat* d_errorGradXIn, const engineFloat* d_errorGradYIn,
     const engineFloat* d_prevAct, const engineFloat* d_prevGradX, const engineFloat* d_prevGradY,
@@ -204,7 +204,7 @@ void RunBackwardLayerGPU(
     int blocksPerGrid = numSMs * 4;
 
     // Calculate Deltas
-    ComputeDeltaTermsKernel<<<blocksPerGrid, threadsPerBlock>>>(
+    ComputeDeltaTermsKernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
         batchSize, numNeurons, //prevNumNeurons,
         d_colorErrorIn, d_errorGradXIn, d_errorGradYIn,
         //d_prevGradX, d_prevGradY,
