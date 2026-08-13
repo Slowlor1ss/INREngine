@@ -16,7 +16,7 @@
  */
 
 // Shamelessly stolen form https://github.com/NVIDIA/CUDALibrarySamples/blob/main/cuBLAS/utils/cublas_utils.h
-// Added some #ifndef _TRAINING for optimization purposes
+// Added some #ifndef _TRAINING for optimization purposes and some profiling markers etc.
 
 #pragma once
 
@@ -31,6 +31,14 @@
 #include <cublas_api.h>
 #include <cuda_runtime_api.h>
 #include <library_types.h>
+
+#ifdef _PROFILE
+#include <nvtx3/nvToolsExt.h>
+#endif
+
+// This vexes me
+#undef min
+#undef max
 
 // CUDA API error checking
 #ifndef _TRAINING
@@ -58,6 +66,97 @@
     } while (0)
 #else
 #define CUBLAS_CHECK(err) (err);
+#endif
+
+#ifdef _PROFILE
+//TODO:
+//#ifdef _PROFILE
+    //cudaEvent_t start, stop;
+    //cudaEventCreate(&start);
+    //cudaEventCreate(&stop);
+//#endif
+//#ifdef _PROFILE
+        //cudaEventRecord(start);
+//#endif
+//#ifdef _PROFILE
+    //cudaEventRecord(stop);
+    //cudaEventSynchronize(stop); 
+    // // Example useage:
+    // // float milliseconds = 0;
+    // // cudaEventElapsedTime(&milliseconds, start, stop);
+    // // std::cout << "Batch Time: " << milliseconds << " ms\n";
+//#endif
+// CLEANUP!!!
+//#ifdef _PROFILE
+    //cudaEventDestroy(start);
+    //cudaEventDestroy(stop);
+//#endif
+
+    // Push / Pop
+    #define PROFILE_PUSH(name) nvtxRangePushA(name)
+    #define PROFILE_PUSH_FMT(fmt, ...) \
+    do { \
+    char nvtx_buf[256]; \
+    std::snprintf(nvtx_buf, sizeof(nvtx_buf), fmt, __VA_ARGS__); \
+    nvtxRangePushA(nvtx_buf); \
+    } while(0)
+
+    #define PROFILE_POP()      nvtxRangePop()
+
+    // (draws a vertical line on the timeline, no duration)
+    #define PROFILE_MARK(name) nvtxMarkA(name)
+
+    // DO NOT USE DIRECTLY, DOH
+    #define _PROFILE_PUSH_COLOR_IMPL(name_str, color_argb) \
+    do { \
+    nvtxEventAttributes_t eventAttrib = {0}; \
+    eventAttrib.version = NVTX_VERSION; \
+    eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE; \
+    eventAttrib.colorType = NVTX_COLOR_ARGB; \
+    eventAttrib.color = color_argb; \
+    eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII; \
+    eventAttrib.message.ascii = name_str; \
+    nvtxRangePushEx(&eventAttrib); \
+    } while(0)
+
+    // (Uses ARGB hex codes e.g. 0xFFFF0000 for Red)
+    #define PROFILE_PUSH_COLOR(name, color_argb) \
+    _PROFILE_PUSH_COLOR_IMPL(name, color_argb)
+    // (Uses ARGB hex codes e.g. 0xFFFF0000 for Red)
+    #define PROFILE_PUSH_COLOR_FMT(color_argb, fmt, ...) \
+    do { \
+    char nvtx_buf[256]; \
+    std::snprintf(nvtx_buf, sizeof(nvtx_buf), fmt, __VA_ARGS__); \
+    _PROFILE_PUSH_COLOR_IMPL(nvtx_buf, color_argb); \
+    } while(0)
+
+    // RAII Scoped Range
+    class ScopedNvtxRange {
+    public:
+        ScopedNvtxRange(const char* name) { nvtxRangePushA(name); }
+        
+        template <typename... Args>
+        ScopedNvtxRange(const char* fmt, Args... args) {
+            char buf[256];
+            std::snprintf(buf, sizeof(buf), fmt, args...);
+            nvtxRangePushA(buf);
+        }
+            
+        ~ScopedNvtxRange() { nvtxRangePop(); }
+    };
+    // __LINE__ ensures unique variable names
+    #define PROFILE_SCOPE(name) ScopedNvtxRange nvtx_scoped_range_##__LINE__(name)
+    #define PROFILE_SCOPE_FMT(fmt, ...) ScopedNvtxRange nvtx_scoped_range_##__LINE__(fmt, __VA_ARGS__)
+
+#else
+    #define PROFILE_PUSH(name)
+    #define PROFILE_PUSH_FMT(fmt, ...)
+    #define PROFILE_POP()
+    #define PROFILE_MARK(name)
+    #define PROFILE_PUSH_COLOR(name, color_argb)
+    #define PROFILE_PUSH_COLOR_FMT(color_argb, fmt, ...)
+    #define PROFILE_SCOPE(name)
+    #define PROFILE_SCOPE_FMT(fmt, ...)
 #endif
 
 // memory alignment

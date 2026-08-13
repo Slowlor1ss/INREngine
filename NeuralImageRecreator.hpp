@@ -2,6 +2,10 @@
 #include <numeric> // Put this at the very top of your file
 #include <random>
 
+#ifdef _PROFILE
+#include <nvtx3/nvToolsExt.h>
+#endif
+
 #include "GpuDataset.h"
 #include "GpuNetwork.h"
 
@@ -88,13 +92,14 @@ static engineFloat RunGPUTrainingEpoch(
 {
     // A hyperparameter to balance how much the network cares about slopes vs colors.
     constexpr engineFloat spatialLossWeight = 0.0f; // Adjust this if you want spatial gradients enabled
-
+	
     for (size_t j = 0; j < printEveryNBatches; j++)
     {
         // Calculate the flat array offsets for this specific batch
         int inOffset = currentImageIdx * inputChannels;
         int tarOffset = currentImageIdx * targetChannels;
-        
+
+    	PROFILE_PUSH("GPU Batch %llu", currentEpoch);
         // Execute purely on the GPU (No PCIe transfer!)
         gpuNet.TrainBatchGPU(
             gpuData.d_inputAct + inOffset,
@@ -106,6 +111,7 @@ static engineFloat RunGPUTrainingEpoch(
             spatialLossWeight,
             learningRate
         );
+		PROFILE_POP();
     	
         // Move forward in the dataset
         currentImageIdx = (currentImageIdx + batchSize) % totalPixels;
@@ -115,7 +121,7 @@ static engineFloat RunGPUTrainingEpoch(
         learningRate = config::initial_learning_rate * std::pow(0.5f, progress);
         currentEpoch++;
     }
-    
+	
     // Download parameters to CPU so the Visualizer and Checkpointing work!
     gpuNet.DownloadParametersToCPU(cpuNetwork);
     

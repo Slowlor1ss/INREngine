@@ -28,10 +28,10 @@ void GpuNetwork::TrainBatchGPU(
         batchCounter++;
     }
 #endif
-
+    PROFILE_PUSH_COLOR("ForwardPass", 0xFFFFB3BA); 
     // Pushes the batch of pixels through the network to calculate colors and spatial slopes.
     ForwardPass(d_batchInputAct, d_batchInputGradX, d_batchInputGradY);
-    
+    PROFILE_POP();
 #ifndef _TRAINING
     {
         cudaError_t launchErr = cudaGetLastError();
@@ -41,11 +41,11 @@ void GpuNetwork::TrainBatchGPU(
         }
     }
 #endif
-
+    PROFILE_PUSH_COLOR("BackwardPass", 0xFFBAFFC9); 
     // Calculates the error against the target image and uses cublas to accumulate 
     // the gradients into the d_delta buffers.
     BackwardPass(d_batchTargetAct, d_batchTargetGradX, d_batchTargetGradY, spatialLossWeight);
-
+    PROFILE_POP();
 #ifndef _TRAINING
     {
         cudaError_t launchErr = cudaGetLastError();
@@ -55,11 +55,11 @@ void GpuNetwork::TrainBatchGPU(
         }
     }
 #endif
-    
+    PROFILE_PUSH_COLOR("ApplyGradientsGPU", 0xFFBAE1FF); 
     // Apply gradients (ADAM OPTIMIZER)
     // Updates all weights, momentum, and velocity in VRAM (auto-clears the deltas to 0.0f)
     ApplyGradientsGPU(learningRate);
-
+    PROFILE_POP();
 #ifndef _TRAINING
     {
         cudaError_t launchErr = cudaGetLastError();
@@ -175,6 +175,7 @@ GpuNetwork::~GpuNetwork()
 // Chckpointing Download trained weights from VRAM back to CPU RAM
 void GpuNetwork::DownloadParametersToCPU(Network& cpuNetwork)
 {
+    PROFILE_SCOPE("DownloadParametersToCPU");
     const auto& cpuLayers = cpuNetwork.GetLayers(); 
 
     for (size_t i = 1; i < m_layers.size(); ++i)
@@ -202,6 +203,7 @@ std::vector<engineFloat> GpuNetwork::PredictGPU(
     const engineFloat* d_inputGradX, 
     const engineFloat* d_inputGradY)
 {
+    PROFILE_SCOPE("PredictGPU");
     // Run the forward pass on the GPU
     ForwardPass(d_inputAct, d_inputGradX, d_inputGradY);
 
@@ -229,6 +231,7 @@ std::vector<engineFloat> GpuNetwork::PredictGPU(
 // Request raw memory from the GPU
 void GpuNetwork::AllocateLayerMemory(GpuLayer& layer, int batchSize)
 {
+    PROFILE_SCOPE_FMT("AllocateLayerMemory - layer size %d", layer.numNeurons);
     const size_t batchNeuronBytes = batchSize * layer.numNeurons * sizeof(engineFloat);
     const size_t biasBytes = layer.numNeurons * sizeof(engineFloat);
     const size_t weightBytes = layer.numNeurons * layer.prevNeurons * sizeof(engineFloat);
@@ -320,6 +323,7 @@ void GpuNetwork::AllocateLayerMemory(GpuLayer& layer, int batchSize)
 // Return memory to the GPU
 void GpuNetwork::FreeLayerMemory(GpuLayer& layer)
 {
+    PROFILE_SCOPE_FMT("FreeLayerMemory - layer size %d", layer.numNeurons);
     auto SafeFree = [](engineFloat*& ptr) {
         if (ptr) {
             cudaFree(ptr);
@@ -393,7 +397,8 @@ void GpuNetwork::ForwardPass(const engineFloat* d_batchInputAct, const engineFlo
     {
         GpuLayer& curr = m_layers[i];
         GpuLayer& prev = m_layers[i - 1];
-
+        
+        PROFILE_PUSH_FMT("Forward propagation loop - layer size %d", curr.numNeurons);
         // Launch the Forward Kernel for this specific layer
         RunForwardLayerGPU(
             m_cublasHandle,
@@ -417,6 +422,7 @@ void GpuNetwork::ForwardPass(const engineFloat* d_batchInputAct, const engineFlo
             curr.actType, 
             curr.hasDualWeights
         );
+        PROFILE_POP();
     }
 }
 
@@ -445,6 +451,7 @@ void GpuNetwork::BackwardPass(
         GpuLayer& curr = m_layers[i];
         GpuLayer& prev = m_layers[i - 1];
 
+        PROFILE_PUSH_FMT("Backward propagation loop - layer size %d", curr.numNeurons);
         // We must wipe the previous layer's error buffers to zero before cuBLAS accumulates into them
         size_t batchNeuronBytes = m_batchSize * prev.numNeurons * sizeof(engineFloat);
         CUDA_CHECK(cudaMemset(prev.d_colorError, 0, batchNeuronBytes));
@@ -465,6 +472,7 @@ void GpuNetwork::BackwardPass(
             curr.d_deltaBiases, curr.d_deltaBiasesScale,
             curr.actType, curr.hasDualWeights
         );
+        PROFILE_POP();
     }
 }
 
