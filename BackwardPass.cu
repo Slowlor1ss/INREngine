@@ -77,6 +77,18 @@ __global__ void ComputeDeltaTermsKernel(
     engineFloat* d_deltaBiases, engineFloat* d_deltaBiasesScale,
     GpuActType actType, bool hasDualWeights)
 {
+    // Allocate dynamic shared memory for the block
+    extern __shared__ engineFloat s_mem[];
+    engineFloat* s_biasFreq = s_mem;
+    engineFloat* s_biasScale = &s_mem[numNeurons];
+
+    // Zero out the shared memory cache
+    for (int i = threadIdx.x; i < numNeurons; i += blockDim.x) {
+        s_biasFreq[i] = 0.0f;
+        if (hasDualWeights) s_biasScale[i] = 0.0f;
+    }
+    __syncthreads(); // Wait for all threads to finish clearing the cache
+
     int totalElements = batchSize * numNeurons;
     int stride = blockDim.x * gridDim.x;
 
@@ -111,8 +123,8 @@ __global__ void ComputeDeltaTermsKernel(
         d_deltaAFreq[idx] = deltaAF;
         d_deltaXFreq[idx] = deltaXF; // Overwrite raw slope with final value (safe, this thread owns idx exclusively)
         d_deltaYFreq[idx] = deltaYF;
-
-        atomicAdd(&d_deltaBiases[neuronIdx], deltaAF);
+        
+        atomicAdd(&s_biasFreq[neuronIdx], deltaAF);
 
         if (hasDualWeights) {
             engineFloat deltaAS = cErr * deriv1Scale + xErr * (deriv2Scale * rawSlopeXScale + deriv2Mixed * rawSlopeXFreq)
@@ -123,8 +135,19 @@ __global__ void ComputeDeltaTermsKernel(
             d_deltaAScale[idx] = deltaAS;
             d_deltaXScale[idx] = deltaXS;
             d_deltaYScale[idx] = deltaYS;
+            
+            atomicAdd(&s_biasScale[neuronIdx], deltaAS);
+        }
+    }
 
-            atomicAdd(&d_deltaBiasesScale[neuronIdx], deltaAS);
+    // Sync block to ensure all threads are done doing math
+    __syncthreads();
+
+    // Flush the cache: Safely add the block's total to global memory exactly ONCE per neuron
+    for (int i = threadIdx.x; i < numNeurons; i += blockDim.x) {
+        atomicAdd(&d_deltaBiases[i], s_biasFreq[i]);
+        if (hasDualWeights) {
+            atomicAdd(&d_deltaBiasesScale[i], s_biasScale[i]);
         }
     }
 }
@@ -203,12 +226,16 @@ void RunBackwardLayerGPU(
     // Launch exactly 4 blocks per SM to fill 100% of GPU hardware waves without partial waves
     int blocksPerGrid = numSMs * 4;
 
-    // Calculate Deltas
-    ComputeDeltaTermsKernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
-        batchSize, numNeurons, //prevNumNeurons,
+    // Calculate how much shared memory we need for this specific layer
+    size_t sharedMemBytes = numNeurons * sizeof(engineFloat);
+    if (hasDualWeights) {
+        sharedMemBytes *= 2; // Double the size to fit the scale biases
+    }
+
+    // Calculate Deltas (Notice 'sharedMemBytes' is passed in the third slot)
+    ComputeDeltaTermsKernel<<<blocksPerGrid, threadsPerBlock, sharedMemBytes, stream>>>(
+        batchSize, numNeurons, 
         d_colorErrorIn, d_errorGradXIn, d_errorGradYIn,
-        //d_prevGradX, d_prevGradY,
-        //d_weights, d_weightsScale, 
         d_preActFreq, d_preActScale,
         d_deltaAFreq, d_deltaXFreq, d_deltaYFreq,
         d_deltaAScale, d_deltaXScale, d_deltaYScale,
