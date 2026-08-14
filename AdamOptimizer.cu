@@ -15,7 +15,6 @@ __global__ void AdamKernel(
 {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= numElements) return;
-
     // Standard Adam Hyperparameters
     constexpr engineFloat beta1 = 0.9f;
     constexpr engineFloat beta2 = 0.999f;
@@ -24,10 +23,10 @@ __global__ void AdamKernel(
     // Average gradient across batch
     engineFloat g = d_gradients[idx] / (engineFloat)batchSize;
 
-    engineFloat m = beta1 * d_m[idx] + (1.0f - beta1) * g;
+    engineFloat m = beta1 * d_m[idx] + ((engineFloat)1.0f - beta1) * g;
     d_m[idx] = m;
 
-    engineFloat v = beta2 * d_v[idx] + (1.0f - beta2) * (g * g);
+    engineFloat v = beta2 * d_v[idx] + ((engineFloat)1.0f - beta2) * (g * g);
     d_v[idx] = v;
 
     //// Compute bias-corrected moments

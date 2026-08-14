@@ -40,6 +40,102 @@
 #undef min
 #undef max
 
+namespace gpu {
+    template <typename T>
+    __host__ __device__ __forceinline__ T abs(T val) {
+        // Check if currently compiling for the GPU device
+        #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ > 0
+            if constexpr (std::is_same_v<T, float>) {
+                return abs(val);
+            } else {
+                return __habs(val); // GPU hardware intrinsic
+            }
+        #else
+            // Fallback for CPU compilation
+            if constexpr (std::is_same_v<T, float>) {
+                return std::abs(val);
+            } else {
+                // Cast 16-bit to float for CPU math, then convert back
+                return static_cast<T>(std::abs(static_cast<float>(val)));
+            }
+        #endif
+    }
+    
+    template <typename T>
+    __host__ __device__ __forceinline__ T sqrt(T val) {
+        #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ > 0
+            if constexpr (std::is_same_v<T, float>) {
+                return sqrt(val);
+            } else {
+                return hsqrt(val); // GPU hardware intrinsic
+            }
+        #else
+            if constexpr (std::is_same_v<T, float>) {
+                return std::sqrt(val);
+            } else {
+                return static_cast<T>(std::sqrt(static_cast<float>(val)));
+            }
+        #endif
+    }
+    
+    template <typename T>
+    __host__ __device__ __forceinline__ T exp(T val) {
+        #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ > 0
+            if constexpr (std::is_same_v<T, float>) {
+                return exp(val);
+            } else {
+                return hexp(val); // GPU hardware intrinsic
+            }
+        #else
+            if constexpr (std::is_same_v<T, float>) {
+                return std::exp(val);
+            } else {
+                return static_cast<T>(std::exp(static_cast<float>(val)));
+            }
+        #endif
+    }
+}
+
+template <typename T>
+inline cublasStatus_t customCublasTGemm(
+    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k, const float* alpha,
+    const T* A, int lda, const T* B, int ldb,
+    const float* beta, T* C, int ldc) 
+{
+    if constexpr (std::is_same_v<T, float>) {
+        return cublasSgemm(handle, transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
+    } 
+    else if constexpr (std::is_same_v<T, __nv_bfloat16>) {
+        return cublasGemmEx(
+            handle, transa, transb, m, n, k, 
+            alpha, 
+            A, CUDA_R_16BF, lda, 
+            B, CUDA_R_16BF, ldb, 
+            beta, 
+            C, CUDA_R_16BF, ldc, 
+            CUBLAS_COMPUTE_32F, 
+            CUBLAS_GEMM_DEFAULT_TENSOR_OP
+        );
+    } 
+    else if constexpr (std::is_same_v<T, half>) {
+        return cublasGemmEx(
+            handle, transa, transb, m, n, k, 
+            alpha, 
+            A, CUDA_R_16F, lda,
+            B, CUDA_R_16F, ldb, 
+            beta, 
+            C, CUDA_R_16F, ldc, 
+            CUBLAS_COMPUTE_32F,  // Accumulating in 32-bit keeps the training stable
+            CUBLAS_GEMM_DEFAULT_TENSOR_OP
+        );
+    } 
+    else {
+        static_assert(sizeof(T) == 0, "Unsupported matrix type for customGemm wrapper!");
+    }
+    return CUBLAS_STATUS_NOT_SUPPORTED;
+}
+
 // CUDA API error checking
 #ifndef _TRAINING
 #define CUDA_CHECK(err)                                                                            \

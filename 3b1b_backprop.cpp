@@ -114,7 +114,7 @@ namespace config
 	inline int pe_num_frequencies = 10; // Positional encode
 	inline bool use_gaussian_pe = false;
 
-	inline bool initial_live_update_state = false;
+	inline bool initial_live_update_state = true;
 
 	// Hyperparameters & Training State
 	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)

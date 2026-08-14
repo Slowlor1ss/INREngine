@@ -64,7 +64,7 @@ void GpuNetwork::TrainBatchGPU(
     if (!m_graphCaptured)
     {
         CUDA_CHECK(cudaStreamBeginCapture(m_stream, cudaStreamCaptureModeThreadLocal));
-        
+        // Cuda graphs has unfortinutly broken the profile markers keep it here for now but dont think its fixable due to how cuda graphs work :(
         PROFILE_PUSH_COLOR("ForwardPass", 0xFFFFB3BA); 
         // Pushes the batch of pixels through the network to calculate colors and spatial slopes.
         ForwardPass();
@@ -87,7 +87,7 @@ void GpuNetwork::TrainBatchGPU(
 
         m_graphCaptured = true;
     }
-
+    
     // Launch captured graph
     CUDA_CHECK(cudaGraphLaunch(m_graphExec, m_stream));
 }
