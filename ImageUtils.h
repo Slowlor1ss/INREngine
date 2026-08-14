@@ -20,6 +20,19 @@ public:
         const std::vector<std::vector<engineFloat>>& targetPixels, 
         int width, 
         int height);
+
+    struct ImageMetrics {
+		engineFloat mse;
+	    engineFloat rmse;
+	    engineFloat mae;
+	    engineFloat ssim;
+	    engineFloat psnr;
+	};
+
+    static ImageMetrics CalculateFullImageMetrics(
+        const std::vector<engineFloat>& predicted,
+        const std::vector<engineFloat>& target,
+        int channels = 3); // Defaulting to RGB);
 };
 
 // TODO: Move this to its own util file together with our normal Positional Encoding

@@ -102,8 +102,8 @@ namespace config
 	inline engineFloat output_image_scale = 1.f;
 	inline std::vector<size_t> custom_layer_dims = { 128, 128, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
-		ActFunc::DataBase::FindActFunc<ActFunc::Finer>(),
-		ActFunc::DataBase::FindActFunc<ActFunc::Finer>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::WireHybrid>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::WireHybrid>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::None>()
 	};
 
@@ -120,7 +120,7 @@ namespace config
 	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)
 	inline size_t batch_size = 256ull*256ull;//8192;//65536;//8192;//32;
 	inline bool shuffle_pixel_batch = true; // TODO: either make this an input parameter or make this the default if batch size isnt == to image size
-	inline size_t print_every_n_batches = 1000;
+	inline size_t print_every_n_batches = 100;
 	//inline float initial_learning_rate = 0.0001f;
 	inline engineFloat initial_learning_rate = 0.1f;//0.005f;//0.005f;//WIRE //0.000025f; Siren
 	

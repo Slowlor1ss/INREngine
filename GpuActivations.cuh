@@ -20,6 +20,7 @@ enum class GpuActType {
     Tanh = 5,
     Wire = 6,
     Finer = 7,
+    WireHybrid = 8,
 };
 
 // TODO: really we should make these functions __global__ or something and replace out cpu code to also use these for when running with --use_gpu off
@@ -42,6 +43,9 @@ namespace SharedAct
         // Bias init range for FINER -- this is what actually gives it its extra
         // frequency range over SIREN, see GenerateInitialBiases below.
         constexpr engineFloat Finer_bias_k = 2.5f;
+
+        constexpr engineFloat Hybrid_mix = 0.20f;
+		constexpr engineFloat Hybrid_frequency_multiplier = 1.95f;
     }
     
     // Forward Pass Activation Functions
@@ -188,6 +192,226 @@ namespace SharedAct
         out_d2Scale = window * wave * (4.0f * Config::Wire_s_squared * Config::Wire_s_squared * zScale * zScale - 2.0f * Config::Wire_s_squared);
         out_d2Mixed = -2.0f * Config::Wire_s_squared * zScale * window * (-Config::Wire_w0 * std::sin(Config::Wire_w0 * zFreq));
     }
+
+	// Hybrid WIRE + high-frequency sinusoidal component
+	__MATH_FUNC__ engineFloat WireHybrid(
+	    engineFloat zFreq,
+	    engineFloat zScale)
+	{
+	    engineFloat window =
+	        std::exp(
+	            -Config::Wire_s_squared *
+	            (zScale * zScale)
+	        );
+
+	    engineFloat wire =
+	        window *
+	        std::cos(
+	            Config::Wire_w0 * zFreq
+	        );
+
+	    engineFloat sharp =
+	        std::sin(
+	            Config::Wire_w0 *
+	            Config::Hybrid_frequency_multiplier *
+	            zFreq
+	        );
+
+	    return wire +
+	        Config::Hybrid_mix * sharp;
+	}
+
+	// Using pass-by-reference to avoid std::pair compatibility issues on the GPU
+	__MATH_FUNC__ void WireHybridDualDeriv(
+	    engineFloat zFreq,
+	    engineFloat zScale,
+	    engineFloat& out_dFreq,
+	    engineFloat& out_dScale)
+	{
+	    engineFloat s2 =
+	        Config::Wire_s_squared;
+
+	    engineFloat w0 =
+	        Config::Wire_w0;
+
+	    engineFloat mix =
+	        Config::Hybrid_mix;
+
+	    engineFloat freqMult =
+	        Config::Hybrid_frequency_multiplier;
+
+
+	    // --------------------------------------------------------
+	    // WIRE
+	    // --------------------------------------------------------
+
+	    engineFloat window =
+	        std::exp(
+	            -s2 * (zScale * zScale)
+	        );
+
+	    engineFloat wireWave =
+	        std::cos(
+	            w0 * zFreq
+	        );
+
+	    engineFloat wire =
+	        window * wireWave;
+
+
+	    // --------------------------------------------------------
+	    // High-frequency residual
+	    // --------------------------------------------------------
+
+	    engineFloat sharpArgument =
+	        w0 * freqMult * zFreq;
+
+	    engineFloat sharp =
+	        std::sin(sharpArgument);
+
+
+	    // --------------------------------------------------------
+	    // d/dzFreq
+	    // --------------------------------------------------------
+
+	    engineFloat wire_dFreq =
+	        window *
+	        (
+	            -w0 *
+	            std::sin(w0 * zFreq)
+	        );
+
+	    engineFloat sharp_dFreq =
+	        w0 *
+	        freqMult *
+	        std::cos(sharpArgument);
+
+
+	    out_dFreq =
+	        wire_dFreq +
+	        mix * sharp_dFreq;
+
+
+	    // --------------------------------------------------------
+	    // d/dzScale
+	    //
+	    // The high-frequency residual has no zScale dependency,
+	    // so only the WIRE component contributes here.
+	    // --------------------------------------------------------
+
+	    engineFloat wire_dScale =
+	        -2.0f *
+	        s2 *
+	        zScale *
+	        wire;
+
+	    out_dScale =
+	        wire_dScale;
+	}
+
+
+	// Using pass-by-reference to avoid std::tuple compatibility issues on the GPU
+	__MATH_FUNC__ void WireHybridDualSecondDeriv(
+	    engineFloat zFreq,
+	    engineFloat zScale,
+	    engineFloat& out_d2Freq,
+	    engineFloat& out_d2Scale,
+	    engineFloat& out_d2Mixed)
+	{
+	    engineFloat s2 =
+	        Config::Wire_s_squared;
+
+	    engineFloat w0 =
+	        Config::Wire_w0;
+
+	    engineFloat mix =
+	        Config::Hybrid_mix;
+
+	    engineFloat freqMult =
+	        Config::Hybrid_frequency_multiplier;
+
+
+	    // --------------------------------------------------------
+	    // WIRE
+	    // --------------------------------------------------------
+
+	    engineFloat window =
+	        std::exp(
+	            -s2 * (zScale * zScale)
+	        );
+
+	    engineFloat wave =
+	        std::cos(
+	            w0 * zFreq
+	        );
+
+	    engineFloat wire =
+	        window * wave;
+
+
+	    // --------------------------------------------------------
+	    // High-frequency residual
+	    // --------------------------------------------------------
+
+	    engineFloat sharpArgument =
+	        w0 * freqMult * zFreq;
+
+	    engineFloat sharp =
+	        std::sin(sharpArgument);
+
+
+	    // --------------------------------------------------------
+	    // Second derivative w.r.t. zFreq
+	    // --------------------------------------------------------
+
+	    engineFloat wire_d2Freq =
+	        -(w0 * w0) * wire;
+
+	    engineFloat sharp_d2Freq =
+	        -(w0 * w0 *
+	          freqMult * freqMult) *
+	        sharp;
+
+	    out_d2Freq =
+	        wire_d2Freq +
+	        mix * sharp_d2Freq;
+
+
+	    // --------------------------------------------------------
+	    // Second derivative w.r.t. zScale
+	    //
+	    // High-frequency residual has no zScale dependency.
+	    // --------------------------------------------------------
+		out_d2Scale =
+	        window * wave *
+	        (
+	            4.0f *
+	            s2 *
+	            s2 *
+	            zScale *
+	            zScale
+	            -
+	            2.0f * s2
+	        );
+
+
+	    // --------------------------------------------------------
+	    // Mixed derivative
+	    //
+	    // High-frequency residual has no zScale dependency,
+	    // so this is identical to WIRE.
+	    // --------------------------------------------------------
+
+	    out_d2Mixed =
+	        -2.0f *
+	        s2 *
+	        zScale *
+	        window *
+	        (
+	            -w0 *
+	            std::sin(w0 * zFreq)
+	        );
+	}
     
     //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
     
@@ -202,6 +426,7 @@ namespace SharedAct
         case GpuActType::Wire:      return Wire(zFreq, zScale);
         case GpuActType::Tanh:      return Tanh(zFreq);
         case GpuActType::Finer:     return Finer(zFreq);
+        case GpuActType::WireHybrid: return WireHybrid(zFreq, zScale);
         case GpuActType::None:
         default:                    return None(zFreq);
         }
@@ -218,10 +443,6 @@ namespace SharedAct
         deriv2Freq = 0.0f; deriv2Scale = 0.0f; deriv2Mixed = 0.0f;
 
         switch (actType) {
-        case GpuActType::Wire:
-            WireDualDeriv(zFreq, zScale, deriv1Freq, deriv1Scale);
-            WireDualSecondDeriv(zFreq, zScale, deriv2Freq, deriv2Scale, deriv2Mixed);
-            break;
         case GpuActType::Sigmoid:
             deriv1Freq = SigmoidDeriv(zFreq);
             deriv2Freq = SigmoidSecondDeriv(zFreq);
@@ -242,9 +463,17 @@ namespace SharedAct
             deriv1Freq = TanhDeriv(zFreq);
             deriv2Freq = TanhSecondDeriv(zFreq);
             break;
+        case GpuActType::Wire:
+            WireDualDeriv(zFreq, zScale, deriv1Freq, deriv1Scale);
+            WireDualSecondDeriv(zFreq, zScale, deriv2Freq, deriv2Scale, deriv2Mixed);
+            break;
         case GpuActType::Finer:
             deriv1Freq = FinerDeriv(zFreq);
             deriv2Freq = FinerSecondDeriv(zFreq);
+            break;
+        case GpuActType::WireHybrid:
+            WireHybridDualDeriv(zFreq, zScale, deriv1Freq, deriv1Scale);
+            WireHybridDualSecondDeriv(zFreq, zScale, deriv2Freq, deriv2Scale, deriv2Mixed);
             break;
         case GpuActType::None:
         default:

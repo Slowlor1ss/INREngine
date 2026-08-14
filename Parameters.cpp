@@ -26,8 +26,8 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFu
 	const size_t fanIn = (numBiases > 0) ? (numWeights / numBiases) : 1;
 	const size_t fanOut = numBiases;
 	
-	bool isWireActivation = actFunc->GetName() == "Wire";
-	if (isWireActivation)
+	bool isDualWeights = actFunc->GetName() == "Wire" || actFunc->GetName() == "WireHybrid";
+	if (isDualWeights)
 	{
 		// Allocate Secondary Vectors ONLY for Wire
 		weights_scale.resize(numWeights, 0.0f);
@@ -42,7 +42,7 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFu
 	for (size_t i = 0; i < numBiases; i++)
 	{
 		biases[i] = actFunc->GenerateInitialBiases( generator, fanIn, fanOut, lIdx );
-		if (isWireActivation)
+		if (isDualWeights)
 		{
 			biases_scale[i] = actFunc->GenerateInitialBiases( generator, fanIn, fanOut, lIdx );
 		}
@@ -51,7 +51,7 @@ Parameters::Parameters(size_t numBiases, size_t numWeights, ActFunc::Base* actFu
 	for (size_t i = 0; i < numWeights; i++)
 	{
 		weights[i] = actFunc->GenerateInitialWeight( generator, fanIn, fanOut, lIdx );
-		if (isWireActivation)
+		if (isDualWeights)
 		{
 			weights_scale[i] = actFunc->GenerateInitialWeight( generator, fanIn, fanOut, lIdx );
 		}

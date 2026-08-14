@@ -151,6 +151,16 @@ void NeuralImageRecreator()
 	BMPParsedData data;
 	ParseBMPData(config::target_image_file.c_str(), data);
 
+	// Create a flattened version of the target image for full-reference metrics
+	std::vector<engineFloat> flatTargetImage;
+	if (!data.outputs.empty())
+	{
+		flatTargetImage.reserve(data.outputs.size() * data.outputs[0].size());
+		for (const auto& pixel : data.outputs) {
+			flatTargetImage.insert(flatTargetImage.end(), pixel.begin(), pixel.end());
+		}
+	}
+
 	// Setup our coordinate mapper lambda for the ImageGenerator
 	std::function<ImageUtils::SpatialData(engineFloat, engineFloat)> coordMapper = nullptr;
 	if (config::use_positional_encoding) 
@@ -352,6 +362,7 @@ void NeuralImageRecreator()
 				cost = RunGradientGuidedTrainingEpoch(network, inputSpatialData, targetSpatialData, currentImage, config::print_every_n_batches, config::batch_size, learningRate, threadPool);
 		}
 
+		// TODO: update to use our new full image metrics
 		engineFloat currentPSNR = CalculatePSNR(cost);
 		
 		if (config::benchmark_enabled)
@@ -381,12 +392,33 @@ void NeuralImageRecreator()
 		// Live viewer update
 		if (liveUpdateWindow)
 		{
-			rendererWindow.Update(GenerateReconstructedImage(network, int(data.width * config::output_image_scale), int(data.height * config::output_image_scale), coordMapper, config::render_mode, threadPool));
+			auto rgbImage = GenerateReconstructedImage(network, int(data.width * config::output_image_scale), int(data.height * config::output_image_scale), coordMapper, config::render_mode, threadPool);
+			rendererWindow.Update(rgbImage);
+			// Note: SSIM requires the generated image and target image to be the exact same size.
+			// We only calculate this if the scale is 1.0 and we are rendering standard RGB.
+			if (config::output_image_scale == 1.0f && config::render_mode == RenderMode::StandardRGB)
+			{
+				ImageUtils::ImageMetrics metrics = ImageUtils::CalculateFullImageMetrics(rgbImage, flatTargetImage);
+				
+				std::cout << "COST: " << cost 
+				          << " LR: " << learningRate 
+				          << " | G_SSIM: " << metrics.ssim 
+				          << " MAE: " << metrics.mae 
+				          << " PSNR(dB): " << metrics.psnr << '\n';
+			}
+			else // TODO: fix for scaled images ALSO JUST CLEAN UP ALL THIS CODE THIS IS A MESS HOLY HELL
+			{
+				// Fallback if scaled or looking at spatial gradients
+				std::cout << "COST: " << cost 
+				          << " LR: " << learningRate 
+				          << " PSNR(dB): " << currentPSNR << " (Scale != 1.0)\n";
+			}
 		}
-
-		// Report progress
-		std::cout << "COST: " << cost << " LR: " << learningRate << " PSNR(dB): " << currentPSNR << '\n';
-		
+		else
+		{
+			// Report progress
+			std::cout << "COST: " << cost << " LR: " << learningRate << " PSNR(dB): " << currentPSNR << '\n';
+		}
 		if (config::benchmark_enabled && currentEpoch >= maxEpochs)
 		{
 			std::cout << "Max epochs reached! Auto-quitting for benchmark pipeline...\n";

@@ -451,4 +451,103 @@ namespace ActFunc
 
 		virtual engineFloat GetLearningRateMultiplier() const override { return 0.0001f; }
 	};
+
+	class WireHybrid : public Base
+	{
+	public:
+	    static constexpr const char* k_name{ "WireHybrid" };
+
+	    virtual GpuActType GetGpuType() const override { return GpuActType::WireHybrid; }
+
+	    virtual std::string GetName() const override
+	    {
+	        return k_name;
+	    }
+
+	    engineFloat Execute(engineFloat z) const override
+	    {
+	        return ExecuteDual(z, z);
+	    }
+
+	    engineFloat ExecuteDerivative(engineFloat z) const override
+	    {
+	        return ExecuteDualDerivative(z, z).first;
+	    }
+
+	    virtual engineFloat ExecuteSecondDerivative(
+	        engineFloat x) const override
+	    {
+	        throw; // TODO
+	    }
+
+		engineFloat ExecuteDual(
+	        engineFloat zFreq,
+	        engineFloat zScale) const override
+	    {
+	        return SharedAct::WireHybrid(zFreq, zScale);
+	    }
+
+	    std::pair<engineFloat, engineFloat>
+	    ExecuteDualDerivative(
+	        engineFloat zFreq,
+	        engineFloat zScale) const override
+	    {
+	        engineFloat dFreq, dScale;
+
+	        SharedAct::WireHybridDualDeriv(
+	            zFreq,
+	            zScale,
+	            dFreq,
+	            dScale
+	        );
+
+	        return { dFreq, dScale };
+	    }
+			std::tuple<engineFloat, engineFloat, engineFloat>
+	    ExecuteDualSecondDerivative(
+	        engineFloat zFreq,
+	        engineFloat zScale) const override
+	    {
+	        engineFloat d2Freq;
+	        engineFloat d2Scale;
+	        engineFloat d2Mixed;
+
+	        SharedAct::WireHybridDualSecondDeriv(
+	            zFreq,
+	            zScale,
+	            d2Freq,
+	            d2Scale,
+	            d2Mixed
+	        );
+
+	        return {
+	            d2Freq,
+	            d2Scale,
+	            d2Mixed
+	        };
+	    }
+
+		engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
+		{
+			// https://github.com/vishwa91/wire/blob/main/modules/wire.py
+			// PyTorch default nn.Linear initialization: U(-sqrt(1/fan_in), sqrt(1/fan_in))
+			const engineFloat bound = static_cast<engineFloat>(1.0 / std::sqrt(static_cast<double>(fanIn)));
+			std::uniform_real_distribution<engineFloat> distribution(-bound, bound);
+			return distribution(generator);
+		}
+		
+		engineFloat GenerateInitialBiases(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) override
+		{
+			// We initialise our biases in the same way as we do out weights for Wire
+			const engineFloat bound = 1.0f / std::sqrt(static_cast<engineFloat>(fanIn));
+			std::uniform_real_distribution<engineFloat> distribution(-bound, bound);
+			return distribution(generator);
+		}
+
+	    virtual engineFloat GetLearningRateMultiplier()
+	        const override
+	    {
+	        return 0.005f;
+	    }
+	};
 }
