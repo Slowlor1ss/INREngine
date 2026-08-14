@@ -8,6 +8,7 @@ __global__ void AdamKernel(
     engineFloat* d_m,
     engineFloat* d_v,
     const engineFloat* d_learningRate,
+    const engineFloat lrMultiplier,
     const engineFloat biasCorr1, // 1 - beta1^t, computed once on host
     const engineFloat biasCorr2, // 1 - beta2^t, computed once on host
     int batchSize)
@@ -38,7 +39,7 @@ __global__ void AdamKernel(
     engineFloat v_hat = v / biasCorr2;
 
     // Read the dynamically updated LR from VRAM
-    engineFloat actualLR = (*d_learningRate); 
+    engineFloat actualLR = (*d_learningRate) * lrMultiplier; 
     d_params[idx] -= actualLR * m_hat / (sqrtf(v_hat) + epsilon);
 
 	// Auto-clear the gradient so it is zeroed for the next batch
@@ -47,7 +48,8 @@ __global__ void AdamKernel(
 
 void RunAdamOptimizerGPU(
     cudaStream_t stream, const int numElements, engineFloat* d_params, engineFloat* d_gradients,
-    engineFloat* d_m, engineFloat* d_v, const engineFloat* d_learningRate, const int t, int batchSize)
+    engineFloat* d_m, engineFloat* d_v, const engineFloat* d_learningRate, const engineFloat lrMultiplier,
+    const int t, int batchSize)
 {
     if (numElements <= 0) return;
 
@@ -59,6 +61,6 @@ void RunAdamOptimizerGPU(
     const engineFloat biasCorr2 = 1.0f - powf(0.999f, static_cast<engineFloat>(t));
 
     AdamKernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
-        numElements, d_params, d_gradients, d_m, d_v, d_learningRate, biasCorr1, biasCorr2, batchSize
+        numElements, d_params, d_gradients, d_m, d_v, d_learningRate, lrMultiplier, biasCorr1, biasCorr2, batchSize
     );
 }

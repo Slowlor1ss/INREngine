@@ -84,8 +84,10 @@ public:
     );
     
     void DownloadParametersToCPU(Network& cpuNetwork);
-    std::vector<engineFloat> PredictGPU(const engineFloat* d_inputAct, const engineFloat* d_inputGradX,
-                                        const engineFloat* d_inputGradY);
+    // std::vector<engineFloat> PredictGPU(const engineFloat* d_inputAct, const engineFloat* d_inputGradX,
+    //                                     const engineFloat* d_inputGradY);
+    
+    void PredictGPU(const engineFloat* d_predictInputs, engineFloat* d_predictOutputs, int numPixels);
     
 public:
     // Pre-allocate required VRAM
@@ -98,8 +100,8 @@ public:
 
 private:
     // Core
-    void ForwardPass(const engineFloat* d_batchInputAct, const engineFloat* d_batchInputGradX, const engineFloat* d_batchInputGradY);
-    void BackwardPass(const engineFloat* d_batchTargetAct, const engineFloat* d_batchTargetGradX, const engineFloat* d_batchTargetGradY, engineFloat spatialLossWeight);
+    void ForwardPass();
+    void BackwardPass(engineFloat spatialLossWeight);
     // Kept for debugging purposes
     //void TransferDeltasToCPU(Network& cpuNetwork);
     void ApplyGradientsGPU(engineFloat baseLearningRate);
@@ -121,6 +123,11 @@ private:
 
     // Dynamic Graph Parameters
     engineFloat* d_learningRate = nullptr;
+    engineFloat* h_learningRate = nullptr; // Host pointer (aka just a normal cpu pointer)
+    
+    engineFloat* d_fixedTargetAct = nullptr;
+    engineFloat* d_fixedTargetGradX = nullptr;
+    engineFloat* d_fixedTargetGradY = nullptr;
 
     std::vector<GpuLayer> m_layers;
 };

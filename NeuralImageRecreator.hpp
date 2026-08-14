@@ -32,7 +32,7 @@ inline void LogTrainingMetrics(const std::string& csvFilepath, size_t batch, eng
 
 //TODO: move
 size_t currentEpoch = 0;
-size_t maxEpochs = 4000; // From the PyTorch script niters = 2000
+size_t maxEpochs = 40'000; // From the PyTorch script niters = 2000
 
 static engineFloat RunGradientGuidedTrainingEpoch(Network& network,
                                             const std::vector<ImageUtils::SpatialData>& inputs,
@@ -91,7 +91,7 @@ static engineFloat RunGPUTrainingEpoch(
     const std::vector<ImageUtils::SpatialData>& activeTargets)
 {
     // A hyperparameter to balance how much the network cares about slopes vs colors.
-    constexpr engineFloat spatialLossWeight = 0.0f; // Adjust this if you want spatial gradients enabled
+    constexpr engineFloat spatialLossWeight = 0.00f; // Adjust this if you want spatial gradients enabled
 	
     for (size_t j = 0; j < printEveryNBatches; j++)
     {

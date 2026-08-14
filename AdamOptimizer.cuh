@@ -9,5 +9,6 @@ void RunAdamOptimizerGPU(
     engineFloat* d_m,
     engineFloat* d_v,
     const engineFloat* d_learningRate,
+    const engineFloat lrMultiplier,
     const int t, int batchSize
 );

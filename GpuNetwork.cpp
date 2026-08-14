@@ -30,21 +30,50 @@ void GpuNetwork::TrainBatchGPU(
 #endif
     
     // Update the dynamic LR buffer on the stream (not captured by the graph if done outside)
-    CUDA_CHECK(cudaMemcpyAsync(d_learningRate, &learningRate, sizeof(engineFloat), cudaMemcpyHostToDevice, m_stream));
+    //CUDA_CHECK(cudaMemcpyAsync(d_learningRate, &learningRate, sizeof(engineFloat), cudaMemcpyHostToDevice, m_stream));
+    
+    // Sources:
+    // https://leimao.github.io/blog/Page-Locked-Host-Memory-Page-Table/#:~:text=This%20allows%20for%20faster%20data%20transfer%20between,page%2Dlocked%20memory%20to%20physical%20addresses%20in%20RAM.
+    // https://www.abhik.ai/concepts/gpu-computing/cuda-streams
+    // Explenation as to why we do this, if we were to do a async cpy of the learning rate passed in the function it can (and will) go out
+    // of scope so we'd end up setting d_learnignRate to garbage or 0, instead we have now created a raw pointer to set the d_learningrate
+    // we use a pointer allocated with cudaMallocHost (page-locked memory) instead of a (non pinned)-member variable as in theory this 
+    // should prevent the copy from turning in to a blocking copy, as pageable memory could get moved around 
+    // which due to some more complicated stuff can turn our async copy in to a blocking one; see sources above ^
+    *h_learningRate = learningRate;
+    CUDA_CHECK(cudaMemcpyAsync(d_learningRate, h_learningRate, sizeof(engineFloat), cudaMemcpyHostToDevice, m_stream));
+    
+    // Stage the Input Data (we use the layer 0 variables as a sort of fixed memory location 
+    // that we constantly override and its purpose is to be able to pass in the parameters trough a fixed memory location, which we need due to how cuda graphs work)
+    GpuLayer& inputLayer = m_layers[0];
+    size_t inBytes = m_batchSize * inputLayer.numNeurons * sizeof(engineFloat);
+    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_activations, d_batchInputAct, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActFreq, d_batchInputAct, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradX, d_batchInputGradX, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradY, d_batchInputGradY, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+    if (inputLayer.hasDualWeights) {
+        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActScale, d_batchInputAct, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+    }
 
+    // Stage the Target Data (We added soem new fixed Buffers as we dont have a layer 0 equevalent here)
+    size_t outBytes = m_batchSize * m_layers.back().numNeurons * sizeof(engineFloat);
+    CUDA_CHECK(cudaMemcpyAsync(d_fixedTargetAct, d_batchTargetAct, outBytes, cudaMemcpyDeviceToDevice, m_stream));
+    CUDA_CHECK(cudaMemcpyAsync(d_fixedTargetGradX, d_batchTargetGradX, outBytes, cudaMemcpyDeviceToDevice, m_stream));
+    CUDA_CHECK(cudaMemcpyAsync(d_fixedTargetGradY, d_batchTargetGradY, outBytes, cudaMemcpyDeviceToDevice, m_stream));
+    
     if (!m_graphCaptured)
     {
         CUDA_CHECK(cudaStreamBeginCapture(m_stream, cudaStreamCaptureModeThreadLocal));
         
         PROFILE_PUSH_COLOR("ForwardPass", 0xFFFFB3BA); 
         // Pushes the batch of pixels through the network to calculate colors and spatial slopes.
-        ForwardPass(d_batchInputAct, d_batchInputGradX, d_batchInputGradY);
+        ForwardPass();
         PROFILE_POP();
         
         PROFILE_PUSH_COLOR("BackwardPass", 0xFFBAFFC9); 
         // Calculates the error against the target image and uses cublas to accumulate 
         // the gradients into the d_delta buffers.
-        BackwardPass(d_batchTargetAct, d_batchTargetGradX, d_batchTargetGradY, spatialLossWeight);
+        BackwardPass(spatialLossWeight);
         PROFILE_POP();
 
         PROFILE_PUSH_COLOR("ApplyGradientsGPU", 0xFFBAE1FF); 
@@ -155,6 +184,16 @@ GpuNetwork::GpuNetwork(const Network& cpuNetwork, int batchSize)
 
         m_layers.push_back(gpuLayer);
     }
+    
+    // Not per layer allocations:
+    CUDA_CHECK(cudaMalloc(&d_learningRate, sizeof(engineFloat)));
+    CUDA_CHECK(cudaMallocHost(&h_learningRate, sizeof(engineFloat)));
+    
+    // Target buffers matching the size of your final output layer
+    const size_t targetBytes = m_batchSize * m_layers.back().numNeurons * sizeof(engineFloat);
+    CUDA_CHECK(cudaMalloc(&d_fixedTargetAct, targetBytes));
+    CUDA_CHECK(cudaMalloc(&d_fixedTargetGradX, targetBytes));
+    CUDA_CHECK(cudaMalloc(&d_fixedTargetGradY, targetBytes));
 }
 
 // Clean up all VRAM to prevent memory leaks
@@ -195,34 +234,59 @@ void GpuNetwork::DownloadParametersToCPU(Network& cpuNetwork)
 }
 
 // Forward pass returning predicted colors to the CPU for rendering
-std::vector<engineFloat> GpuNetwork::PredictGPU(
-    const engineFloat* d_inputAct, 
-    const engineFloat* d_inputGradX, 
-    const engineFloat* d_inputGradY)
+// std::vector<engineFloat> GpuNetwork::PredictGPU(
+//     const engineFloat* d_inputAct, 
+//     const engineFloat* d_inputGradX, 
+//     const engineFloat* d_inputGradY)
+// {
+//     PROFILE_SCOPE("PredictGPU");
+//     // Run the forward pass on the GPU
+//     ForwardPass(d_inputAct, d_inputGradX, d_inputGradY);
+//
+//     // Grab the final layer
+//     GpuLayer& outputLayer = m_layers.back();
+//     size_t outputBytes = m_batchSize * outputLayer.numNeurons * sizeof(engineFloat);
+//
+//     // TODO: probably not needed as cudaMemcpy blocks
+//     //CUDA_CHECK(cudaDeviceSynchronize());
+// #ifndef _TRAINING
+// 	cudaError_t launchErr = cudaPeekAtLastError();
+// 	if ( launchErr != cudaSuccess ) {
+// 		printf( "\n[cudaPeekAtLastError] PredictGPU failed: %s\n", cudaGetErrorString( launchErr ) );
+// 		__debugbreak();
+// 	}
+// #endif
+//
+//     // Allocate a CPU vector and copy the results back
+//     std::vector<engineFloat> predictions(m_batchSize * outputLayer.numNeurons);
+//     CUDA_CHECK(cudaMemcpy(predictions.data(), outputLayer.d_activations, outputBytes, cudaMemcpyDeviceToHost));
+//     
+//     return predictions;
+// }
+
+void GpuNetwork::PredictGPU(const engineFloat* d_predictInputs, engineFloat* d_predictOutputs, int numPixels)
 {
-    PROFILE_SCOPE("PredictGPU");
-    // Run the forward pass on the GPU
-    ForwardPass(d_inputAct, d_inputGradX, d_inputGradY);
-
-    // Grab the final layer
-    GpuLayer& outputLayer = m_layers.back();
-    size_t outputBytes = m_batchSize * outputLayer.numNeurons * sizeof(engineFloat);
-
-    // TODO: probably not needed as cudaMemcpy blocks
-    //CUDA_CHECK(cudaDeviceSynchronize());
-#ifndef _TRAINING
-	cudaError_t launchErr = cudaPeekAtLastError();
-	if ( launchErr != cudaSuccess ) {
-		printf( "\n[cudaPeekAtLastError] PredictGPU failed: %s\n", cudaGetErrorString( launchErr ) );
-		__debugbreak();
-	}
-#endif
-
-    // Allocate a CPU vector and copy the results back
-    std::vector<engineFloat> predictions(m_batchSize * outputLayer.numNeurons);
-    CUDA_CHECK(cudaMemcpy(predictions.data(), outputLayer.d_activations, outputBytes, cudaMemcpyDeviceToHost));
+    // 1. Manually copy the prediction coordinates into Layer 0's mailbox
+    GpuLayer& inputLayer = m_layers[0];
+    size_t inBytes = numPixels * inputLayer.numNeurons * sizeof(engineFloat);
     
-    return predictions;
+    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_activations, d_predictInputs, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActFreq, d_predictInputs, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+    if (inputLayer.hasDualWeights) {
+        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActScale, d_predictInputs, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+    }
+
+    // 2. Run the normal ForwardPass! 
+    // (Since we aren't capturing a graph right now, this just runs standard kernels on the stream)
+    ForwardPass();
+
+    // 3. Copy the results out of the final layer
+    GpuLayer& outputLayer = m_layers.back();
+    size_t outBytes = numPixels * outputLayer.numNeurons * sizeof(engineFloat);
+    CUDA_CHECK(cudaMemcpyAsync(d_predictOutputs, outputLayer.d_activations, outBytes, cudaMemcpyDeviceToDevice, m_stream));
+    
+    // Make sure to sync if your CPU needs the image immediately to draw to the screen
+    CUDA_CHECK(cudaStreamSynchronize(m_stream));
 }
 
 // Request raw memory from the GPU
@@ -232,7 +296,7 @@ void GpuNetwork::AllocateLayerMemory(GpuLayer& layer, int batchSize)
     const size_t batchNeuronBytes = batchSize * layer.numNeurons * sizeof(engineFloat);
     const size_t biasBytes = layer.numNeurons * sizeof(engineFloat);
     const size_t weightBytes = layer.numNeurons * layer.prevNeurons * sizeof(engineFloat);
-
+    
     // Persistent Parameters & Deltas (Biases)
     CUDA_CHECK(cudaMalloc(&layer.d_biases, biasBytes));
     CUDA_CHECK(cudaMalloc(&layer.d_deltaBiases, biasBytes));
@@ -327,6 +391,20 @@ void GpuNetwork::FreeLayerMemory(GpuLayer& layer)
             ptr = nullptr;
         }
     };
+    
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    // These are not per layer but as we check the pointer this should be fine
+    SafeFree(d_learningRate);
+    // Not using SafeFree as this is host memory and needs cudaFreeHost
+    if (h_learningRate) {
+        cudaFreeHost(h_learningRate);
+        h_learningRate = nullptr;
+    }
+    
+    SafeFree(d_fixedTargetAct);
+    SafeFree(d_fixedTargetGradX);
+    SafeFree(d_fixedTargetGradY);
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
     // Parameters & Deltas
     SafeFree(layer.d_weights);
@@ -373,21 +451,21 @@ void GpuNetwork::FreeLayerMemory(GpuLayer& layer)
     SafeFree(layer.d_errorGradY);
 }
 
-void GpuNetwork::ForwardPass(const engineFloat* d_batchInputAct, const engineFloat* d_batchInputGradX, const engineFloat* d_batchInputGradY)
+void GpuNetwork::ForwardPass()
 {
     // Layer 0 (Input Passthrough)
-    GpuLayer& inputLayer = m_layers[0];
-    size_t batchNeuronBytes = m_batchSize * inputLayer.numNeurons * sizeof(engineFloat);
+    //GpuLayer& inputLayer = m_layers[0];
+    //size_t batchNeuronBytes = m_batchSize * inputLayer.numNeurons * sizeof(engineFloat);
 
     // Copy the raw batch inputs directly into Layer 0's forward buffers
-    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_activations, d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
-    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActFreq,  d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
-    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradX,       d_batchInputGradX, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
-    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradY,       d_batchInputGradY, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
+    //CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_activations, d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
+    //CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActFreq,  d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
+    //CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradX,       d_batchInputGradX, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
+    //CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradY,       d_batchInputGradY, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
 
-    if (inputLayer.hasDualWeights) {
-        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActScale, d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
-    }
+    //if (inputLayer.hasDualWeights) {
+    //    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActScale, d_batchInputAct, batchNeuronBytes, cudaMemcpyDeviceToDevice, m_stream));
+    //}
  
     // Forward propagation loop
     for (size_t i = 1; i < m_layers.size(); ++i)
@@ -412,9 +490,6 @@ void GpuNetwork::ForwardPass(const engineFloat* d_batchInputAct, const engineFlo
 }
 
 void GpuNetwork::BackwardPass(
-    const engineFloat* d_batchTargetAct, 
-    const engineFloat* d_batchTargetGradX, 
-    const engineFloat* d_batchTargetGradY, 
     engineFloat spatialLossWeight)
 {
     // Calculate output error
@@ -424,7 +499,7 @@ void GpuNetwork::BackwardPass(
         m_stream,
         m_batchSize, outputLayer.numNeurons,
         outputLayer.d_activations, outputLayer.d_gradX, outputLayer.d_gradY,
-        d_batchTargetAct, d_batchTargetGradX, d_batchTargetGradY,
+        d_fixedTargetAct, d_fixedTargetGradX, d_fixedTargetGradY,
         outputLayer.d_colorError, outputLayer.d_errorGradX, outputLayer.d_errorGradY,
         spatialLossWeight, m_costType
     );
@@ -481,19 +556,23 @@ void GpuNetwork::ApplyGradientsGPU(engineFloat baseLearningRate)
         
         // Update Weights
         RunAdamOptimizerGPU(m_stream, numWeights, layer.d_weights, layer.d_deltaWeights,
-                            layer.d_m_weights, layer.d_v_weights, d_learningRate, layer.adam_t, m_batchSize);
+                            layer.d_m_weights, layer.d_v_weights, d_learningRate, layer.learningRateMultiplier,
+                            layer.adam_t, m_batchSize);
 
         // Update Biases
         RunAdamOptimizerGPU(m_stream, numBiases, layer.d_biases, layer.d_deltaBiases,
-                            layer.d_m_biases, layer.d_v_biases, d_learningRate, layer.adam_t, m_batchSize);
+                            layer.d_m_biases, layer.d_v_biases, d_learningRate, layer.learningRateMultiplier,
+                            layer.adam_t, m_batchSize);
 
         // Update Dual Weights (if applicable)
         if (layer.hasDualWeights) {
             RunAdamOptimizerGPU(m_stream, numWeights, layer.d_weightsScale, layer.d_deltaWeightsScale,
-                                layer.d_m_weightsScale, layer.d_v_weightsScale, d_learningRate, layer.adam_t, m_batchSize);
+                                layer.d_m_weightsScale, layer.d_v_weightsScale, d_learningRate, layer.learningRateMultiplier,
+                                layer.adam_t, m_batchSize);
 
             RunAdamOptimizerGPU(m_stream, numBiases, layer.d_biasesScale, layer.d_deltaBiasesScale,
-                                layer.d_m_biasesScale, layer.d_v_biasesScale, d_learningRate, layer.adam_t, m_batchSize);
+                                layer.d_m_biasesScale, layer.d_v_biasesScale, d_learningRate, layer.learningRateMultiplier,
+                                layer.adam_t, m_batchSize);
         }
     }
 }
