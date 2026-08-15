@@ -11,6 +11,8 @@ Global
 		Debug|x86 = Debug|x86
 		Release|x64 = Release|x64
 		Release|x86 = Release|x86
+		ReleaseNoOpt|x64 = ReleaseNoOpt|x64
+		ReleaseNoOpt|x86 = ReleaseNoOpt|x86
 		Training_Profile|x64 = Training_Profile|x64
 		Training_Profile|x86 = Training_Profile|x86
 		Training|x64 = Training|x64
@@ -25,6 +27,10 @@ Global
 		{EEF5FD4D-9BC6-4037-887A-EC8AA66DD2AB}.Release|x64.Build.0 = Release|x64
 		{EEF5FD4D-9BC6-4037-887A-EC8AA66DD2AB}.Release|x86.ActiveCfg = Release|Win32
 		{EEF5FD4D-9BC6-4037-887A-EC8AA66DD2AB}.Release|x86.Build.0 = Release|Win32
+		{EEF5FD4D-9BC6-4037-887A-EC8AA66DD2AB}.ReleaseNoOpt|x64.ActiveCfg = ReleaseNoOpt|x64
+		{EEF5FD4D-9BC6-4037-887A-EC8AA66DD2AB}.ReleaseNoOpt|x64.Build.0 = ReleaseNoOpt|x64
+		{EEF5FD4D-9BC6-4037-887A-EC8AA66DD2AB}.ReleaseNoOpt|x86.ActiveCfg = ReleaseNoOpt|Win32
+		{EEF5FD4D-9BC6-4037-887A-EC8AA66DD2AB}.ReleaseNoOpt|x86.Build.0 = ReleaseNoOpt|Win32
 		{EEF5FD4D-9BC6-4037-887A-EC8AA66DD2AB}.Training_Profile|x64.ActiveCfg = Training_Profile|x64
 		{EEF5FD4D-9BC6-4037-887A-EC8AA66DD2AB}.Training_Profile|x64.Build.0 = Training_Profile|x64
 		{EEF5FD4D-9BC6-4037-887A-EC8AA66DD2AB}.Training_Profile|x86.ActiveCfg = Training_Profile|Win32

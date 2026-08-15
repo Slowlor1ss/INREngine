@@ -125,5 +125,7 @@
     <CudaCompile Include="BackwardPass.cuh" />
     <CudaCompile Include="AdamOptimizer.cuh" />
     <CudaCompile Include="GpuCostFunctions.cuh" />
+    <CudaCompile Include="GridEncoding.cu" />
+    <CudaCompile Include="GridEncoding.cuh" />
   </ItemGroup>
 </Project>

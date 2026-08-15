@@ -8,6 +8,7 @@
 
 #include "GpuDataset.h"
 #include "GpuNetwork.h"
+#include "GridEncoding.cuh"
 
 // Assuming 'mse' is your mean squared error for the current batch
 inline engineFloat CalculatePSNR(engineFloat mse) {
@@ -90,6 +91,7 @@ static engineFloat RunGPUTrainingEpoch(
     const std::vector<ImageUtils::SpatialData>& activeInputs,
     const std::vector<ImageUtils::SpatialData>& activeTargets)
 {
+	// TODO: I suspect we have some issue with spatialLossWeight as it seems to focus too much on edges and the colours get too worng so its pretty useless right nwo it seems
     // A hyperparameter to balance how much the network cares about slopes vs colors.
     constexpr engineFloat spatialLossWeight = 0.00f; // Adjust this if you want spatial gradients enabled
 	
@@ -108,6 +110,8 @@ static engineFloat RunGPUTrainingEpoch(
             gpuData.d_targetAct + tarOffset,
             gpuData.d_targetGradX + tarOffset,
             gpuData.d_targetGradY + tarOffset,
+            gpuData.d_pixelX + currentImageIdx,
+            gpuData.d_pixelY + currentImageIdx,
             spatialLossWeight,
             learningRate
         );
@@ -226,10 +230,11 @@ void NeuralImageRecreator()
 	///
 
 	// Initialize Neural Network & Visualizer Window
-	//size_t inputLayerSize = config::use_positional_encoding ? (config::pe_num_frequencies * 4) : 2;
-	// Run a dummy coordinate through the mapper to see how big the output is (depends on what mode we run in)
-	ImageUtils::SpatialData dummyData = coordMapper(0.0f, 0.0f);
-	size_t inputLayerSize = dummyData.values.size();
+	// Grid encoder replaces the coordMapper as Layer 0's input when enabled --
+	// Layer 0 must match the encoder's concatenated output width, not coordMapper's.
+	size_t inputLayerSize = config::use_grid_encoding
+		? static_cast<size_t>(GridEncoding::Config::NumLevels * GridEncoding::Config::FeaturesPerLevel)
+		: coordMapper(0.0f, 0.0f).values.size();
 	
 	std::vector<size_t> layerDims;
 	layerDims.push_back(inputLayerSize);
@@ -269,6 +274,18 @@ void NeuralImageRecreator()
 	std::unique_ptr<GpuNetwork> gpuNet = nullptr;
 	std::unique_ptr<GpuDataset> gpuData = nullptr;
 
+	// Load checkpoint into the CPU network FIRST -- GpuNetwork's constructor
+	// copies weights from the CPU network at construction time only, so it must
+	// happen after this or the loaded weights never make it to VRAM (this was the
+	// "loaded weights get overridden" bug: the old code built GpuNetwork once
+	// with random weights, uploaded the dataset, THEN loaded the checkpoint and
+	// rebuilt GpuNetwork a second time -- confusing and wasteful, and easy to get
+	// wrong. One construction, after loading, removes the whole failure mode.)
+	if (!config::benchmark_enabled)
+	{
+		LoadCheckpoint(network, weightsFile);
+	}
+
 	const auto& activeInputs = config::shuffle_pixel_batch ? shuffledInputs : inputSpatialData;
 	const auto& activeTargets = config::shuffle_pixel_batch ? shuffledTargets : targetSpatialData;
 	const size_t totalPixels = activeInputs.size();
@@ -282,49 +299,45 @@ void NeuralImageRecreator()
 	if (config::use_gpu)
 	{
 		std::cout << "Initializing GPU Pipeline...\n";
-		gpuNet = std::make_unique<GpuNetwork>(network, config::batch_size);
+		gpuNet = std::make_unique<GpuNetwork>(network, config::batch_size, config::use_grid_encoding);
 		gpuData = std::make_unique<GpuDataset>(paddedPixels, inChan, tarChan);
 		
 		std::cout << "Flattening dataset for VRAM transfer...\n";
 		std::vector<engineFloat> flatInAct(paddedPixels * inChan), flatInGradX(paddedPixels * inChan), flatInGradY(paddedPixels * inChan);
 		std::vector<engineFloat> flatTarAct(paddedPixels * tarChan), flatTarGradX(paddedPixels * tarChan), flatTarGradY(paddedPixels * tarChan);
+		// Raw normalized [0,1] pixel coordinates for the grid encoder. data.inputs
+		// entries are assumed [x,y] already in the coordMapper's input space --
+		// if that space isn't [0,1], normalize here (GridEncoding::FindCell clamps
+		// to [0,1], so anything outside it just clamps to an edge cell silently).
+		std::vector<engineFloat> flatPixelX(paddedPixels), flatPixelY(paddedPixels);
 		
 		for (size_t i = 0; i < paddedPixels; ++i) {
 			// Wrap around to the start of the image if we need extra pixels to fill the final batch
 			size_t srcIdx = i % totalPixels;
 			
 			for (size_t c = 0; c < inChan; ++c) {
-				flatInAct[i * inChan + c] = activeInputs[srcIdx].values[c];
-				flatInGradX[i * inChan + c] = activeInputs[srcIdx].gradX[c];
-				flatInGradY[i * inChan + c] = activeInputs[srcIdx].gradY[c];
+				// We check if we actually have anything if nto we just input 0 as our inputs layer 0 is not supposed to match the grid's 16 values
+				bool haveSrc = c < activeInputs[srcIdx].values.size();
+				flatInAct[i * inChan + c] = haveSrc ? activeInputs[srcIdx].values[c] : 0.0f;
+				flatInGradX[i * inChan + c] = haveSrc ? activeInputs[srcIdx].gradX[c] : 0.0f;
+				flatInGradY[i * inChan + c] = haveSrc ? activeInputs[srcIdx].gradY[c] : 0.0f;
 			}
 			for (size_t c = 0; c < tarChan; ++c) {
 				flatTarAct[i * tarChan + c] = activeTargets[srcIdx].values[c];
 				flatTarGradX[i * tarChan + c] = activeTargets[srcIdx].gradX[c];
 				flatTarGradY[i * tarChan + c] = activeTargets[srcIdx].gradY[c];
 			}
+			flatPixelX[i] = data.inputs[srcIdx % data.inputs.size()][0];
+			flatPixelY[i] = data.inputs[srcIdx % data.inputs.size()][1];
 		}
 		
-		gpuData->UploadData(flatInAct, flatInGradX, flatInGradY, flatTarAct, flatTarGradX, flatTarGradY);
+		gpuData->UploadData(flatInAct, flatInGradX, flatInGradY, flatTarAct, flatTarGradX, flatTarGradY, flatPixelX, flatPixelY);
 		std::cout << "GPU Dataset Uploaded.\n";
 	}
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 	
 	ImageWindow rendererWindow(int(data.width * config::output_image_scale), int(data.height * config::output_image_scale));
 
-	// Load Weights Checkpoint (Validates dimensions vs current layerDims automatically)
-	// TODO: REENABLE ONCE I FIXED THIS DAMMED BUG
-	if (!config::benchmark_enabled)
-	{
-		LoadCheckpoint(network, weightsFile);
-		// If we loaded CPU weights from disk, we need to push them into the GPU
-		if (config::use_gpu) { 
-			// TODO: maybe do this better
-			// We can simply destroy and recreate the gpuNet to pull the new weights
-			gpuNet = std::make_unique<GpuNetwork>(network, config::batch_size);
-		}
-	}
-	
 	// Display Interactive Controls
 	PrintControls();
 

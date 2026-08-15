@@ -110,6 +110,7 @@ namespace config
 	//TODO-Lkrikilion: make a command like param for this like --render-mode or smth
 	inline RenderMode render_mode = RenderMode::StandardRGB;
 
+	inline bool use_grid_encoding = true;
 	inline bool use_positional_encoding = false;
 	inline int pe_num_frequencies = 10; // Positional encode
 	inline bool use_gaussian_pe = false;
@@ -560,6 +561,10 @@ int main(int argc, char** argv)
 	// Forces cuBLAS to boot up immediately rather then upon first use
 	CudaManager::GetInstance(); 
 	cudaError_t initErr = cudaGetLastError();
+    if ( initErr != cudaSuccess ) {
+        printf( "\n[INIT ERROR] Cuda Init Error: %s\n", cudaGetErrorString( initErr ) );
+        __debugbreak();
+    }
 	
 	// Parse the command line arguments right at startup
 	if ( int ret = ParseCommandLine(argc, argv); ret != 1 )

@@ -5,6 +5,8 @@
 #include "AdamOptimizer.cuh"
 #include "BackwardPass.cuh"
 #include "ForwardPass.cuh"
+#include "GridEncoding.cuh"
+#include <random>
 
 // Main wrapper: Executes one full batch entirely on the GPU
 void GpuNetwork::TrainBatchGPU(
@@ -14,6 +16,8 @@ void GpuNetwork::TrainBatchGPU(
     const engineFloat* d_batchTargetAct,
     const engineFloat* d_batchTargetGradX,
     const engineFloat* d_batchTargetGradY,
+    const engineFloat* d_batchPixelXSrc,
+    const engineFloat* d_batchPixelYSrc,
     engineFloat spatialLossWeight,
     engineFloat learningRate)
 {
@@ -47,19 +51,40 @@ void GpuNetwork::TrainBatchGPU(
     // that we constantly override and its purpose is to be able to pass in the parameters trough a fixed memory location, which we need due to how cuda graphs work)
     GpuLayer& inputLayer = m_layers[0];
     size_t inBytes = m_batchSize * inputLayer.numNeurons * sizeof(engineFloat);
-    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_activations, d_batchInputAct, inBytes, cudaMemcpyDeviceToDevice, m_stream));
-    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActFreq, d_batchInputAct, inBytes, cudaMemcpyDeviceToDevice, m_stream));
-    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradX, d_batchInputGradX, inBytes, cudaMemcpyDeviceToDevice, m_stream));
-    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradY, d_batchInputGradY, inBytes, cudaMemcpyDeviceToDevice, m_stream));
-    if (inputLayer.hasDualWeights) {
-        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActScale, d_batchInputAct, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+    if (!m_useGridEncoding) {
+        // Static coordMapper-encoded input path
+        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_activations, d_batchInputAct, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActFreq, d_batchInputAct, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradX, d_batchInputGradX, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_gradY, d_batchInputGradY, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+        if (inputLayer.hasDualWeights) {
+            CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActScale, d_batchInputAct, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+        }
     }
+    // else: inputLayer.d_activations/d_gradX/d_gradY get written by
+    // RunGridEncodeForwardGPU at the top of ForwardPass() instead, every batch,
+    // inside the captured graph.
 
     // Stage the Target Data (We added soem new fixed Buffers as we dont have a layer 0 equevalent here)
     size_t outBytes = m_batchSize * m_layers.back().numNeurons * sizeof(engineFloat);
     CUDA_CHECK(cudaMemcpyAsync(d_fixedTargetAct, d_batchTargetAct, outBytes, cudaMemcpyDeviceToDevice, m_stream));
     CUDA_CHECK(cudaMemcpyAsync(d_fixedTargetGradX, d_batchTargetGradX, outBytes, cudaMemcpyDeviceToDevice, m_stream));
     CUDA_CHECK(cudaMemcpyAsync(d_fixedTargetGradY, d_batchTargetGradY, outBytes, cudaMemcpyDeviceToDevice, m_stream));
+
+    // Stage this batch's pixel coordinates for the grid encoder into its FIXED
+    // mailbox. Same reasoning as the input/target copies above: d_batchPixelXSrc
+    // is gpuData.d_pixelX + offset, a DIFFERENT pointer value every batch. If a
+    // captured graph node read that varying pointer directly, every replay after
+    // the first would silently keep re-reading whatever offset was current at
+    // capture time. Copying into a fixed address here (queued fresh on the stream
+    // every single call, same as the LR/input/target copies above) is what makes
+    // it safe for the graph-captured RunGridEncodeForwardGPU/BackwardGPU calls
+    // inside ForwardPass()/BackwardPass() to always see the current batch.
+    if (m_useGridEncoding) {
+        size_t pixelBytes = m_batchSize * sizeof(engineFloat);
+        CUDA_CHECK(cudaMemcpyAsync(m_gridEncoder.d_batchPixelX, d_batchPixelXSrc, pixelBytes, cudaMemcpyDeviceToDevice, m_stream));
+        CUDA_CHECK(cudaMemcpyAsync(m_gridEncoder.d_batchPixelY, d_batchPixelYSrc, pixelBytes, cudaMemcpyDeviceToDevice, m_stream));
+    }
     
     if (!m_graphCaptured)
     {
@@ -93,8 +118,8 @@ void GpuNetwork::TrainBatchGPU(
 }
 
 // Initialize cublas and mirror the CPU network structure to VRAM
-GpuNetwork::GpuNetwork(const Network& cpuNetwork, int batchSize)
-    : m_batchSize(batchSize)
+GpuNetwork::GpuNetwork(const Network& cpuNetwork, int batchSize, bool useGridEncoding)
+    : m_batchSize(batchSize), m_useGridEncoding(useGridEncoding)
 {
     // Initialize the cublas Hardware Context
     CUBLAS_CHECK(cublasCreate(&m_cublasHandle));
@@ -194,6 +219,20 @@ GpuNetwork::GpuNetwork(const Network& cpuNetwork, int batchSize)
     CUDA_CHECK(cudaMalloc(&d_fixedTargetAct, targetBytes));
     CUDA_CHECK(cudaMalloc(&d_fixedTargetGradX, targetBytes));
     CUDA_CHECK(cudaMalloc(&d_fixedTargetGradY, targetBytes));
+
+    if (m_useGridEncoding) {
+        AllocateGridEncoderMemory(m_batchSize);
+
+#ifndef _TRAINING
+        if (m_gridEncoder.totalOutputChannels != m_layers[0].numNeurons) {
+            std::cout << "[FATAL GPU ERROR] Grid encoder output channel mismatch!\n"
+                      << "Grid encoder produces: " << m_gridEncoder.totalOutputChannels
+                      << " channels, but CPU Layer 0 (InitialLayer) has: " << m_layers[0].numNeurons << " neurons.\n"
+                      << "Fix: size the CPU InitialLayer to GridEncoding::Config::NumLevels * FeaturesPerLevel.\n";
+            __debugbreak();
+        }
+#endif
+    }
 }
 
 // Clean up all VRAM to prevent memory leaks
@@ -202,6 +241,7 @@ GpuNetwork::~GpuNetwork()
     for (auto& layer : m_layers) {
         FreeLayerMemory(layer);
     }
+    if (m_useGridEncoding) FreeGridEncoderMemory();
     if (m_graphExec) cudaGraphExecDestroy(m_graphExec);
     if (m_graph) cudaGraphDestroy(m_graph);
     cudaStreamDestroy(m_stream);
@@ -381,6 +421,71 @@ void GpuNetwork::AllocateLayerMemory(GpuLayer& layer, int batchSize)
     CUDA_CHECK(cudaMalloc(&layer.d_errorGradY, batchNeuronBytes));
 }
 
+// Allocate the grid encoder's per-level buffers and initialize its parameters
+void GpuNetwork::AllocateGridEncoderMemory(int batchSize)
+{
+    PROFILE_SCOPE("AllocateGridEncoderMemory");
+    using namespace GridEncoding;
+
+    m_gridEncoder.numLevels = Config::NumLevels;
+    m_gridEncoder.featuresPerLevel = Config::FeaturesPerLevel;
+    m_gridEncoder.totalOutputChannels = Config::NumLevels * Config::FeaturesPerLevel;
+
+    // Work out each level's resolution + flat offset into the concatenated
+    // parameter buffer, once, on the host.
+    std::vector<int> levelResolutions(Config::NumLevels);
+    std::vector<int> levelParamOffsets(Config::NumLevels);
+    int runningOffset = 0;
+    for (int level = 0; level < Config::NumLevels; ++level) {
+        levelResolutions[level] = LevelResolution(level);
+        levelParamOffsets[level] = runningOffset;
+        runningOffset += LevelNumParams(level);
+    }
+    m_gridEncoder.totalParams = runningOffset;
+
+    CUDA_CHECK(cudaMalloc(&m_gridEncoder.d_levelResolutions, Config::NumLevels * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&m_gridEncoder.d_levelParamOffsets, Config::NumLevels * sizeof(int)));
+    CUDA_CHECK(cudaMemcpy(m_gridEncoder.d_levelResolutions, levelResolutions.data(), Config::NumLevels * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(m_gridEncoder.d_levelParamOffsets, levelParamOffsets.data(), Config::NumLevels * sizeof(int), cudaMemcpyHostToDevice));
+
+    const size_t paramBytes = m_gridEncoder.totalParams * sizeof(engineFloat);
+    CUDA_CHECK(cudaMalloc(&m_gridEncoder.d_params, paramBytes));
+    CUDA_CHECK(cudaMalloc(&m_gridEncoder.d_grad, paramBytes));
+    CUDA_CHECK(cudaMemset(m_gridEncoder.d_grad, 0, paramBytes)); // must start at 0, same reasoning as d_deltaWeights
+    CUDA_CHECK(cudaMalloc(&m_gridEncoder.d_m, paramBytes));
+    CUDA_CHECK(cudaMemset(m_gridEncoder.d_m, 0, paramBytes));
+    CUDA_CHECK(cudaMalloc(&m_gridEncoder.d_v, paramBytes));
+    CUDA_CHECK(cudaMemset(m_gridEncoder.d_v, 0, paramBytes));
+
+    // Small random init (Instant-NGP inits near 0 -- these features get refined
+    // fast, and starting large risks the first few batches producing noisy,
+    // high-magnitude activations into the MLP before anything has trained).
+    std::vector<engineFloat> hostInit(m_gridEncoder.totalParams);
+    std::mt19937 gen(1337);
+    std::uniform_real_distribution<engineFloat> dist(-1e-4f, 1e-4f);
+    for (auto& v : hostInit) v = dist(gen);
+    CUDA_CHECK(cudaMemcpy(m_gridEncoder.d_params, hostInit.data(), paramBytes, cudaMemcpyHostToDevice));
+
+    const size_t pixelBytes = batchSize * sizeof(engineFloat);
+    CUDA_CHECK(cudaMalloc(&m_gridEncoder.d_batchPixelX, pixelBytes));
+    CUDA_CHECK(cudaMalloc(&m_gridEncoder.d_batchPixelY, pixelBytes));
+}
+
+void GpuNetwork::FreeGridEncoderMemory()
+{
+    auto SafeFree = [](engineFloat*& ptr) { if (ptr) { cudaFree(ptr); ptr = nullptr; } };
+    auto SafeFreeInt = [](int*& ptr) { if (ptr) { cudaFree(ptr); ptr = nullptr; } };
+
+    SafeFreeInt(m_gridEncoder.d_levelResolutions);
+    SafeFreeInt(m_gridEncoder.d_levelParamOffsets);
+    SafeFree(m_gridEncoder.d_params);
+    SafeFree(m_gridEncoder.d_grad);
+    SafeFree(m_gridEncoder.d_m);
+    SafeFree(m_gridEncoder.d_v);
+    SafeFree(m_gridEncoder.d_batchPixelX);
+    SafeFree(m_gridEncoder.d_batchPixelY);
+}
+
 // Return memory to the GPU
 void GpuNetwork::FreeLayerMemory(GpuLayer& layer)
 {
@@ -453,6 +558,23 @@ void GpuNetwork::FreeLayerMemory(GpuLayer& layer)
 
 void GpuNetwork::ForwardPass()
 {
+    if (m_useGridEncoding) {
+        GpuLayer& inputLayer = m_layers[0];
+        PROFILE_PUSH_COLOR("GridEncodeForward", 0xFFFFE1BA);
+        RunGridEncodeForwardGPU(
+            m_stream, m_batchSize, m_gridEncoder.numLevels, m_gridEncoder.featuresPerLevel,
+            m_gridEncoder.d_levelResolutions, m_gridEncoder.d_levelParamOffsets,
+            m_gridEncoder.d_params,
+            m_gridEncoder.d_batchPixelX, m_gridEncoder.d_batchPixelY,
+            inputLayer.d_activations, inputLayer.d_gradX, inputLayer.d_gradY
+        );
+        // Layer 0 has no activation function (identity), so preActFreq == activations,
+        // same convention the old static-input path used.
+        size_t inBytes = m_batchSize * inputLayer.numNeurons * sizeof(engineFloat);
+        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActFreq, inputLayer.d_activations, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+        PROFILE_POP();
+    }
+
     // Layer 0 (Input Passthrough)
     //GpuLayer& inputLayer = m_layers[0];
     //size_t batchNeuronBytes = m_batchSize * inputLayer.numNeurons * sizeof(engineFloat);
@@ -533,6 +655,23 @@ void GpuNetwork::BackwardPass(
         );
         PROFILE_POP();
     }
+
+    // The loop above, at i=1, already computed prev = m_layers[0]'s
+    // d_colorError/d_errorGradX/d_errorGradY (zeroed then GEMM-accumulated into,
+    // same as every other layer -- layer 0 already has these buffers allocated).
+    // Scatter that error into the grid's parameter gradients.
+    if (m_useGridEncoding) {
+        GpuLayer& inputLayer = m_layers[0];
+        PROFILE_PUSH_COLOR("GridEncodeBackward", 0xFFFFE1BA);
+        RunGridEncodeBackwardGPU(
+            m_stream, m_batchSize, m_gridEncoder.numLevels, m_gridEncoder.featuresPerLevel,
+            m_gridEncoder.d_levelResolutions, m_gridEncoder.d_levelParamOffsets,
+            m_gridEncoder.d_grad,
+            m_gridEncoder.d_batchPixelX, m_gridEncoder.d_batchPixelY,
+            inputLayer.d_colorError, inputLayer.d_errorGradX, inputLayer.d_errorGradY
+        );
+        PROFILE_POP();
+    }
 }
 
 void GpuNetwork::ApplyGradientsGPU(engineFloat baseLearningRate)
@@ -573,6 +712,26 @@ void GpuNetwork::ApplyGradientsGPU(engineFloat baseLearningRate)
             RunAdamOptimizerGPU(m_stream, numBiases, layer.d_biasesScale, layer.d_deltaBiasesScale,
                                 layer.d_m_biasesScale, layer.d_v_biasesScale, d_learningRate, layer.learningRateMultiplier,
                                 layer.adam_t, m_batchSize);
+        }
+    }
+
+    if (m_useGridEncoding) {
+        // One time step for the whole encoder (not per-level -- all levels train
+        // together every batch, so they should share the same Adam bias-correction
+        // schedule). Each level gets its own RunAdamOptimizerGPU call over its own
+        // slice of the concatenated buffers, exactly like weights vs weightsScale
+        // above are two separate calls into the same conceptual "layer".
+        m_gridEncoder.adam_t += 1;
+        using namespace GridEncoding;
+        int offset = 0;
+        for (int level = 0; level < m_gridEncoder.numLevels; ++level) {
+            int numParams = LevelNumParams(level);
+            RunAdamOptimizerGPU(m_stream, numParams,
+                                m_gridEncoder.d_params + offset, m_gridEncoder.d_grad + offset,
+                                m_gridEncoder.d_m + offset, m_gridEncoder.d_v + offset,
+                                d_learningRate, m_gridEncoder.learningRateMultiplier,
+                                m_gridEncoder.adam_t, m_batchSize);
+            offset += numParams;
         }
     }
 }
