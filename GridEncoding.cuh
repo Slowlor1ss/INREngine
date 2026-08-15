@@ -86,8 +86,13 @@ namespace GridEncoding
         engineFloat x, engineFloat y, int resolution,
         int& x0, int& y0, int& x1, int& y1, engineFloat& tx, engineFloat& ty)
     {
-        engineFloat cx = x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x);
-        engineFloat cy = y < 0.0f ? 0.0f : (y > 1.0f ? 1.0f : y);
+        // Map from [-1.0, 1.0] to [0.0, 1.0]
+        engineFloat nx = (x + 1.0f) * 0.5f;
+        engineFloat ny = (y + 1.0f) * 0.5f;
+
+        engineFloat cx = nx < 0.0f ? 0.0f : (nx > 1.0f ? 1.0f : nx);
+        engineFloat cy = ny < 0.0f ? 0.0f : (ny > 1.0f ? 1.0f : ny);
+        
         engineFloat gx = cx * static_cast<engineFloat>(resolution - 1);
         engineFloat gy = cy * static_cast<engineFloat>(resolution - 1);
 
@@ -125,7 +130,8 @@ namespace GridEncoding
         const engineFloat w11 = tx * ty;
 
         // Chain rule through gx = x*(resolution-1) folds into this scale factor.
-        const engineFloat scale = static_cast<engineFloat>(resolution - 1);
+        // Because we mapped [-1, 1] to [0, 1], du/dx = 0.5.
+        const engineFloat scale = static_cast<engineFloat>(resolution - 1) * 0.5f;
 
         for (int f = 0; f < numFeatures; ++f)
         {
@@ -164,7 +170,8 @@ namespace GridEncoding
         const engineFloat w10 = tx * (1.0f - ty);
         const engineFloat w01 = (1.0f - tx) * ty;
         const engineFloat w11 = tx * ty;
-        const engineFloat scale = static_cast<engineFloat>(resolution - 1);
+        // Chain rule scaling must match the forward pass so * 0.5
+        const engineFloat scale = static_cast<engineFloat>(resolution - 1) * 0.5f;
 
         for (int f = 0; f < numFeatures; ++f)
         {

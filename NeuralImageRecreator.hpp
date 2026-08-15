@@ -127,11 +127,11 @@ static engineFloat RunGPUTrainingEpoch(
     }
 	
     // Download parameters to CPU so the Visualizer and Checkpointing work!
-    gpuNet.DownloadParametersToCPU(cpuNetwork);
+    //gpuNet.DownloadParametersToCPU(cpuNetwork);
     
     // Quickly run a single batch on the CPU ThreadPool just to calculate the Cost/PSNR metrics for the console
-    engineFloat cost = threadPool.RunBatch(activeInputs, activeTargets, currentImageIdx, batchSize) / static_cast<engineFloat>(batchSize);
-    return cost;
+    //engineFloat cost = threadPool.RunBatch(activeInputs, activeTargets, currentImageIdx, batchSize) / static_cast<engineFloat>(batchSize);
+    return 0.0f;
 }
 
 void NeuralImageRecreator()
@@ -209,6 +209,11 @@ void NeuralImageRecreator()
 	// Create new vectors to hold the randomized data
 	std::vector<ImageUtils::SpatialData> shuffledInputs(inputSpatialData.size());
 	std::vector<ImageUtils::SpatialData> shuffledTargets(targetSpatialData.size());
+	
+	// NEW: We need arrays to hold the correctly ordered raw coordinates for the Grid Encoder!
+	std::vector<engineFloat> activePixelX(inputSpatialData.size());
+	std::vector<engineFloat> activePixelY(inputSpatialData.size());
+
 	if( config::shuffle_pixel_batch )
 	{
 		std::cout << "Shuffling dataset for random pixel batching...\n";
@@ -221,10 +226,19 @@ void NeuralImageRecreator()
 		std::mt19937 g(42); // Fixed seed for consistency
 		std::shuffle(indices.begin(), indices.end(), g);
 
-
 		for(size_t i = 0; i < indices.size(); ++i) {
 		    shuffledInputs[i] = inputSpatialData[indices[i]];
 		    shuffledTargets[i] = targetSpatialData[indices[i]];
+		    // Map the raw coordinates alongside the shuffled targets!
+		    activePixelX[i] = data.inputs[indices[i]][0];
+		    activePixelY[i] = data.inputs[indices[i]][1];
+		}
+	}
+	else 
+	{
+		for(size_t i = 0; i < inputSpatialData.size(); ++i) {
+			activePixelX[i] = data.inputs[i][0];
+			activePixelY[i] = data.inputs[i][1];
 		}
 	}
 	///
@@ -295,6 +309,16 @@ void NeuralImageRecreator()
 	// Calculate Padded Dataset Size (must be a multiple of batch_size)
 	const size_t numBatches = (totalPixels + config::batch_size - 1) / config::batch_size;
 	const size_t paddedPixels = numBatches * config::batch_size;
+
+	// For gpu rendering
+	int renderWidth = int(data.width * config::output_image_scale);
+	int renderHeight = int(data.height * config::output_image_scale);
+	int totalRenderPixels = renderWidth * renderHeight;
+
+	engineFloat* d_renderPixelX = nullptr;
+	engineFloat* d_renderPixelY = nullptr;
+	engineFloat* d_renderInputs = nullptr; // Added for standard PE fallback
+	engineFloat* d_renderColors = nullptr;
 	
 	if (config::use_gpu)
 	{
@@ -327,12 +351,61 @@ void NeuralImageRecreator()
 				flatTarGradX[i * tarChan + c] = activeTargets[srcIdx].gradX[c];
 				flatTarGradY[i * tarChan + c] = activeTargets[srcIdx].gradY[c];
 			}
-			flatPixelX[i] = data.inputs[srcIdx % data.inputs.size()][0];
-			flatPixelY[i] = data.inputs[srcIdx % data.inputs.size()][1];
+			flatPixelX[i] = activePixelX[srcIdx]; // Now correctly matches the shuffled target colors!
+			flatPixelY[i] = activePixelY[srcIdx];
 		}
 		
 		gpuData->UploadData(flatInAct, flatInGradX, flatInGradY, flatTarAct, flatTarGradX, flatTarGradY, flatPixelX, flatPixelY);
 		std::cout << "GPU Dataset Uploaded.\n";
+
+		// GPU render setup
+		CUDA_CHECK(cudaMalloc(&d_renderColors, totalRenderPixels * tarChan * sizeof(engineFloat)));
+
+		if (config::use_grid_encoding)
+		{
+			CUDA_CHECK(cudaMalloc(&d_renderPixelX, totalRenderPixels * sizeof(engineFloat)));
+			CUDA_CHECK(cudaMalloc(&d_renderPixelY, totalRenderPixels * sizeof(engineFloat)));
+
+			std::vector<engineFloat> h_renderPixelX(totalRenderPixels);
+			std::vector<engineFloat> h_renderPixelY(totalRenderPixels);
+
+			for (int y = 0; y < renderHeight; ++y)
+			{
+				for (int x = 0; x < renderWidth; ++x)
+				{
+					int idx = y * renderWidth + x;
+					// Pass [-1.0, 1.0] so FindCell's (x + 1.0f) * 0.5f maps correctly to [0.0, 1.0]
+					h_renderPixelX[idx] = (static_cast<engineFloat>(x) / static_cast<engineFloat>(renderWidth)) * 2.0f - 1.0f;
+					h_renderPixelY[idx] = (static_cast<engineFloat>(y) / static_cast<engineFloat>(renderHeight)) * 2.0f - 1.0f;
+				}
+			}
+			
+			CUDA_CHECK(cudaMemcpy(d_renderPixelX, h_renderPixelX.data(), totalRenderPixels * sizeof(engineFloat), cudaMemcpyHostToDevice));
+			CUDA_CHECK(cudaMemcpy(d_renderPixelY, h_renderPixelY.data(), totalRenderPixels * sizeof(engineFloat), cudaMemcpyHostToDevice));
+		}
+		else
+		{
+			// Fallback buffer so standard Positional Encoding doesn't crash the GPU
+			CUDA_CHECK(cudaMalloc(&d_renderInputs, totalRenderPixels * inChan * sizeof(engineFloat)));
+			std::vector<engineFloat> h_renderInputs(totalRenderPixels * inChan);
+
+			for (int y = 0; y < renderHeight; ++y)
+			{
+				for (int x = 0; x < renderWidth; ++x)
+				{
+					int pixelIdx = (y * renderWidth + x) * inChan;
+					engineFloat normX = (static_cast<engineFloat>(x) / static_cast<engineFloat>(renderWidth)) * 2.0f - 1.0f;
+					engineFloat normY = (static_cast<engineFloat>(y) / static_cast<engineFloat>(renderHeight)) * 2.0f - 1.0f;
+					
+					ImageUtils::SpatialData encoded = coordMapper(normX, normY);
+					for (size_t c = 0; c < encoded.values.size(); ++c) {
+						h_renderInputs[pixelIdx + c] = encoded.values[c];
+					}
+				}
+			}
+			CUDA_CHECK(cudaMemcpy(d_renderInputs, h_renderInputs.data(), h_renderInputs.size() * sizeof(engineFloat), cudaMemcpyHostToDevice));
+		}
+		std::cout << "Finished GPU Render setup.\n";
 	}
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 	
@@ -352,7 +425,7 @@ void NeuralImageRecreator()
 		rendererWindow.ProcessMessages();
 
 		// Handle non-blocking user input
-		if (!HandleUserAction(PollUserAction(), network, data, weightsFile, liveUpdateWindow, coordMapper, threadPool))
+		if (!HandleUserAction(PollUserAction(), network, *gpuNet, data, weightsFile, liveUpdateWindow, coordMapper, threadPool))
 		{
 			break;
 		}
@@ -403,40 +476,66 @@ void NeuralImageRecreator()
 		}
 		
 		// Live viewer update
-		if (liveUpdateWindow)
-		{
-			auto rgbImage = GenerateReconstructedImage(network, int(data.width * config::output_image_scale), int(data.height * config::output_image_scale), coordMapper, config::render_mode, threadPool);
-			rendererWindow.Update(rgbImage);
-			// Note: SSIM requires the generated image and target image to be the exact same size.
-			// We only calculate this if the scale is 1.0 and we are rendering standard RGB.
-			if (config::output_image_scale == 1.0f && config::render_mode == RenderMode::StandardRGB)
-			{
-				ImageUtils::ImageMetrics metrics = ImageUtils::CalculateFullImageMetrics(rgbImage, flatTargetImage);
-				
-				std::cout << "COST: " << cost 
-				          << " LR: " << learningRate 
-				          << " | G_SSIM: " << metrics.ssim 
-				          << " MAE: " << metrics.mae 
-				          << " PSNR(dB): " << metrics.psnr << '\n';
-			}
-			else // TODO: fix for scaled images ALSO JUST CLEAN UP ALL THIS CODE THIS IS A MESS HOLY HELL
-			{
-				// Fallback if scaled or looking at spatial gradients
-				std::cout << "COST: " << cost 
-				          << " LR: " << learningRate 
-				          << " PSNR(dB): " << currentPSNR << " (Scale != 1.0)\n";
-			}
-		}
-		else
-		{
-			// Report progress
-			std::cout << "COST: " << cost << " LR: " << learningRate << " PSNR(dB): " << currentPSNR << '\n';
-		}
-		if (config::benchmark_enabled && currentEpoch >= maxEpochs)
-		{
-			std::cout << "Max epochs reached! Auto-quitting for benchmark pipeline...\n";
-			break;
-		}
+	    if (liveUpdateWindow)
+	    {
+	        std::vector<engineFloat> rgbImage;
+
+	        if (config::use_gpu) 
+	        {
+	            // Run inference completely on the GPU using the chunked PredictGPU
+	            gpuNet->PredictGPU(d_renderPixelX, d_renderPixelY, nullptr, d_renderColors, totalRenderPixels);
+	        
+	            // Download ONLY the final image colors
+	            std::vector<engineFloat> h_colors(totalRenderPixels * tarChan);
+	            CUDA_CHECK(cudaMemcpy(h_colors.data(), d_renderColors, h_colors.size() * sizeof(engineFloat), cudaMemcpyDeviceToHost));
+
+	            if (tarChan == 3)
+	            {
+	                rgbImage = h_colors;
+	                rendererWindow.Update(rgbImage); 
+	            }
+	            else if (tarChan == 1)
+	            {
+	                rgbImage.resize(totalRenderPixels * 3);
+	                for (int i = 0; i < totalRenderPixels; ++i) {
+	                    rgbImage[i * 3 + 0] = h_colors[i];
+	                    rgbImage[i * 3 + 1] = h_colors[i];
+	                    rgbImage[i * 3 + 2] = h_colors[i];
+	                }
+	                rendererWindow.Update(rgbImage);
+	            }
+	        }
+	        else 
+	        {
+	            // Fallback if scaled or looking at spatial gradients
+	            rgbImage = GenerateReconstructedImage(network, int(data.width * config::output_image_scale), int(data.height * config::output_image_scale), coordMapper, config::render_mode, threadPool);
+	            rendererWindow.Update(rgbImage);
+	        }
+
+	        // Note: SSIM requires the generated image and target image to be the exact same size.
+	        // We only calculate this if the scale is 1.0 and we are rendering standard RGB.
+	        if (config::output_image_scale == 1.0f && config::render_mode == RenderMode::StandardRGB)
+	        {
+	            ImageUtils::ImageMetrics metrics = ImageUtils::CalculateFullImageMetrics(rgbImage, flatTargetImage);
+	                
+	            std::cout    << "COST: " << cost 
+	                        << " LR: " << learningRate 
+	                        << " | G_SSIM: " << metrics.ssim 
+	                        << " MAE: " << metrics.mae 
+	                        << " PSNR(dB): " << metrics.psnr << '\n';
+	        }
+	        else
+	        {
+	            // Report progress
+	            std::cout << "COST: " << cost << " LR: " << learningRate << " PSNR(dB): " << currentPSNR << '\n';
+	        }
+
+	        if (config::benchmark_enabled && currentEpoch >= maxEpochs)
+	        {
+	            std::cout << "Max epochs reached! Auto-quitting for benchmark pipeline...\n";
+	            break;
+	        }
+	    }
 	}
 
 	// Final Output Generation & Cleanup
@@ -459,12 +558,12 @@ void NeuralImageRecreator()
 		std::filesystem::path basePath(config::output_path);
 		auto benchFolder = basePath / ("benchmark_" + stem);
 		const std::string benchWeightsFile = GetCheckpointFilename(config::output_filename, benchFolder.string());
-		SaveCheckpoint(network, benchWeightsFile);
+		SaveCheckpoint(network, *gpuNet, benchWeightsFile);
 		std::cout << "Final " << benchWeightsFile << " saved.\n";
 	}
 	else
 	{
-		SaveCheckpoint(network, weightsFile);
+		SaveCheckpoint(network, *gpuNet, weightsFile);
 		std::cout << "Final " << weightsFile << " saved.\n";
 	}
 }

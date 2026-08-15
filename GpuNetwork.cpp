@@ -274,58 +274,32 @@ void GpuNetwork::DownloadParametersToCPU(Network& cpuNetwork)
 }
 
 // Forward pass returning predicted colors to the CPU for rendering
-// std::vector<engineFloat> GpuNetwork::PredictGPU(
-//     const engineFloat* d_inputAct, 
-//     const engineFloat* d_inputGradX, 
-//     const engineFloat* d_inputGradY)
-// {
-//     PROFILE_SCOPE("PredictGPU");
-//     // Run the forward pass on the GPU
-//     ForwardPass(d_inputAct, d_inputGradX, d_inputGradY);
-//
-//     // Grab the final layer
-//     GpuLayer& outputLayer = m_layers.back();
-//     size_t outputBytes = m_batchSize * outputLayer.numNeurons * sizeof(engineFloat);
-//
-//     // TODO: probably not needed as cudaMemcpy blocks
-//     //CUDA_CHECK(cudaDeviceSynchronize());
-// #ifndef _TRAINING
-// 	cudaError_t launchErr = cudaPeekAtLastError();
-// 	if ( launchErr != cudaSuccess ) {
-// 		printf( "\n[cudaPeekAtLastError] PredictGPU failed: %s\n", cudaGetErrorString( launchErr ) );
-// 		__debugbreak();
-// 	}
-// #endif
-//
-//     // Allocate a CPU vector and copy the results back
-//     std::vector<engineFloat> predictions(m_batchSize * outputLayer.numNeurons);
-//     CUDA_CHECK(cudaMemcpy(predictions.data(), outputLayer.d_activations, outputBytes, cudaMemcpyDeviceToHost));
-//     
-//     return predictions;
-// }
-
-void GpuNetwork::PredictGPU(const engineFloat* d_predictInputs, engineFloat* d_predictOutputs, int numPixels)
+void GpuNetwork::PredictGPU(const engineFloat* d_predictPixelX, const engineFloat* d_predictPixelY, const engineFloat* d_standardInputs, engineFloat* d_predictOutputs, int totalPixels)
 {
-    // 1. Manually copy the prediction coordinates into Layer 0's mailbox
     GpuLayer& inputLayer = m_layers[0];
-    size_t inBytes = numPixels * inputLayer.numNeurons * sizeof(engineFloat);
-    
-    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_activations, d_predictInputs, inBytes, cudaMemcpyDeviceToDevice, m_stream));
-    CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActFreq, d_predictInputs, inBytes, cudaMemcpyDeviceToDevice, m_stream));
-    if (inputLayer.hasDualWeights) {
-        CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActScale, d_predictInputs, inBytes, cudaMemcpyDeviceToDevice, m_stream));
-    }
-
-    // 2. Run the normal ForwardPass! 
-    // (Since we aren't capturing a graph right now, this just runs standard kernels on the stream)
-    ForwardPass();
-
-    // 3. Copy the results out of the final layer
     GpuLayer& outputLayer = m_layers.back();
-    size_t outBytes = numPixels * outputLayer.numNeurons * sizeof(engineFloat);
-    CUDA_CHECK(cudaMemcpyAsync(d_predictOutputs, outputLayer.d_activations, outBytes, cudaMemcpyDeviceToDevice, m_stream));
-    
-    // Make sure to sync if your CPU needs the image immediately to draw to the screen
+
+    for (int offset = 0; offset < totalPixels; offset += m_batchSize)
+    {
+        int currentChunk = std::min((int)m_batchSize, totalPixels - offset);
+        
+        if (m_useGridEncoding) {
+            size_t pixelBytes = currentChunk * sizeof(engineFloat);
+            CUDA_CHECK(cudaMemcpyAsync(m_gridEncoder.d_batchPixelX, d_predictPixelX + offset, pixelBytes, cudaMemcpyDeviceToDevice, m_stream));
+            CUDA_CHECK(cudaMemcpyAsync(m_gridEncoder.d_batchPixelY, d_predictPixelY + offset, pixelBytes, cudaMemcpyDeviceToDevice, m_stream));
+        } else {
+            int inPointerOffset = offset * inputLayer.numNeurons;
+            size_t inBytes = currentChunk * inputLayer.numNeurons * sizeof(engineFloat);
+            CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_activations, d_standardInputs + inPointerOffset, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+            CUDA_CHECK(cudaMemcpyAsync(inputLayer.d_preActFreq, d_standardInputs + inPointerOffset, inBytes, cudaMemcpyDeviceToDevice, m_stream));
+        }
+
+        ForwardPass();
+
+        int outPointerOffset = offset * outputLayer.numNeurons;
+        size_t outBytes = currentChunk * outputLayer.numNeurons * sizeof(engineFloat);
+        CUDA_CHECK(cudaMemcpyAsync(d_predictOutputs + outPointerOffset, outputLayer.d_activations, outBytes, cudaMemcpyDeviceToDevice, m_stream));
+    }
     CUDA_CHECK(cudaStreamSynchronize(m_stream));
 }
 

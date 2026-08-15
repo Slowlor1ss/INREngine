@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "CudaManager.cuh"
+#include "GpuNetwork.h"
 
 namespace fs = std::filesystem;
 
@@ -102,8 +103,8 @@ namespace config
 	inline engineFloat output_image_scale = 1.f;
 	inline std::vector<size_t> custom_layer_dims = { 128, 128, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
-		ActFunc::DataBase::FindActFunc<ActFunc::WireHybrid>(),
-		ActFunc::DataBase::FindActFunc<ActFunc::WireHybrid>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::LeakyReLU>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::None>()
 	};
 
@@ -400,7 +401,7 @@ static std::vector<engineFloat> PositionalEncode(engineFloat x, engineFloat y, i
 }
 	
 // Generates a checkpoint filename based on the input image filename.
-// Example: "Sarah.bmp" -> "weights_biases_Sarah.csv"
+// Example: "Image.bmp" -> "weights_biases_Sarah.csv"
 static std::string GetCheckpointFilename(const std::string& imageFilename, const std::string& outbasePath = "")
 {
 	namespace fs = std::filesystem;
@@ -431,8 +432,12 @@ static void LoadCheckpoint(Network& network, const std::string& filename)
 	}
 }
 
-static void SaveCheckpoint(Network& network, const std::string& filename)
+static void SaveCheckpoint(Network& network, GpuNetwork& gpuNet, const std::string& filename)
 {
+	if (config::use_gpu) {
+		gpuNet.DownloadParametersToCPU(network);
+	}
+
 	std::ofstream outFile{ filename };
 	if (outFile.is_open())
 	{
@@ -474,7 +479,7 @@ static UserAction PollUserAction()
 }
 
 // Handles user actions outside the main training loop; returns false to break loop.
-static bool HandleUserAction(const UserAction action, Network& network, const BMPParsedData& data,
+static bool HandleUserAction(const UserAction action, Network& network, GpuNetwork& gpuNet, const BMPParsedData& data,
                              const std::string& weightsFile, bool& liveUpdateWindow,
                              const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& mapper,
                              TrainingThreadPool& threadPool)
@@ -486,16 +491,105 @@ static bool HandleUserAction(const UserAction action, Network& network, const BM
 			return false;
 		
 		case UserAction::SaveWeights:
-			SaveCheckpoint(network, weightsFile);
+			SaveCheckpoint(network, gpuNet, weightsFile);
 			break;
 		
 		case UserAction::ExportImage:
-		{
-			const std::vector<engineFloat> reconstructedImage = GenerateReconstructedImage(network, int(data.width * config::output_image_scale), int(data.height * config::output_image_scale), mapper, config::render_mode, threadPool);
-			saveBMP("network_output.bmp", int(data.width*config::output_image_scale), int(data.height*config::output_image_scale), reconstructedImage);
-			std::cout << "Successfully saved network_output.bmp!\n";
-			break;
-		}
+        {
+            int renderWidth = int(data.width * config::output_image_scale);
+            int renderHeight = int(data.height * config::output_image_scale);
+            int totalRenderPixels = renderWidth * renderHeight;
+            std::vector<engineFloat> reconstructedImage;
+
+            if (config::use_gpu)
+            {
+                int outChannels = network.GetLayers().back()->GetNumNeurons();
+                
+                engineFloat* d_exportPixelX = nullptr;
+                engineFloat* d_exportPixelY = nullptr;
+                engineFloat* d_exportInputs = nullptr;
+                engineFloat* d_exportColors = nullptr;
+                
+                CUDA_CHECK(cudaMalloc(&d_exportColors, totalRenderPixels * outChannels * sizeof(engineFloat)));
+
+                if (config::use_grid_encoding)
+                {
+                    CUDA_CHECK(cudaMalloc(&d_exportPixelX, totalRenderPixels * sizeof(engineFloat)));
+                    CUDA_CHECK(cudaMalloc(&d_exportPixelY, totalRenderPixels * sizeof(engineFloat)));
+
+                    std::vector<engineFloat> h_exportPixelX(totalRenderPixels);
+                    std::vector<engineFloat> h_exportPixelY(totalRenderPixels);
+
+					for (int y = 0; y < renderHeight; ++y)
+                    {
+                        for (int x = 0; x < renderWidth; ++x)
+                        {
+                            int idx = y * renderWidth + x;
+                            // Match the [-1.0, 1.0] domain so FindCell maps 0.0 to 1.0 across the full grid
+                            h_exportPixelX[idx] = (static_cast<engineFloat>(x) / static_cast<engineFloat>(renderWidth)) * 2.0f - 1.0f;
+                            h_exportPixelY[idx] = (static_cast<engineFloat>(y) / static_cast<engineFloat>(renderHeight)) * 2.0f - 1.0f;
+                        }
+                    }
+                    
+                    CUDA_CHECK(cudaMemcpy(d_exportPixelX, h_exportPixelX.data(), totalRenderPixels * sizeof(engineFloat), cudaMemcpyHostToDevice));
+                    CUDA_CHECK(cudaMemcpy(d_exportPixelY, h_exportPixelY.data(), totalRenderPixels * sizeof(engineFloat), cudaMemcpyHostToDevice));
+                }
+                else
+                {
+                    int inChannels = network.GetLayers().front()->GetNumNeurons();
+                    CUDA_CHECK(cudaMalloc(&d_exportInputs, totalRenderPixels * inChannels * sizeof(engineFloat)));
+                    std::vector<engineFloat> h_exportInputs(totalRenderPixels * inChannels);
+
+                    for (int y = 0; y < renderHeight; ++y)
+                    {
+                        for (int x = 0; x < renderWidth; ++x)
+                        {
+                            int pixelIdx = (y * renderWidth + x) * inChannels;
+                            engineFloat normX = (static_cast<engineFloat>(x) / static_cast<engineFloat>(renderWidth)) * 2.0f - 1.0f;
+                            engineFloat normY = (static_cast<engineFloat>(y) / static_cast<engineFloat>(renderHeight)) * 2.0f - 1.0f;
+                            
+                            ImageUtils::SpatialData encoded = mapper(normX, normY);
+                            for (size_t c = 0; c < encoded.values.size(); ++c) {
+                                h_exportInputs[pixelIdx + c] = encoded.values[c];
+                            }
+                        }
+                    }
+                    CUDA_CHECK(cudaMemcpy(d_exportInputs, h_exportInputs.data(), h_exportInputs.size() * sizeof(engineFloat), cudaMemcpyHostToDevice));
+                }
+
+                gpuNet.PredictGPU(d_exportPixelX, d_exportPixelY, d_exportInputs, d_exportColors, totalRenderPixels);
+
+                std::vector<engineFloat> h_colors(totalRenderPixels * outChannels);
+                CUDA_CHECK(cudaMemcpy(h_colors.data(), d_exportColors, h_colors.size() * sizeof(engineFloat), cudaMemcpyDeviceToHost));
+
+                if (outChannels == 3)
+                {
+                    reconstructedImage = h_colors;
+                }
+                else if (outChannels == 1)
+                {
+                    reconstructedImage.resize(totalRenderPixels * 3);
+                    for (int i = 0; i < totalRenderPixels; ++i) {
+                        reconstructedImage[i * 3 + 0] = h_colors[i];
+                        reconstructedImage[i * 3 + 1] = h_colors[i];
+                        reconstructedImage[i * 3 + 2] = h_colors[i];
+                    }
+                }
+
+                if (d_exportPixelX) cudaFree(d_exportPixelX);
+                if (d_exportPixelY) cudaFree(d_exportPixelY);
+                if (d_exportInputs) cudaFree(d_exportInputs);
+                if (d_exportColors) cudaFree(d_exportColors);
+            }
+            else
+            {
+                reconstructedImage = GenerateReconstructedImage(network, renderWidth, renderHeight, mapper, config::render_mode, threadPool);
+            }
+
+            saveBMP("network_output.bmp", renderWidth, renderHeight, reconstructedImage);
+            std::cout << "Successfully saved network_output.bmp!\n";
+            break;
+        }
 		
 		case UserAction::ToggleViewer:
 			liveUpdateWindow = !liveUpdateWindow;

@@ -131,7 +131,7 @@ public:
     // std::vector<engineFloat> PredictGPU(const engineFloat* d_inputAct, const engineFloat* d_inputGradX,
     //                                     const engineFloat* d_inputGradY);
     
-    void PredictGPU(const engineFloat* d_predictInputs, engineFloat* d_predictOutputs, int numPixels);
+    void PredictGPU(const engineFloat* d_predictPixelX, const engineFloat* d_predictPixelY, const engineFloat* d_standardInputs, engineFloat* d_predictOutputs, int totalPixels);
     
 public:
     // Pre-allocate required VRAM
