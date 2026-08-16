@@ -1,0 +1,18 @@
+fix cost and gradient visualizer in gpu implementation
+
+Clean up code
+
+Implement a png parser
+
+make out code generate a HD5 file with all usefull infromation and a new python script runs our code with various setting and all Div2K images and then reads that HD5 file and generates graphs etc. for writing up a github page
+
+Update the live viewer so we can render at full scale and then at a fixed window size, also make it so we can do a side by side comparison and diff view like in beyond compare with a tolerance and possibly a zoom using mouse? Maybe integrate python for live viewing?
+
+
+-- MRI STUFF --
+
+make MRI visualizer c++
+
+Get MRI dataset
+
+make mri python file for editing reading etc
