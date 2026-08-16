@@ -10,11 +10,12 @@
 #include "GpuNetwork.h"
 #include "GridEncoding.cuh"
 
+// BAD do not use anymore
 // Assuming 'mse' is your mean squared error for the current batch
-inline engineFloat CalculatePSNR(engineFloat mse) {
-	if (mse <= 0.0000001f) return 100.0f; // Prevent divide by zero (perfect image)
-	return -10.0f * std::log10(mse);
-}
+//inline engineFloat CalculatePSNR(engineFloat mse) {
+//	if (mse <= 0.0000001f) return 100.0f; // Prevent divide by zero (perfect image)
+//	return -10.0f * std::log10(mse);
+//}
 
 inline void LogTrainingMetrics(const std::string& csvFilepath, size_t batch, engineFloat cost, engineFloat psnr) 
 {
@@ -91,9 +92,9 @@ static engineFloat RunGPUTrainingEpoch(
     const std::vector<ImageUtils::SpatialData>& activeInputs,
     const std::vector<ImageUtils::SpatialData>& activeTargets)
 {
-	// TODO: I suspect we have some issue with spatialLossWeight as it seems to focus too much on edges and the colours get too worng so its pretty useless right nwo it seems
+	// When randering at same resolution 0 (disabled) seems to work best, but when upscaling this can help with noise reduction
     // A hyperparameter to balance how much the network cares about slopes vs colors.
-    constexpr engineFloat spatialLossWeight = 0.00f; // Adjust this if you want spatial gradients enabled
+    constexpr engineFloat spatialLossWeight = 0.001f; // Adjust this if you want spatial gradients enabled
 	
     for (size_t j = 0; j < printEveryNBatches; j++)
     {
@@ -449,30 +450,32 @@ void NeuralImageRecreator()
 		}
 
 		// TODO: update to use our new full image metrics
-		engineFloat currentPSNR = CalculatePSNR(cost);
+		//engineFloat currentPSNR = CalculatePSNR(cost);
 		
 		if (config::benchmark_enabled)
 		{
-			// Ensure the output directories exist
-			std::string stem = fs::path(config::output_filename).stem().string();
-			std::filesystem::path basePath(config::output_path);
-			auto benchFolder = basePath / ("benchmark_" + stem);
-			std::filesystem::create_directories(benchFolder);
-			std::filesystem::create_directories(benchFolder / "rgb");
-			std::filesystem::create_directories(benchFolder / "grad");
+			// TODO: update to use our new full image metrics
+			throw;
+			//// Ensure the output directories exist
+			//std::string stem = fs::path(config::output_filename).stem().string();
+			//std::filesystem::path basePath(config::output_path);
+			//auto benchFolder = basePath / ("benchmark_" + stem);
+			//std::filesystem::create_directories(benchFolder);
+			//std::filesystem::create_directories(benchFolder / "rgb");
+			//std::filesystem::create_directories(benchFolder / "grad");
 
-			// Log Metrics to CSV
-			std::string csvPath = (benchFolder / "metrics.csv").string();
-			LogTrainingMetrics(csvPath, currentEpoch, cost, currentPSNR);
+			//// Log Metrics to CSV
+			//std::string csvPath = (benchFolder / "metrics.csv").string();
+			//LogTrainingMetrics(csvPath, currentEpoch, cost, currentPSNR);
 
-			// Save Image Frames
-			auto rgbImage = GenerateReconstructedImage(network, data.width*config::output_image_scale, data.height*config::output_image_scale, coordMapper, RenderMode::StandardRGB, threadPool);
-			std::string rgbPath = std::format("{}/rgb/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
-			saveBMP(rgbPath, data.width*config::output_image_scale, data.height*config::output_image_scale, rgbImage);
+			//// Save Image Frames
+			//auto rgbImage = GenerateReconstructedImage(network, data.width*config::output_image_scale, data.height*config::output_image_scale, coordMapper, RenderMode::StandardRGB, threadPool);
+			//std::string rgbPath = std::format("{}/rgb/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
+			//saveBMP(rgbPath, data.width*config::output_image_scale, data.height*config::output_image_scale, rgbImage);
 
-			auto gradImage = GenerateReconstructedImage(network, data.width*config::output_image_scale, data.height*config::output_image_scale, coordMapper, RenderMode::SpatialGradient, threadPool);
-			std::string gradPath = std::format("{}/grad/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
-			saveBMP(gradPath, data.width*config::output_image_scale, data.height*config::output_image_scale, gradImage);
+			//auto gradImage = GenerateReconstructedImage(network, data.width*config::output_image_scale, data.height*config::output_image_scale, coordMapper, RenderMode::SpatialGradient, threadPool);
+			//std::string gradPath = std::format("{}/grad/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
+			//saveBMP(gradPath, data.width*config::output_image_scale, data.height*config::output_image_scale, gradImage);
 		}
 		
 		// Live viewer update
@@ -527,7 +530,7 @@ void NeuralImageRecreator()
 	        else
 	        {
 	            // Report progress
-	            std::cout << "COST: " << cost << " LR: " << learningRate << " PSNR(dB): " << currentPSNR << '\n';
+	            std::cout << "COST: " << cost << " LR: " << learningRate << " PSNR(dB): " << '\n';// << currentPSNR << '\n';
 	        }
 
 	        if (config::benchmark_enabled && currentEpoch >= maxEpochs)
