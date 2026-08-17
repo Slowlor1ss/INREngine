@@ -5,6 +5,11 @@
 
 enum class GpuCostType;
 
+engineFloat CalculateBatchCostGPU(
+    int batchSize, int numNeurons,
+    const engineFloat* d_outputAct, const engineFloat* d_targetAct,
+    engineFloat* d_outCost, GpuCostType costType);
+
 // Calculate the starting errors at the output layer
 void CalculateOutputErrorGPU(
     cudaStream_t stream,

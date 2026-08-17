@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -12,7 +14,7 @@ struct Image {
     std::vector<float> data; // Stores RGB pixels as floats from 0.0 to 1.0
 };
 
-Image loadBMP(const std::string& filename) {
+inline Image loadBMP(const std::string& filename) {
     Image img;
     std::ifstream file(filename, std::ios::binary);
 
@@ -90,7 +92,7 @@ struct BMPParsedData {
     std::vector<std::vector<engineFloat>> outputs;
 };
 
-bool ParseBMPData(const char* filename, BMPParsedData& outData) {
+inline bool ParseBMPData(const char* filename, BMPParsedData& outData) {
     Image img = loadBMP(filename);
 
     // Save dimensions for later
@@ -129,7 +131,7 @@ inline engineFloat clamp(const engineFloat v, const engineFloat l, const engineF
     return v;
 }
 
-void saveBMP(const std::string& filename, int width, int height, const std::vector<engineFloat>& data) {
+inline void saveBMP(const std::string& filename, int width, int height, const std::vector<engineFloat>& data) {
     std::ofstream file(filename, std::ios::binary);
     if (!file) {
         std::cerr << "Error: Could not open " << filename << " for writing.\n";

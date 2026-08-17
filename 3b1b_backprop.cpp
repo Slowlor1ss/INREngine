@@ -6,9 +6,8 @@
 #include "CostFuncDataBase.h"
 #include "Gemini/BMPParser.h"
 
-// Alternative dataset readers (available for switching modes)
-#include "Gemini/MNISTReader.h"
-#include "Gemini/CustomFileReader.h"
+#include "Config.h"
+#include "NeuralImageRecreator.h"
 
 #include <chrono>
 #include <cmath>
@@ -16,9 +15,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#if _HAS_CXX23
-	#include <numbers>
-#endif
 #include <ranges>
 #include <string>
 #include <vector>
@@ -34,102 +30,6 @@ namespace fs = std::filesystem;
 // TODO: Relu needs HE initialization: make it so that happens automatically when selecting relu, and not when selecting sigmoid for a layer.
 // TODO: serialization
 // TODO: better interface / frontend.
-
-// ============================================================================
-// Alternative Dataset & Mode Examples (Uncomment to use)
-// ============================================================================
-/*
-// ----------------------------------------------------------------------------
-// 1. MNIST Dataset Loading Example
-// ----------------------------------------------------------------------------
-// To train on MNIST digit recognition instead of image regression:
-// Network layerDims for MNIST: { 784, 64, 64, 10 }
-//
-static void LoadMNISTData(std::vector<std::vector<float>>& trainImages,
-                          std::vector<std::vector<float>>& trainLabels,
-                          std::vector<std::vector<float>>& testImages,
-                          std::vector<std::vector<float>>& testLabels)
-{
-    trainImages = read_mnist_images("DATA/train-images-idx3-ubyte");
-    trainLabels = read_mnist_labels("DATA/train-labels-idx1-ubyte");
-    testImages  = read_mnist_images("DATA/t10k-images-idx3-ubyte");
-    testLabels  = read_mnist_labels("DATA/t10k-labels-idx1-ubyte");
-}
-
-// ----------------------------------------------------------------------------
-// 2. Custom Binary File Reader Example
-// ----------------------------------------------------------------------------
-static void LoadCustomBinaryData(const char* filename, ParsedData& outData)
-{
-    ParseBinaryData(filename, outData);
-}
-
-// ----------------------------------------------------------------------------
-// 3. Alternative Image Targets & Iteration Methods
-// ----------------------------------------------------------------------------
-// ParseBMPData("light_on.bmp", data);
-// Sequential training image traversal:
-// currentImage = (currentImage + 1) % images.size();
-*/
-
-#if _HAS_CXX23
-    constexpr engineFloat K_PI = std::numbers::pi_v<engineFloat>;
-#else
-    constexpr engineFloat K_PI = static_cast<engineFloat>(3.141592653589793);
-#endif
-
-// ============================================================================
-// Input & State Definitions
-// ============================================================================
-
-enum class UserAction : uint8_t {
-	None,
-	SaveWeights,
-	ExportImage,
-	ToggleViewer,
-	SwapRenderMode,
-	Quit,
-};
-
-namespace config
-{
-	inline bool use_gpu = true;
-	inline bool benchmark_enabled = false;
-	
-	inline std::string target_image_file = "Training_Data/DIV2K_train_LR_mild/0064x4m.bmp";// "Training_Data/0064_x4.bmp";
-	inline std::string output_path = "";
-	inline std::string output_filename = target_image_file;
-
-	inline engineFloat output_image_scale = 4.f;
-	inline std::vector<size_t> custom_layer_dims = { 128, 128, 3 };
-	inline std::vector<ActFunc::Base*> custom_activations = {
-		ActFunc::DataBase::FindActFunc<ActFunc::Finer>(),
-		ActFunc::DataBase::FindActFunc<ActFunc::Finer>(),
-		ActFunc::DataBase::FindActFunc<ActFunc::None>()
-	};
-
-	//TODO-Lkrikilion: make a command like param for this like --render-mode or smth
-	inline RenderMode render_mode = RenderMode::StandardRGB;
-
-	inline bool use_grid_encoding = true;
-	inline bool use_positional_encoding = false;
-	inline int pe_num_frequencies = 10; // Positional encode
-	inline bool use_gaussian_pe = false;
-
-	inline bool initial_live_update_state = true;
-
-	// Hyperparameters & Training State
-	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)
-	inline size_t batch_size = 256ull * 256ull;//510 * 338; // 256ull*256ull;//8192;//65536;//8192;//32;
-	inline bool shuffle_pixel_batch = true; // TODO: either make this an input parameter or make this the default if batch size isnt == to image size
-	inline size_t print_every_n_batches = 100;
-	//inline float initial_learning_rate = 0.0001f;
-	inline engineFloat initial_learning_rate = 0.1f;//0.005f;//0.005f;//WIRE //0.000025f; Siren
-	
-	// Hyperparameter to balance how much the network cares about slopes vs colors
-	// used by spatial gradient (use 0 to turn spatial gradient off)
-	//inline engineFloat spatialLossWeight = 0.f; // TODO: make a utils file so we can use this
-}
 
 namespace
 {
@@ -341,318 +241,14 @@ static int ParseCommandLine(const int argc, char** argv)
 	
 	return 1;
 }
-
-// TODO: merge the 2 function below or something this is bad but we need one for the imagedataset and another for the coormapper
-static ImageUtils::SpatialData PositionalEncodeWithDerivatives(engineFloat x, engineFloat y, int numFrequencies) 
-{
-    ImageUtils::SpatialData result;
-    const size_t size = static_cast<size_t>(numFrequencies) * 4;
-    result.values.reserve(size);
-    result.gradX.reserve(size);
-    result.gradY.reserve(size);
-
-    for (int i = 0; i < numFrequencies; ++i) {
-        const engineFloat freq = std::powf(2.f, float(i)) * K_PI;
-        const engineFloat weight = 1.0f - (static_cast<float>(i) / static_cast<float>(numFrequencies));
-
-        // Pre-calculate to save CPU cycles
-        engineFloat sin_x = std::sin(x * freq);
-        engineFloat cos_x = std::cos(x * freq);
-        engineFloat sin_y = std::sin(y * freq);
-        engineFloat cos_y = std::cos(y * freq);
-
-        // Standard Values
-        result.values.push_back(sin_x * weight);
-        result.values.push_back(cos_x * weight);
-        result.values.push_back(sin_y * weight);
-        result.values.push_back(cos_y * weight);
-
-        // X Gradients (d/dx)
-        result.gradX.push_back(freq * cos_x * weight);  // d/dx sin = cos * freq
-        result.gradX.push_back(-freq * sin_x * weight); // d/dx cos = -sin * freq
-        result.gradX.push_back(0.0f);                   // d/dx of Y is 0
-        result.gradX.push_back(0.0f);
-
-        // Y Gradients (d/dy)
-        result.gradY.push_back(0.0f);                   // d/dy of X is 0
-        result.gradY.push_back(0.0f);
-        result.gradY.push_back(freq * cos_y * weight);  
-        result.gradY.push_back(-freq * sin_y * weight); 
-    }
-    return result;
 }
-
-// Helper to expand a coordinate (x, y) into multiple frequency bands with decay
-static std::vector<engineFloat> PositionalEncode(engineFloat x, engineFloat y, int numFrequencies) {
-	std::vector<engineFloat> encoded;
-	encoded.reserve(static_cast<size_t>(numFrequencies) * 4);
-
-	for (int i = 0; i < numFrequencies; ++i) {
-		const engineFloat freq = std::pow(2.0f, static_cast<engineFloat>(i)) * K_PI;
-		const engineFloat weight = 1.0f - (static_cast<engineFloat>(i) / static_cast<engineFloat>(numFrequencies));
-    
-		encoded.push_back(std::sin(x * freq) * weight);
-		encoded.push_back(std::cos(x * freq) * weight);
-    
-		encoded.push_back(std::sin(y * freq) * weight);
-		encoded.push_back(std::cos(y * freq) * weight);
-	}
-	return encoded;
-}
-	
-// Generates a checkpoint filename based on the input image filename.
-// Example: "Image.bmp" -> "weights_biases_Sarah.csv"
-static std::string GetCheckpointFilename(const std::string& imageFilename, const std::string& outbasePath = "")
-{
-	namespace fs = std::filesystem;
-
-	// Get filename without extension (aka: stem)
-	std::string stem = fs::path(imageFilename).stem().string();
-	std::string filename = "weights_biases_" + stem + ".csv";
-
-	// If a base path is provided, modify the filename variable
-	if (!outbasePath.empty())
-	{
-		filename = (fs::path(outbasePath) / filename).string();
-	}
-	
-	return filename; 
-}
-
-static void LoadCheckpoint(Network& network, const std::string& filename)
-{
-	std::ifstream inFile{ filename };
-	if (inFile.is_open())
-	{
-		network.Deserialize(inFile);
-	}
-	else
-	{
-		std::cout << "No existing checkpoint found (" << filename << "). Starting with fresh weights.\n";
-	}
-}
-
-static void SaveCheckpoint(Network& network, GpuNetwork& gpuNet, const std::string& filename)
-{
-	if (config::use_gpu) {
-		gpuNet.DownloadParametersToCPU(network);
-	}
-
-	std::ofstream outFile{ filename };
-	if (outFile.is_open())
-	{
-		network.Serialize(outFile);
-		std::cout << "Weights saved to " << filename << "!\n";
-	}
-}
-
-static void PrintControls()
-{
-	std::cout << "Training started.\n"
-		<< " [Q/ESC] - Stop training\n"
-		<< " [W]     - Save weights\n"
-		<< " [D]     - Swap render mode (Used for debugging)\n"
-		<< " [E]     - Save image to disk\n"
-		<< " [V]     - Toggle live viewer window\n\n";
-}
-
-// Polls non-blocking keyboard input buffer and maps to UserAction.
-static UserAction PollUserAction()
-{
-	if (!_kbhit()) return UserAction::None;
-
-	switch (int ch = _getch())
-	{
-		case 'q': case 'Q': case 27: // ESC
-			return UserAction::Quit;
-		case 'w': case 'W':
-			return UserAction::SaveWeights;
-		case 'e': case 'E':
-			return UserAction::ExportImage;
-		case 'v': case 'V':
-			return UserAction::ToggleViewer;
-		case 'd': case 'D':
-			return UserAction::SwapRenderMode;
-		default:
-			return UserAction::None;
-	}
-}
-
-// Handles user actions outside the main training loop; returns false to break loop.
-static bool HandleUserAction(const UserAction action, Network& network, GpuNetwork& gpuNet, const BMPParsedData& data,
-                             const std::string& weightsFile, bool& liveUpdateWindow,
-                             const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& mapper,
-                             TrainingThreadPool& threadPool)
-{
-	switch (action)
-	{
-		case UserAction::Quit:
-			std::cout << "\n[Interrupt Received] Stopping training...\n";
-			return false;
-		
-		case UserAction::SaveWeights:
-			SaveCheckpoint(network, gpuNet, weightsFile);
-			break;
-		
-		case UserAction::ExportImage:
-        {
-            int renderWidth = int(data.width * config::output_image_scale);
-            int renderHeight = int(data.height * config::output_image_scale);
-            int totalRenderPixels = renderWidth * renderHeight;
-            std::vector<engineFloat> reconstructedImage;
-
-            if (config::use_gpu)
-            {
-                int outChannels = network.GetLayers().back()->GetNumNeurons();
-                
-                engineFloat* d_exportPixelX = nullptr;
-                engineFloat* d_exportPixelY = nullptr;
-                engineFloat* d_exportInputs = nullptr;
-                engineFloat* d_exportColors = nullptr;
-                
-                CUDA_CHECK(cudaMalloc(&d_exportColors, totalRenderPixels * outChannels * sizeof(engineFloat)));
-
-                if (config::use_grid_encoding)
-                {
-                    CUDA_CHECK(cudaMalloc(&d_exportPixelX, totalRenderPixels * sizeof(engineFloat)));
-                    CUDA_CHECK(cudaMalloc(&d_exportPixelY, totalRenderPixels * sizeof(engineFloat)));
-
-                    std::vector<engineFloat> h_exportPixelX(totalRenderPixels);
-                    std::vector<engineFloat> h_exportPixelY(totalRenderPixels);
-
-					for (int y = 0; y < renderHeight; ++y)
-                    {
-                        for (int x = 0; x < renderWidth; ++x)
-                        {
-                            int idx = y * renderWidth + x;
-                            // Match the [-1.0, 1.0] domain so FindCell maps 0.0 to 1.0 across the full grid
-                            h_exportPixelX[idx] = (static_cast<engineFloat>(x) / static_cast<engineFloat>(renderWidth)) * 2.0f - 1.0f;
-                            h_exportPixelY[idx] = (static_cast<engineFloat>(y) / static_cast<engineFloat>(renderHeight)) * 2.0f - 1.0f;
-                        }
-                    }
-                    
-                    CUDA_CHECK(cudaMemcpy(d_exportPixelX, h_exportPixelX.data(), totalRenderPixels * sizeof(engineFloat), cudaMemcpyHostToDevice));
-                    CUDA_CHECK(cudaMemcpy(d_exportPixelY, h_exportPixelY.data(), totalRenderPixels * sizeof(engineFloat), cudaMemcpyHostToDevice));
-                }
-                else
-                {
-                    int inChannels = network.GetLayers().front()->GetNumNeurons();
-                    CUDA_CHECK(cudaMalloc(&d_exportInputs, totalRenderPixels * inChannels * sizeof(engineFloat)));
-                    std::vector<engineFloat> h_exportInputs(totalRenderPixels * inChannels);
-
-                    for (int y = 0; y < renderHeight; ++y)
-                    {
-                        for (int x = 0; x < renderWidth; ++x)
-                        {
-                            int pixelIdx = (y * renderWidth + x) * inChannels;
-                            engineFloat normX = (static_cast<engineFloat>(x) / static_cast<engineFloat>(renderWidth)) * 2.0f - 1.0f;
-                            engineFloat normY = (static_cast<engineFloat>(y) / static_cast<engineFloat>(renderHeight)) * 2.0f - 1.0f;
-                            
-                            ImageUtils::SpatialData encoded = mapper(normX, normY);
-                            for (size_t c = 0; c < encoded.values.size(); ++c) {
-                                h_exportInputs[pixelIdx + c] = encoded.values[c];
-                            }
-                        }
-                    }
-                    CUDA_CHECK(cudaMemcpy(d_exportInputs, h_exportInputs.data(), h_exportInputs.size() * sizeof(engineFloat), cudaMemcpyHostToDevice));
-                }
-
-                gpuNet.PredictGPU(d_exportPixelX, d_exportPixelY, d_exportInputs, d_exportColors, totalRenderPixels);
-
-                std::vector<engineFloat> h_colors(totalRenderPixels * outChannels);
-                CUDA_CHECK(cudaMemcpy(h_colors.data(), d_exportColors, h_colors.size() * sizeof(engineFloat), cudaMemcpyDeviceToHost));
-
-                if (outChannels == 3)
-                {
-                    reconstructedImage = h_colors;
-                }
-                else if (outChannels == 1)
-                {
-                    reconstructedImage.resize(totalRenderPixels * 3);
-                    for (int i = 0; i < totalRenderPixels; ++i) {
-                        reconstructedImage[i * 3 + 0] = h_colors[i];
-                        reconstructedImage[i * 3 + 1] = h_colors[i];
-                        reconstructedImage[i * 3 + 2] = h_colors[i];
-                    }
-                }
-
-                if (d_exportPixelX) cudaFree(d_exportPixelX);
-                if (d_exportPixelY) cudaFree(d_exportPixelY);
-                if (d_exportInputs) cudaFree(d_exportInputs);
-                if (d_exportColors) cudaFree(d_exportColors);
-            }
-            else
-            {
-                reconstructedImage = GenerateReconstructedImage(network, renderWidth, renderHeight, mapper, config::render_mode, threadPool);
-            }
-
-            saveBMP("network_output.bmp", renderWidth, renderHeight, reconstructedImage);
-            std::cout << "Successfully saved network_output.bmp!\n";
-            break;
-        }
-		
-		case UserAction::ToggleViewer:
-			liveUpdateWindow = !liveUpdateWindow;
-			std::cout << (liveUpdateWindow ? "Live viewer window ENABLED\n" : "Live viewer window DISABLED\n");
-			break;
-
-		case UserAction::SwapRenderMode:
-			config::render_mode = (RenderMode)(((int)config::render_mode + 1) % (int)RenderMode::Last);
-			std::cout << "Updated render mode!\n"; // Im not making an enum to sting >:(
-			break;
-		
-		case UserAction::None:
-			break;
-	}
-
-	return true;
-}
-
-// Generates a 32-bit random index to correctly sample datasets larger than RAND_MAX (32,767).
-static size_t GetRandomImageIndex(const size_t totalImages)
-{
-	static thread_local std::mt19937 rng(static_cast<uint32_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count()));
-	std::uniform_int_distribution<size_t> dist(0, totalImages - 1);
-	return dist(rng);
-}
-
-// Executes a full epoch consisting of multiple mini-batches and returns the average cost.
-// static engineFloat RunTrainingEpoch(Network& network,
-//                               const std::vector<std::vector<engineFloat>>& images,
-//                               const std::vector<std::vector<engineFloat>>& labels,
-//                               size_t& currentImageIdx,
-//                               const size_t printEveryNBatches,
-//                               const size_t batchSize,
-//                               engineFloat& learningRate)
-// {
-// 	engineFloat totalCost = 0.0f;
-//
-// 	for (size_t j = 0; j < printEveryNBatches; j++)
-// 	{
-// 		for (size_t i = 0; i < batchSize; i++)
-// 		{
-// 			engineFloat c = network.BackPropagate(images[currentImageIdx], labels[currentImageIdx]);
-// 			totalCost += c;
-//
-// 			currentImageIdx = GetRandomImageIndex(images.size());
-// 		}
-//
-// 		network.ConsumeDelta(learningRate);
-// 		learningRate *= static_cast<engineFloat>(std::pow(0.9999999, batchSize));
-// 	}
-//
-// 	return totalCost / static_cast<engineFloat>(batchSize * printEveryNBatches);
-// }
-}
-
-#include "NeuralImageRecreator.hpp"
 
 // ============================================================================
 // Main Execution
 // ============================================================================
 int main(int argc, char** argv)
 {
-	// Forces cuBLAS to boot up immediately rather then upon first use
+	// Forces cublas to boot up immediately rather then upon first use
 	CudaManager::GetInstance(); 
 	cudaError_t initErr = cudaGetLastError();
     if ( initErr != cudaSuccess ) {
@@ -668,8 +264,8 @@ int main(int argc, char** argv)
 	auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 	srand(static_cast<uint32_t>(seed));
 
-	NeuralImageRecreator();
+	NeuralImageRecreator recreator;
+	recreator.Run();
 
 	return 0;
 }
-

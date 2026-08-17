@@ -219,6 +219,8 @@ GpuNetwork::GpuNetwork(const Network& cpuNetwork, int batchSize, bool useGridEnc
     CUDA_CHECK(cudaMalloc(&d_fixedTargetAct, targetBytes));
     CUDA_CHECK(cudaMalloc(&d_fixedTargetGradX, targetBytes));
     CUDA_CHECK(cudaMalloc(&d_fixedTargetGradY, targetBytes));
+    
+    CUDA_CHECK(cudaMalloc(&d_totalCost, sizeof(engineFloat)));
 
     if (m_useGridEncoding) {
         AllocateGridEncoderMemory(m_batchSize);
@@ -271,6 +273,19 @@ void GpuNetwork::DownloadParametersToCPU(Network& cpuNetwork)
             CUDA_CHECK(cudaMemcpy((void**)cpuParams.biases_scale.data(), gpuLayer.d_biasesScale, bSize, cudaMemcpyDeviceToHost));
         }
     }
+}
+
+engineFloat GpuNetwork::GetLastBatchCost(const engineFloat* d_batchTargetAct)
+{
+    // Read directly from the final layer's activation buffer!
+    const engineFloat* d_finalActivations = m_layers.back().d_activations;
+    int numOutputNeurons = m_layers.back().numNeurons;
+
+    return CalculateBatchCostGPU(
+        m_batchSize, numOutputNeurons, 
+        d_finalActivations, d_batchTargetAct, 
+        d_totalCost, m_costType
+    );
 }
 
 // Forward pass returning predicted colors to the CPU for rendering
@@ -483,6 +498,8 @@ void GpuNetwork::FreeLayerMemory(GpuLayer& layer)
     SafeFree(d_fixedTargetAct);
     SafeFree(d_fixedTargetGradX);
     SafeFree(d_fixedTargetGradY);
+    
+    SafeFree(d_totalCost);
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
     // Parameters & Deltas

@@ -131,6 +131,7 @@ public:
     // std::vector<engineFloat> PredictGPU(const engineFloat* d_inputAct, const engineFloat* d_inputGradX,
     //                                     const engineFloat* d_inputGradY);
     
+    engineFloat GetLastBatchCost(const engineFloat* d_batchTargetAct);
     void PredictGPU(const engineFloat* d_predictPixelX, const engineFloat* d_predictPixelY, const engineFloat* d_standardInputs, engineFloat* d_predictOutputs, int totalPixels);
     
 public:
@@ -184,4 +185,6 @@ private:
 
     bool m_useGridEncoding = false;
     GpuGridEncoder m_gridEncoder;
+    
+    engineFloat* d_totalCost;
 };

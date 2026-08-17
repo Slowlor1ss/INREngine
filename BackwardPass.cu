@@ -2,6 +2,66 @@
 #include "cublas_utils.h"
 #include "GpuCostFunctions.cuh"
 
+__global__ void BatchCostKernel(
+    int totalElements,
+    const engineFloat* d_outputAct,
+    const engineFloat* d_targetAct,
+    engineFloat* d_outCost,
+    GpuCostType costType)
+{
+    // Allocate shared memory for this block
+    __shared__ engineFloat sdata[256];
+
+    int tid = threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Load and compute local cost for this thread
+    engineFloat localCost = 0.0f;
+    if (idx < totalElements) {
+        localCost = SharedCost::Execute(costType, d_outputAct[idx], d_targetAct[idx]);
+    }
+    sdata[tid] = localCost;
+    __syncthreads(); // Wait for all threads in the block to finish
+
+    // Tree reduction: collapse all elements down to 1 sum
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            sdata[tid] += sdata[tid + s];
+        }
+        __syncthreads();
+    }
+
+    // Thread 0 of this block adds its block-sum to the global GPU total
+    if (tid == 0) {
+        atomicAdd(d_outCost, sdata[0]);
+    }
+}
+
+engineFloat CalculateBatchCostGPU(
+    int batchSize, int numNeurons,
+    const engineFloat* d_outputAct, const engineFloat* d_targetAct,
+    engineFloat* d_outCost, GpuCostType costType)
+{
+    int totalElements = batchSize * numNeurons;
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
+
+    // Zero out cost before calculating
+    CUDA_CHECK(cudaMemset(d_outCost, 0, sizeof(engineFloat)));
+
+    // Launch the reduction kernel
+    BatchCostKernel<<<blocksPerGrid, threadsPerBlock>>>(
+        totalElements, d_outputAct, d_targetAct, d_outCost, costType
+    );
+
+    // Copy back to the CPU
+    engineFloat totalCost = 0.0f;
+    CUDA_CHECK(cudaMemcpy(&totalCost, d_outCost, sizeof(engineFloat), cudaMemcpyDeviceToHost));
+
+    // Return average cost per pixel
+    return totalCost / static_cast<engineFloat>(totalElements);
+}
+
 // OUTPUT ERROR KERNEL
 __global__ void OutputErrorKernel(
     int batchSize, int numNeurons,

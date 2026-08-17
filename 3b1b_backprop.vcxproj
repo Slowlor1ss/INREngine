@@ -418,18 +418,24 @@
     <ClCompile Include="ActFuncDataBase.cpp" />
     <CudaCompile Include="BackwardPass.cu" />
     <CudaCompile Include="AdamOptimizer.cu" />
+    <ClCompile Include="CheckpointUtils.cpp" />
     <ClCompile Include="CostFuncDataBase.cpp" />
     <CudaCompile Include="ForwardPass.cu">
       <FileType>Document</FileType>
     </CudaCompile>
     <ClCompile Include="GpuDataset.cpp" />
     <ClCompile Include="GpuNetwork.cpp" />
+    <ClCompile Include="GpuTrainingPipeline.cpp" />
     <ClCompile Include="ImageGenerator.cpp" />
     <ClCompile Include="ImageUtils.cpp" />
     <ClCompile Include="Layer.cpp" />
     <ClCompile Include="Network.cpp" />
+    <ClCompile Include="NeuralImageRecreator.cpp" />
     <ClCompile Include="Parameters.cpp" />
+    <ClCompile Include="TrainingDataset.cpp" />
+    <ClCompile Include="TrainingMetricsReporter.cpp" />
     <ClCompile Include="TrainingThreadPool.cpp" />
+    <ClCompile Include="TrainingUserActions.cpp" />
     <ClCompile Include="WindowRenderer.cpp" />
     <CudaCompile Include="GridEncoding.cu" />
   </ItemGroup>
@@ -437,6 +443,8 @@
     <ClInclude Include="ActFuncDataBase.h" />
     <ClInclude Include="ActivationFunctions.h" />
     <CudaCompile Include="BackwardPass.cuh" />
+    <ClInclude Include="CheckpointUtils.h" />
+    <ClInclude Include="Config.h" />
     <ClInclude Include="CostFuncDataBase.h" />
     <ClInclude Include="CostFunctions.h" />
     <ClInclude Include="cublas_utils.h" />
@@ -450,14 +458,18 @@
     <ClInclude Include="GpuDataset.h" />
     <ClInclude Include="GpuNetwork.h" />
     <CudaCompile Include="GridEncoding.cuh" />
+    <ClInclude Include="GpuTrainingPipeline.h" />
     <ClInclude Include="ImageGenerator.h" />
     <ClInclude Include="ImageUtils.h" />
     <ClInclude Include="Layer.h" />
     <ClInclude Include="Network.h" />
-    <ClInclude Include="NeuralImageRecreator.hpp" />
+    <ClInclude Include="NeuralImageRecreator.h" />
     <ClInclude Include="Parameters.h" />
     <ClInclude Include="Serializable.h" />
+    <ClInclude Include="TrainingDataset.h" />
+    <ClInclude Include="TrainingMetricsReporter.h" />
     <ClInclude Include="TrainingThreadPool.h" />
+    <ClInclude Include="TrainingUserActions.h" />
     <ClInclude Include="Types.h" />
     <ClInclude Include="WindowRenderer.h" />
   </ItemGroup>
