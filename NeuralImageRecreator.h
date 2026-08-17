@@ -42,6 +42,7 @@ private:
 		BMPParsedData data;
 		std::string weightsFile;
 		std::vector<engineFloat> flatTargetImage;
+		std::vector<engineFloat> flatHDImage;
 		std::function<ImageUtils::SpatialData(engineFloat, engineFloat)> coordMapper;
 		SpatialDataset dataset;
 		size_t inputLayerSize = 0;

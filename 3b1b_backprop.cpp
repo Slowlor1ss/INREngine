@@ -1,6 +1,4 @@
 #include "Network.h"
-// This vexes me
-#define NOMINMAX 
 #include "WindowRenderer.h"
 #include "ImageGenerator.h"
 #include "CostFuncDataBase.h"

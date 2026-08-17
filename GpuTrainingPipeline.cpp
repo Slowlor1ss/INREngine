@@ -18,7 +18,7 @@
 
 namespace
 {
-	// Prints out the CUDA devices available on this machine (informational only).
+	// Prints out the CUDA devices available on this pc
 	void PrintCudaDeviceInfo()
 	{
 		int deviceCount = 0;
@@ -146,7 +146,7 @@ engineFloat GpuTrainingPipeline::RunEpoch(size_t& currentImageIdx, size_t printE
 {
 	// When randering at same resolution 0 (disabled) seems to work best, but when upscaling this can help with noise reduction
 	// A hyperparameter to balance how much the network cares about slopes vs colors.
-	constexpr engineFloat spatialLossWeight = 0.010f; // Adjust this if you want spatial gradients enabled
+	constexpr engineFloat spatialLossWeight = 0.0000f; // Adjust this if you want spatial gradients enabled
 
 	for (size_t j = 0; j < printEveryNBatches; j++)
 	{
@@ -171,8 +171,19 @@ engineFloat GpuTrainingPipeline::RunEpoch(size_t& currentImageIdx, size_t printE
 		PROFILE_POP();
 
 		// Move forward in the dataset
-		currentImageIdx = (currentImageIdx + batchSize) % m_totalPixels;
-
+		//currentImageIdx = (currentImageIdx + batchSize) % m_totalPixels;
+		
+		// TODO: we need to fix this as our batchsize is not divisable by the total pixes (often at least)
+		// we need to wrap around or do something; Maybe we can allocate a d_pixelIndices buffer containing 
+		// numbers 0 to m_totalPixels, shuffle it randomly every epoch, and have the GPU pull random pixels for every batch.
+		//
+		// For now well just move back a bit e.g. if batchsize=30 totalPx=100 we do 0-29, 30-59, 60-89, (move back) 70-99
+		currentImageIdx += batchSize;
+		if (currentImageIdx >= m_totalPixels) 
+			currentImageIdx = 0; 
+		else if (currentImageIdx + batchSize > m_totalPixels) 
+			currentImageIdx = m_totalPixels - batchSize;
+		
 		// Decay learning rate identically to the CPU version
 		engineFloat progress = std::min(static_cast<engineFloat>(currentEpoch) / config::max_epochs, 1.0f);
 		learningRate = config::initial_learning_rate * std::pow(0.5f, progress);

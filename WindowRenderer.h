@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <cstdint>
+#define NOMINMAX
 #include <windows.h>
 
 #include "Types.h"

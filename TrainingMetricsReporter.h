@@ -16,7 +16,7 @@ void LogTrainingMetrics(const std::string& csvFilepath, size_t batch, engineFloa
 // Prints the per-batch training report line, including full-reference metrics when the
 // output is at native scale and standard RGB (SSIM needs matching generated/target sizes).
 void ReportProgress(engineFloat cost, engineFloat learningRate, const std::vector<engineFloat>& rgbImage,
-                    const std::vector<engineFloat>& flatTargetImage);
+                    const std::vector<engineFloat>& flatTargetImage, const std::vector<engineFloat>& flatHDImage);
 
 // Logs metrics + saves RGB/gradient frames for the benchmark pipeline. Renders its own
 // frames at native resolution, independent of the live viewer / output_image_scale, since

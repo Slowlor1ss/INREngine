@@ -3,8 +3,8 @@
 
 // One thread per (pixel, level): interpolate that level's F features at this
 // pixel's (x,y) and write them into that level's channel slice of the flat
-// encoder output buffers. Output layout matches everything else in your
-// pipeline: [pixelIdx * totalChannels + channelIdx], totalChannels = numLevels*F.
+// encoder output buffers
+// Output layout = [pixelIdx * totalChannels + channelIdx], totalChannels = numLevels*F.
 __global__ void GridEncodeForwardKernel(
     int batchSize, int numLevels, int featuresPerLevel,
     const int* d_levelResolutions,   // [numLevels], precomputed on host once
@@ -35,11 +35,9 @@ __global__ void GridEncodeForwardKernel(
     }
 }
 
-// One thread per (pixel, level): scatter this level's share of the error your
-// existing RunBackwardLayerGPU already computed for "layer 0" (d_nextColorError
-// etc, sized batchSize * totalChannels) into that level's grad buffer.
-// d_gridGrad MUST be zeroed before this is called each batch, same as any other
-// delta/gradient accumulator in your pipeline.
+// One thread per (pixel, level): scatter this level's share of the error 
+// RunBackwardLayerGPU already computed for "layer 0" (d_nextColorError
+// etc, sized batchSize * totalChannels) into that level's grad buffer
 __global__ void GridEncodeBackwardKernel(
     int batchSize, int numLevels, int featuresPerLevel,
     const int* d_levelResolutions,
@@ -70,8 +68,8 @@ __global__ void GridEncodeBackwardKernel(
     }
 }
 
-// HOST LAUNCHERS -- same shape as RunForwardLayerGPU / RunBackwardLayerGPU so
-// they drop into GpuNetwork's per-batch call sequence the same way.
+// HOST LAUNCHERS: same shape as RunForwardLayerGPU / RunBackwardLayerGPU so
+// they drop into our per-batch call sequence
 void RunGridEncodeForwardGPU(
     cudaStream_t stream, int batchSize, int numLevels, int featuresPerLevel,
     const int* d_levelResolutions, const int* d_levelParamOffsets,

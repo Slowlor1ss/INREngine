@@ -25,6 +25,13 @@ NeuralImageRecreator::InitData NeuralImageRecreator::LoadInitData()
 
 	// Create a flattened version of the target image for full-reference metrics
 	init.flatTargetImage = FlattenTargetImage(init.data);
+	
+	if (!config::hd_image_file.empty())
+	{
+		BMPParsedData hdData; // Not needed outside this if statement so no need to save it like init.data
+		ParseBMPData(config::hd_image_file.c_str(), hdData);
+		init.flatHDImage = FlattenTargetImage(hdData);
+	}
 
 	// Setup our coordinate mapper lambda for the ImageGenerator
 	init.coordMapper = BuildCoordMapper();
@@ -205,7 +212,7 @@ void NeuralImageRecreator::Run()
 			std::vector<engineFloat> rgbImage = RenderLiveFrame(m_renderWidth * m_renderHeight, m_tarChan);
 			m_window->Update(rgbImage);
 
-			ReportProgress(cost, m_learningRate, rgbImage, m_init.flatTargetImage);
+			ReportProgress(cost, m_learningRate, rgbImage, m_init.flatTargetImage, m_init.flatHDImage);
 
 		}
 		

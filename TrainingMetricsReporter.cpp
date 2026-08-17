@@ -26,7 +26,7 @@ void LogTrainingMetrics(const std::string& csvFilepath, size_t batch, engineFloa
 }
 
 void ReportProgress(engineFloat cost, engineFloat learningRate, const std::vector<engineFloat>& rgbImage,
-                    const std::vector<engineFloat>& flatTargetImage)
+                    const std::vector<engineFloat>& flatTargetImage, const std::vector<engineFloat>& flatHDImage)
 {
 	// TODO: make this more flexible
 	// Note: SSIM requires the generated image and target image to be the exact same size.
@@ -34,6 +34,18 @@ void ReportProgress(engineFloat cost, engineFloat learningRate, const std::vecto
 	if (config::output_image_scale == 1.0f && config::render_mode == RenderMode::StandardRGB)
 	{
 		ImageUtils::ImageMetrics metrics = ImageUtils::CalculateFullImageMetrics(rgbImage, flatTargetImage);
+
+		std::cout    << "COST: " << cost 
+					<< " LR: " << learningRate 
+					<< " | G_SSIM: " << metrics.ssim 
+					<< " MAE: " << metrics.mae 
+					<< " PSNR(dB): " << metrics.psnr << '\n';
+	}
+	// Compare out generated image to a ideal HD version (metrics only)
+	// A 4x scale means 4x width AND 4x height, so the array is 16x larger hence (output_image_scale * output_image_scale)
+	else if ( flatHDImage.size() == ( flatTargetImage.size() * size_t(config::output_image_scale * config::output_image_scale) ) )
+	{
+		ImageUtils::ImageMetrics metrics = ImageUtils::CalculateFullImageMetrics(rgbImage, flatHDImage);
 
 		std::cout    << "COST: " << cost 
 					<< " LR: " << learningRate 

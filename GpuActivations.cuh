@@ -32,8 +32,8 @@ namespace SharedAct
     {
         constexpr engineFloat Siren_w0 = 30.0f;
         
-        constexpr engineFloat Wire_w0 = 2.0f;//20.0f;
-        constexpr engineFloat Wire_s = 2.0f;//30.0f;
+        constexpr engineFloat Wire_w0 = 4.0f;//20.0f;
+        constexpr engineFloat Wire_s = 4.0f;//30.0f;
         constexpr engineFloat Wire_s_squared = Wire_s * Wire_s;
         
         constexpr engineFloat LeakyReLU_slope = 0.1f;

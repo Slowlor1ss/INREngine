@@ -3,8 +3,7 @@
 #include <cuda_runtime.h>
 #include <cmath>
 
-// Host launchers, implemented in GridEncoding.cu -- declared here so GpuNetwork.cpp
-// can call them the same way it calls RunForwardLayerGPU/RunBackwardLayerGPU.
+// Host launchers
 void RunGridEncodeForwardGPU(
     cudaStream_t stream, int batchSize, int numLevels, int featuresPerLevel,
     const int* d_levelResolutions, const int* d_levelParamOffsets,
@@ -26,36 +25,37 @@ void RunGridEncodeBackwardGPU(
 #endif
 
 // Dense multi-resolution 2D feature grid encoder (Instant-NGP-style, minus the
-// hash table -- our domain is one bounded image, so a small dense grid per level
+// hash table, our domain is one bounded image, so a small dense grid per level
 // is cheap enough that we don't need to accept hash collisions to save memory).
 //
 // Each level owns its own R_l x R_l x F block of trainable features. A query
 // coordinate (x,y) in [0,1]x[0,1] is bilinearly interpolated per level, and the
-// per-level F-dim results get concatenated into the encoder's output vector --
-// which is then just "d_prevAct" for your existing Layer 0, unchanged.
-//
-// NOTE: this file is the self-contained math core only (forward interpolation +
-// exact analytic dValue/dx,dy, and the backward scatter coefficients). The
-// surrounding __global__ kernels + host launchers (RunGridEncodeForwardGPU /
-// RunGridEncodeBackwardGPU, mirroring ForwardPass.cu / BackwardPass.cu) and the
-// GpuNetwork-side buffer management still need to be wired up against
-// GpuNetwork.h/.cu, GpuDataset.h, and ImageUtils.h, which I don't have yet.
+// per-level F-dim results get concatenated into the encoder's output vector
+// which is then just "d_prevAct" for our existing Layer 0 unchanged
 namespace GridEncoding
 {
     namespace Config
     {
-        // Tune to taste. Keep FinestResolution at or slightly BELOW your training
-        // image's resolution -- if the grid can resolve every training pixel
-        // exactly, it will happily memorize per-pixel noise, and the MLP that
+        // Keep FinestResolution at or slightly BELOW your training
+        // image's resolution, if the grid can resolve every training pixel
+        // exactly, it will just memorize per-pixel noise, and the MLP that
         // follows loses its reason to smooth/generalize between grid cells.
-        constexpr int NumLevels = 8;
-        constexpr int BaseResolution = 16;
-        constexpr int FeaturesPerLevel = 2;
-        constexpr int FinestResolution = 256; // set to just under your training res
+        
+        // How many separate feature grids are stacked together
+        constexpr int NumLevels = 8; 
+        // Size of the very first, coarsest grid
+        constexpr int BaseResolution = 16; 
+        // Number of trainable floating-point values (features) stored at every single intersection (corner) of the grid; 
+        // total output channel count fed into the neural network is NumLevels * FeaturesPerLevel
+        constexpr int FeaturesPerLevel = 4; 
+        // Resolution of the final, most detailed grid
+        // at FinestResolution 'R', pixels-per-cell is 719/R vertically and 1277/R horizontally
+        // (smallest side / 1.2) seems to work well
+        constexpr int FinestResolution =  339 / 1.2; // set to just under the training res (grid is of size FinestResolution x FinestResolution)
     }
 
     // Level resolutions form a geometric progression from BaseResolution to
-    // FinestResolution across NumLevels steps -- coarse levels give the MLP cheap
+    // FinestResolution across NumLevels steps, coarse levels gives cheap
     // global structure, fine levels give it cheap local detail.
     __GRID_FUNC__ engineFloat LevelGrowthFactor()
     {
@@ -79,14 +79,13 @@ namespace GridEncoding
     }
 
     // Bilinear cell lookup: given normalized x,y in [0,1] and this level's
-    // resolution, find the 4 surrounding grid corners and fractional weights.
-    // (Pass resolution in rather than recomputing LevelResolution() per-thread --
-    // precompute it once on the host per level and pass it into the kernel.)
+    // resolution, find the 4 surrounding grid corners and fractional weights
+    // (we pass resolution in rather than recomputing LevelResolution() per-thread
+    // precompute it once on the host per level and pass it into the kernel)
     __GRID_FUNC__ void FindCell(
         engineFloat x, engineFloat y, int resolution,
         int& x0, int& y0, int& x1, int& y1, engineFloat& tx, engineFloat& ty)
     {
-        // Map from [-1.0, 1.0] to [0.0, 1.0]
         engineFloat nx = (x + 1.0f) * 0.5f;
         engineFloat ny = (y + 1.0f) * 0.5f;
 
@@ -106,10 +105,10 @@ namespace GridEncoding
     }
 
     // FORWARD: interpolate one level's F features at (x,y), plus the analytic
-    // dValue/dx and dValue/dy per feature -- needed for your gradX/gradY spatial
+    // dValue/dx and dValue/dy per feature, needed for your gradX/gradY spatial
     // loss machinery. Bilinear interpolation is piecewise-linear, so these are
     // exact closed forms; no second derivatives needed anywhere in this encoder,
-    // unlike the activation functions.
+    // unlike the activation functions
     __GRID_FUNC__ void InterpolateLevel(
         const engineFloat* levelParams, int resolution, int numFeatures,
         engineFloat x, engineFloat y,
@@ -149,9 +148,9 @@ namespace GridEncoding
     // BACKWARD: scatter this level's share of the upstream error into the 4
     // corner feature vectors read on the forward pass. Interpolation is linear in
     // the stored features, so each of the three upstream errors (color, dx, dy)
-    // just distributes by its own coefficient and sums -- no second-derivative
+    // just distributes by its own coefficient and sums, no second-derivative
     // term needed. Multiple query points will land in the same cell across a
-    // batch, hence atomicAdd on device.
+    // batch, hence atomicAdd on device
     __GRID_FUNC__ void ScatterLevelGradient(
         engineFloat* levelGrad, int resolution, int numFeatures,
         engineFloat x, engineFloat y,
