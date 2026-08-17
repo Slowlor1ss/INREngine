@@ -22,5 +22,5 @@ void ReportProgress(engineFloat cost, engineFloat learningRate, const std::vecto
 // frames at native resolution, independent of the live viewer / output_image_scale, since
 // PSNR/SSIM are only meaningful when compared at the target's native size.
 void RunBenchmarkStep(Network& network, const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordMapper,
-                      TrainingThreadPool& threadPool, const BMPParsedData& data,
+                      TrainingThreadPool& threadPool, const ImgParser::ImageParsedData& data,
                       const std::vector<engineFloat>& flatTargetImage, size_t currentEpoch, engineFloat cost);

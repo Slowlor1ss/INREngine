@@ -40,7 +40,7 @@ std::function<ImageUtils::SpatialData(engineFloat, engineFloat)> BuildCoordMappe
 	return coordMapper;
 }
 
-SpatialDataset BuildSpatialDataset(const BMPParsedData& data,
+SpatialDataset BuildSpatialDataset(const ImgParser::ImageParsedData& data,
                                    const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordMapper)
 {
 	SpatialDataset dataset;
@@ -95,7 +95,7 @@ SpatialDataset BuildSpatialDataset(const BMPParsedData& data,
 	return dataset;
 }
 
-std::vector<engineFloat> FlattenTargetImage(const BMPParsedData& data)
+std::vector<engineFloat> FlattenTargetImage(const ImgParser::ImageParsedData& data)
 {
 	std::vector<engineFloat> flatTargetImage;
 	if (!data.outputs.empty())

@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="ParserFiles">
+      <UniqueIdentifier>{8bb49271-6c2d-4e59-b6b5-8b60501c55a2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="3b1b_backprop.cpp">
@@ -51,6 +54,27 @@
     <ClCompile Include="GpuNetwork.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CheckpointUtils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="GpuTrainingPipeline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="NeuralImageRecreator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TrainingDataset.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TrainingMetricsReporter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TrainingUserActions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Gemini\STBImplementation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CostFunctions.h">
@@ -86,13 +110,7 @@
     <ClInclude Include="Gemini\CustomFileReader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\BMPParser.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="ImageUtils.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="NeuralImageRecreator.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TrainingThreadPool.h">
@@ -112,6 +130,54 @@
     </ClInclude>
     <ClInclude Include="GpuNetwork.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CheckpointUtils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GpuTrainingPipeline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="NeuralImageRecreator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TrainingDataset.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TrainingMetricsReporter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TrainingUserActions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Gemini\stb_image_write.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Gemini\TGAParser.h">
+      <Filter>ParserFiles</Filter>
+    </ClInclude>
+    <ClInclude Include="Gemini\stb_image.h">
+      <Filter>ParserFiles</Filter>
+    </ClInclude>
+    <ClInclude Include="Gemini\BMPParser.h">
+      <Filter>ParserFiles</Filter>
+    </ClInclude>
+    <ClInclude Include="Gemini\HDRParser.h">
+      <Filter>ParserFiles</Filter>
+    </ClInclude>
+    <ClInclude Include="Gemini\IImageParser.h">
+      <Filter>ParserFiles</Filter>
+    </ClInclude>
+    <ClInclude Include="Gemini\ImageParser.h">
+      <Filter>ParserFiles</Filter>
+    </ClInclude>
+    <ClInclude Include="Gemini\JPEGParser.h">
+      <Filter>ParserFiles</Filter>
+    </ClInclude>
+    <ClInclude Include="Gemini\PngParser.h">
+      <Filter>ParserFiles</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

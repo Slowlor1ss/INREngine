@@ -39,7 +39,7 @@ private:
 	// shot in the member-initializer list, ahead of m_network.
 	struct InitData
 	{
-		BMPParsedData data;
+		ImgParser::ImageParsedData data;
 		std::string weightsFile;
 		std::vector<engineFloat> flatTargetImage;
 		std::vector<engineFloat> flatHDImage;

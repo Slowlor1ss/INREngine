@@ -423,6 +423,7 @@
     <CudaCompile Include="ForwardPass.cu">
       <FileType>Document</FileType>
     </CudaCompile>
+    <ClCompile Include="Gemini\STBImplementation.cpp" />
     <ClCompile Include="GpuDataset.cpp" />
     <ClCompile Include="GpuNetwork.cpp" />
     <ClCompile Include="GpuTrainingPipeline.cpp" />
@@ -432,6 +433,9 @@
     <ClCompile Include="Network.cpp" />
     <ClCompile Include="NeuralImageRecreator.cpp" />
     <ClCompile Include="Parameters.cpp" />
+    <ClInclude Include="Gemini\HDRParser.h" />
+    <ClInclude Include="Gemini\IImageParser.h" />
+    <ClInclude Include="Gemini\ImageParser.h" />
     <ClCompile Include="TrainingDataset.cpp" />
     <ClCompile Include="TrainingMetricsReporter.cpp" />
     <ClCompile Include="TrainingThreadPool.cpp" />
@@ -452,9 +456,14 @@
     <CudaCompile Include="ForwardPass.cuh" />
     <ClInclude Include="Gemini\BMPParser.h" />
     <ClInclude Include="Gemini\CustomFileReader.h" />
+    <ClInclude Include="Gemini\JPEGParser.h" />
     <ClInclude Include="Gemini\MNISTReader.h" />
     <CudaCompile Include="GpuActivations.cuh" />
     <CudaCompile Include="GpuBuffer.cuh" />
+    <ClInclude Include="Gemini\PngParser.h" />
+    <ClInclude Include="Gemini\stb_image.h" />
+    <ClInclude Include="Gemini\stb_image_write.h" />
+    <ClInclude Include="Gemini\TGAParser.h" />
     <ClInclude Include="GpuDataset.h" />
     <ClInclude Include="GpuNetwork.h" />
     <CudaCompile Include="GridEncoding.cuh" />

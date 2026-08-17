@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <iostream>
 #include <thread>
+#include "Gemini/ImageParser.h"
 
 namespace fs = std::filesystem;
 
@@ -21,15 +22,15 @@ NeuralImageRecreator::InitData NeuralImageRecreator::LoadInitData()
 
 	init.weightsFile = GetCheckpointFilename(config::output_filename, config::output_path);
 
-	ParseBMPData(config::target_image_file.c_str(), init.data);
+	ImageParser::ParseData(config::target_image_file.c_str(), init.data);
 
 	// Create a flattened version of the target image for full-reference metrics
 	init.flatTargetImage = FlattenTargetImage(init.data);
 	
 	if (!config::hd_image_file.empty())
 	{
-		BMPParsedData hdData; // Not needed outside this if statement so no need to save it like init.data
-		ParseBMPData(config::hd_image_file.c_str(), hdData);
+		ImgParser::ImageParsedData hdData; // Not needed outside this if statement so no need to save it like init.data
+		ImageParser::ParseData(config::hd_image_file.c_str(), hdData);
 		init.flatHDImage = FlattenTargetImage(hdData);
 	}
 
@@ -147,7 +148,7 @@ void NeuralImageRecreator::SaveFinalOutputs(GpuNetwork* gpuNet)
 
 	if (!config::benchmark_enabled)
 	{
-		saveBMP("network_output.bmp", m_init.data.width, m_init.data.height, finalReconstructedImage);
+		ImageParser::Save("network_output.bmp", m_init.data.width, m_init.data.height, finalReconstructedImage);
 		std::cout << "Successfully saved network_output.bmp!\n";
 	}
 

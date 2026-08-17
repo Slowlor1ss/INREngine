@@ -7,6 +7,7 @@
 #include <format>
 #include <fstream>
 #include <iostream>
+#include "Gemini/ImageParser.h"
 
 namespace fs = std::filesystem;
 
@@ -61,7 +62,7 @@ void ReportProgress(engineFloat cost, engineFloat learningRate, const std::vecto
 }
 
 void RunBenchmarkStep(Network& network, const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordMapper,
-                      TrainingThreadPool& threadPool, const BMPParsedData& data,
+                      TrainingThreadPool& threadPool, const ImgParser::ImageParsedData& data,
                       const std::vector<engineFloat>& flatTargetImage, size_t currentEpoch, engineFloat cost)
 {
 	auto rgbFrame = GenerateReconstructedImage(network, data.width, data.height, coordMapper, RenderMode::StandardRGB, threadPool);
@@ -81,9 +82,9 @@ void RunBenchmarkStep(Network& network, const std::function<ImageUtils::SpatialD
 
 	// Save Image Frames
 	std::string rgbPath = std::format("{}/rgb/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
-	saveBMP(rgbPath, data.width, data.height, rgbFrame);
+	ImageParser::Save(rgbPath, data.width, data.height, rgbFrame);
 
 	auto gradFrame = GenerateReconstructedImage(network, data.width, data.height, coordMapper, RenderMode::SpatialGradient, threadPool);
 	std::string gradPath = std::format("{}/grad/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
-	saveBMP(gradPath, data.width, data.height, gradFrame);
+	ImageParser::Save(gradPath, data.width, data.height, gradFrame);
 }

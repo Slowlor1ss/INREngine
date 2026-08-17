@@ -25,7 +25,7 @@ void PrintControls();
 UserAction PollUserAction();
 
 // Handles user actions outside the main training loop; returns false to break the loop.
-bool HandleUserAction(UserAction action, Network& network, GpuNetwork* gpuNet, const BMPParsedData& data,
+bool HandleUserAction(UserAction action, Network& network, GpuNetwork* gpuNet, const ImgParser::ImageParsedData& data,
                        const std::string& weightsFile, bool& liveUpdateWindow,
                        const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& mapper,
                        TrainingThreadPool& threadPool);

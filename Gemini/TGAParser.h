@@ -1,15 +1,13 @@
 #pragma once
 
-#include <algorithm>
-
 #include "IImageParser.h"
 #include "stb_image.h"
 #include "stb_image_write.h"
 
-class BMPParser : public IImageParser {
+class TGAParser : public IImageParser {
 public:
-	ImgParser::Image load(const std::string& filename) override {
-		ImgParser::Image img;
+    ImgParser::Image load(const std::string& filename) override {
+        ImgParser::Image img;
         int channels;
         unsigned char* raw_data = stbi_load(filename.c_str(), &img.width, &img.height, &channels, 3);
         
@@ -24,7 +22,7 @@ public:
     }
 
     bool parseData(const std::string& filename, ImgParser::ImageParsedData& outData) override {
-	    ImgParser::Image img = load(filename);
+        ImgParser::Image img = load(filename);
         if (img.width == 0 || img.height == 0) return false;
         
         outData.width = img.width;   //[cite: 1]
@@ -51,6 +49,6 @@ public:
         for (int i = 0; i < width * height * 3; ++i) {
             byte_data[i] = static_cast<uint8_t>(std::clamp(data[i], (engineFloat)0.0f, (engineFloat)1.0f) * 255.0f); //[cite: 1]
         }
-        stbi_write_bmp(filename.c_str(), width, height, 3, byte_data.data());
+        stbi_write_tga(filename.c_str(), width, height, 3, byte_data.data());
     }
 };

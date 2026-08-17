@@ -7,6 +7,7 @@
 #include <conio.h> // For _kbhit() and _getch()
 #include <iostream>
 #include <vector>
+#include "Gemini/ImageParser.h"
 
 void PrintControls()
 {
@@ -42,7 +43,7 @@ UserAction PollUserAction()
 
 // Renders the network at the configured output scale and saves it as network_output.bmp.
 // Split out of HandleUserAction() since it's a fairly large, self-contained chunk of work.
-static void ExportNetworkImage(Network& network, GpuNetwork* gpuNet, const BMPParsedData& data,
+static void ExportNetworkImage(Network& network, GpuNetwork* gpuNet, const ImgParser::ImageParsedData& data,
                                const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& mapper,
                                TrainingThreadPool& threadPool)
 {
@@ -136,12 +137,12 @@ static void ExportNetworkImage(Network& network, GpuNetwork* gpuNet, const BMPPa
 		reconstructedImage = GenerateReconstructedImage(network, renderWidth, renderHeight, mapper, config::render_mode, threadPool);
 	}
 
-	saveBMP("network_output.bmp", renderWidth, renderHeight, reconstructedImage);
+	ImageParser::Save("network_output.bmp", renderWidth, renderHeight, reconstructedImage);
 	std::cout << "Successfully saved network_output.bmp!\n";
 }
 
 // Handles user actions outside the main training loop; returns false to break loop.
-bool HandleUserAction(const UserAction action, Network& network, GpuNetwork* gpuNet, const BMPParsedData& data,
+bool HandleUserAction(const UserAction action, Network& network, GpuNetwork* gpuNet, const ImgParser::ImageParsedData& data,
                        const std::string& weightsFile, bool& liveUpdateWindow,
                        const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& mapper,
                        TrainingThreadPool& threadPool)

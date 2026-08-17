@@ -23,8 +23,8 @@ std::function<ImageUtils::SpatialData(engineFloat, engineFloat)> BuildCoordMappe
 // Generates encoded inputs (coords/PE + spatial slopes) and targets (RGB + spatial edges)
 // from the parsed image, optionally shuffled per config::shuffle_pixel_batch. Only allocates
 // the shuffled copies when actually shuffling.
-SpatialDataset BuildSpatialDataset(const BMPParsedData& data,
+SpatialDataset BuildSpatialDataset(const ImgParser::ImageParsedData& data,
                                    const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordMapper);
 
 // Flattens the target image into a single RGB buffer for full-reference metrics (SSIM/PSNR/etc).
-std::vector<engineFloat> FlattenTargetImage(const BMPParsedData& data);
+std::vector<engineFloat> FlattenTargetImage(const ImgParser::ImageParsedData& data);
