@@ -25,19 +25,19 @@ public:
         ImgParser::Image img = load(filename);
         if (img.width == 0 || img.height == 0) return false;
         
-        outData.width = img.width;   //[cite: 1]
-        outData.height = img.height; //[cite: 1]
+        outData.width = img.width;   
+        outData.height = img.height; 
 
-        for (size_t y = 0; y < img.height; y++) { //[cite: 1]
-            for (size_t x = 0; x < img.width; x++) { //[cite: 1]
-                float normX = (x / float(img.width)) * 2.0f - 1.0f; //[cite: 1]
-                float normY = (y / float(img.height)) * 2.0f - 1.0f; //[cite: 1]
+        for (size_t y = 0; y < img.height; y++) { 
+            for (size_t x = 0; x < img.width; x++) { 
+                float normX = (x / float(img.width)) * 2.0f - 1.0f; 
+                float normY = (y / float(img.height)) * 2.0f - 1.0f; 
 
-                outData.inputs.push_back({ static_cast<engineFloat>(normX), static_cast<engineFloat>(normY) }); //[cite: 1]
+                outData.inputs.push_back({ static_cast<engineFloat>(normX), static_cast<engineFloat>(normY) }); 
                 outData.outputs.push_back({ 
-                    static_cast<engineFloat>(img.data[(y * img.width + x) * 3]),     //[cite: 1]
-                    static_cast<engineFloat>(img.data[(y * img.width + x) * 3 + 1]), //[cite: 1]
-                    static_cast<engineFloat>(img.data[(y * img.width + x) * 3 + 2])  //[cite: 1]
+                    static_cast<engineFloat>(img.data[(y * img.width + x) * 3]),     
+                    static_cast<engineFloat>(img.data[(y * img.width + x) * 3 + 1]), 
+                    static_cast<engineFloat>(img.data[(y * img.width + x) * 3 + 2])  
                 });
             }
         }
@@ -47,7 +47,7 @@ public:
     void save(const std::string& filename, int width, int height, const std::vector<engineFloat>& data) override {
         std::vector<uint8_t> byte_data(width * height * 3);
         for (int i = 0; i < width * height * 3; ++i) {
-            byte_data[i] = static_cast<uint8_t>(std::clamp(data[i], (engineFloat)0.0f, (engineFloat)1.0f) * 255.0f); //[cite: 1]
+            byte_data[i] = static_cast<uint8_t>(std::clamp(data[i], (engineFloat)0.0f, (engineFloat)1.0f) * 255.0f); 
         }
         // JPEG specific: The last argument is the quality (1-100)
         stbi_write_jpg(filename.c_str(), width, height, 3, byte_data.data(), 90);

@@ -2,7 +2,7 @@
 #include "WindowRenderer.h"
 #include "ImageGenerator.h"
 #include "CostFuncDataBase.h"
-#include "Gemini/BMPParser.h"
+#include "Gemini/ImageParser.h"
 
 #include "Config.h"
 #include "NeuralImageRecreator.h"

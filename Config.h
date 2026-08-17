@@ -12,9 +12,9 @@ namespace config
 	inline bool use_gpu = true;
 	inline bool benchmark_enabled = false;
 
-	inline std::string target_image_file = "Training_Data/DIV2K_train_LR_mild/0064x4m.bmp"; //"Training_Data/DIV2K_train_LR_mild/0064x4m.bmp";// "Training_Data/0064_x4.bmp";
+	inline std::string target_image_file = "Training_Data/DIV2K_train_LR_mild/0064x4m.png"; //"Training_Data/DIV2K_train_LR_mild/0064x4m.bmp";// "Training_Data/0064_x4.bmp";
 	// A high res version to compare to used in MetricsReporter
-	inline std::string hd_image_file = "Training_Data/DIV2K_train_HR/0064.bmp";
+	inline std::string hd_image_file = "Training_Data/DIV2K_train_HR/0064.png";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
@@ -39,7 +39,7 @@ namespace config
 	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)
 	inline size_t batch_size = 256ull*256ull;//510 * 338; // 256ull*256ull;//8192;//65536;//8192;//32;
 	inline bool shuffle_pixel_batch = true; // TODO: either make this an input parameter or make this the default if batch size isnt == to image size
-	inline size_t print_every_n_batches = 500;
+	inline size_t print_every_n_batches = 100;
 	//inline float initial_learning_rate = 0.0001f;
 	inline engineFloat initial_learning_rate = 0.1f;//0.005f;//0.005f;//WIRE //0.000025f; Siren
 	inline size_t max_epochs = 40'000; // From the PyTorch script niters = 2000
