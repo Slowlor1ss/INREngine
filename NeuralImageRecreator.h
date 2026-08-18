@@ -25,6 +25,7 @@ private:
 	struct InitData
 	{
 		ImgParser::ImageParsedData data;
+		ImgParser::ImageParsedData hdData;
 		std::string weightsFile;
 		std::vector<engineFloat> flatTargetImage;
 		std::vector<engineFloat> flatHDImage;

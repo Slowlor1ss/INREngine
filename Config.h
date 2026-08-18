@@ -11,9 +11,10 @@ namespace config
 {
 	inline bool use_gpu = true;
 	inline bool benchmark_enabled = false;
+	inline bool save_on_close = false;
 
 	// I/O settings
-	inline std::string target_image_file = "Training_Data/DIV2K_train_LR_mild/0064x4m.png"; //"Training_Data/DIV2K_train_LR_mild/0064x4m.bmp";// "Training_Data/0064_x4.bmp";
+	inline std::string target_image_file = "Training_Data/0064_x4.png"; //"Training_Data/DIV2K_train_LR_mild/0064x4m.png";// "Training_Data/0064_x4.png";
 	// A high res version to compare to used in MetricsReporter
 	inline std::string hd_image_file = "Training_Data/DIV2K_train_HR/0064.png";
 	inline std::string output_path = "";
@@ -28,8 +29,8 @@ namespace config
 	// Layer settings
 	inline std::vector<size_t> custom_layer_dims = { 128, 128, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
-		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
-		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::Finer>(),
+		ActFunc::DataBase::FindActFunc<ActFunc::Finer>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::None>()
 	};
 	

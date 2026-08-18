@@ -36,11 +36,12 @@ void ReportProgress(engineFloat cost, engineFloat learningRate, const std::vecto
 	{
 		ImageUtils::ImageMetrics metrics = ImageUtils::CalculateFullImageMetrics(rgbImage, flatTargetImage);
 
-		std::cout    << "COST: " << cost 
-					<< " LR: " << learningRate 
-					<< " | G_SSIM: " << metrics.ssim 
-					<< " MAE: " << metrics.mae 
-					<< " PSNR(dB): " << metrics.psnr << '\n';
+		std::cout << std::left << std::fixed << std::setprecision(6)
+				  << "COST: "		<< std::setw(9) << cost 
+				  << " LR: "		<< std::setw(9) << learningRate 
+				  << "| G_SSIM: "	<< std::setw(9) << metrics.ssim 
+				  << " MAE: "		<< std::setw(9) << metrics.mae 
+				  << " PSNR(dB): "	<< std::setw(9) << metrics.psnr << '\n';
 	}
 	// Compare out generated image to a ideal HD version (metrics only)
 	// A 4x scale means 4x width AND 4x height, so the array is 16x larger hence (output_image_scale * output_image_scale)
@@ -48,11 +49,12 @@ void ReportProgress(engineFloat cost, engineFloat learningRate, const std::vecto
 	{
 		ImageUtils::ImageMetrics metrics = ImageUtils::CalculateFullImageMetrics(rgbImage, flatHDImage);
 
-		std::cout    << "COST: " << cost 
-					<< " LR: " << learningRate 
-					<< " | G_SSIM: " << metrics.ssim 
-					<< " MAE: " << metrics.mae 
-					<< " PSNR(dB): " << metrics.psnr << '\n';
+		std::cout << std::left << std::fixed << std::setprecision(6)
+				  << "COST: "		<< std::setw(9) << cost 
+				  << " LR: "		<< std::setw(9) << learningRate 
+				  << "| G_SSIM: "	<< std::setw(9) << metrics.ssim 
+				  << " MAE: "		<< std::setw(9) << metrics.mae 
+				  << " PSNR(dB): "	<< std::setw(9) << metrics.psnr << '\n';
 	}
 	else
 	{

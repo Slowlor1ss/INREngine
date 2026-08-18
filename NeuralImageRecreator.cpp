@@ -29,9 +29,8 @@ NeuralImageRecreator::InitData NeuralImageRecreator::LoadInitData()
 	
 	if (!config::hd_image_file.empty())
 	{
-		ImgParser::ImageParsedData hdData; // Not needed outside this if statement so no need to save it like init.data
-		ImageParser::ParseData(config::hd_image_file.c_str(), hdData);
-		init.flatHDImage = FlattenTargetImage(hdData);
+		ImageParser::ParseData(config::hd_image_file.c_str(), init.hdData);
+		init.flatHDImage = FlattenTargetImage(init.hdData);
 	}
 
 	// Setup our coordinate mapper lambda for the ImageGenerator
@@ -97,17 +96,23 @@ NeuralImageRecreator::NeuralImageRecreator()
 	}
 	else
 	{
-		// Shared-memory bridge to the Python live viewer (non blocking)
-		// Tag defaults to the output filename stem so we can have concurrent runs without collisions (TODO: possibly need something more granualr, e.g. hidden layers name and size, or hash of all settings added up?)
-		m_pyViz = std::make_unique<PythonVisualizerBridge>(
-			m_renderWidth, m_renderHeight, m_init.data.width, m_init.data.height,
-			static_cast<int>(m_tarChan), true, fs::path(config::output_filename).stem().string());
-		
 		// Render training input if theres no HD Target
 		if (m_init.flatHDImage.empty())
+		{
+			m_pyViz = std::make_unique<PythonVisualizerBridge>(
+				m_renderWidth, m_renderHeight, m_init.data.width, m_init.data.height,
+				static_cast<int>(m_tarChan), true, fs::path(config::output_filename).stem().string());
+			
 			m_pyViz->PushReferenceFrame(m_init.flatTargetImage);
+		}
 		else
+		{
+			m_pyViz = std::make_unique<PythonVisualizerBridge>(
+			m_renderWidth, m_renderHeight, m_init.hdData.width, m_init.hdData.height,
+			static_cast<int>(m_tarChan), true, fs::path(config::output_filename).stem().string());
+			
 			m_pyViz->PushReferenceFrame(m_init.flatHDImage);
+		}
 		
 		// Auto spawn py viewer
 		m_pyViz->LaunchViewerProcess();
@@ -167,7 +172,7 @@ void NeuralImageRecreator::SaveFinalOutputs(GpuNetwork* gpuNet)
 	// No point really
 	// m_window->Update(finalReconstructedImage);
 
-	if (!config::benchmark_enabled)
+	if (!config::benchmark_enabled && config::save_on_close)
 	{
 		ImageParser::Save("network_output.bmp", m_init.data.width, m_init.data.height, finalReconstructedImage);
 		std::cout << "Successfully saved network_output.bmp!\n";
@@ -183,10 +188,14 @@ void NeuralImageRecreator::SaveFinalOutputs(GpuNetwork* gpuNet)
 		SaveCheckpoint(m_network, gpuNet, benchWeightsFile);
 		std::cout << "Final " << benchWeightsFile << " saved.\n";
 	}
-	else
+	else if (config::save_on_close)
 	{
 		SaveCheckpoint(m_network, gpuNet, m_init.weightsFile);
 		std::cout << "Final " << m_init.weightsFile << " saved.\n";
+	}
+	else
+	{
+		std::cout << "Nothing saved as \"save_on_close = false\" was specified!\n";
 	}
 }
 

@@ -42,16 +42,16 @@ namespace GridEncoding
         // follows loses its reason to smooth/generalize between grid cells.
         
         // How many separate feature grids are stacked together
-        constexpr int NumLevels = 8; 
+        constexpr int NumLevels = 12; 
         // Size of the very first, coarsest grid
         constexpr int BaseResolution = 16; 
         // Number of trainable floating-point values (features) stored at every single intersection (corner) of the grid; 
         // total output channel count fed into the neural network is NumLevels * FeaturesPerLevel
-        constexpr int FeaturesPerLevel = 4; 
+        constexpr int FeaturesPerLevel = 16; 
         // Resolution of the final, most detailed grid
         // at FinestResolution 'R', pixels-per-cell is 719/R vertically and 1277/R horizontally
-        // (smallest side / 1.2) seems to work well
-        constexpr int FinestResolution =  339 / 1.2; // set to just under the training res (grid is of size FinestResolution x FinestResolution)
+        // (smallest side / 1.4 seems to work well)
+        constexpr int FinestResolution =  339 / 2.6; // set to just under the training res (grid is of size FinestResolution x FinestResolution)
     }
 
     // Level resolutions form a geometric progression from BaseResolution to
