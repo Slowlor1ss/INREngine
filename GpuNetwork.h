@@ -69,17 +69,17 @@ struct GpuLayer
 // Vram container for the multi-resolution grid encoder (all levels concatenated
 // into single flat buffers, indexed via d_levelResolutions/d_levelParamOffsets).
 // This plays the exact same role for the grid encoder that GpuLayer plays for a
-// normal dense layer: persistent params + accumulated grad + Adam state.
+// normal dense layer: persistent params + accumulated grad + Adam state
 struct GpuGridEncoder
 {
     int numLevels = 0;
     int featuresPerLevel = 0;
     int totalParams = 0;       // sum over levels of R_l*R_l*F
-    int totalOutputChannels = 0; // numLevels * featuresPerLevel -- this becomes Layer 0's numNeurons
+    int totalOutputChannels = 0; // numLevels * featuresPerLevel; this becomes Layer 0's numNeurons
 
-    // One entry per level, uploaded once at construction (never changes -- fine
+    // One entry per level, uploaded once at construction (never changes, fine
     // to bake into the captured graph since these are fixed device pointers to
-    // fixed data, same as e.g. curr.d_weights for a normal layer).
+    // fixed data, same as e.g. curr.d_weights for a normal layer)
     int* d_levelResolutions = nullptr;
     int* d_levelParamOffsets = nullptr;
 
@@ -91,21 +91,12 @@ struct GpuGridEncoder
     int adam_t = 0;
     engineFloat learningRateMultiplier = 1.0f;
 
-    // Fixed mailbox for this batch's pixel coordinates (Size: batchSize).
-    // IMPORTANT (this is the CUDA graph subtlety): the dataset's d_pixelX/d_pixelY
-    // + offset is a DIFFERENT pointer value every batch, same as d_batchInputAct
-    // is today. If a captured graph node referenced that varying pointer directly,
-    // every replay after the first would silently keep using whatever offset was
-    // current at capture time. So exactly like the existing input-layer mailbox
-    // copy in TrainBatchGPU, the varying dataset pointer gets cudaMemcpyAsync'd
-    // into this FIXED buffer every call (outside/before the `if (!m_graphCaptured)`
-    // block, so it re-runs on every launch), and the captured
-    // RunGridEncodeForwardGPU/BackwardGPU calls always read from this fixed address.
+    // Fixed mailbox for this batch's pixel coordinates (Size: batchSize)
     engineFloat* d_batchPixelX = nullptr;
     engineFloat* d_batchPixelY = nullptr;
 };
 
-// GPU network manager
+// GPU manager
 class GpuNetwork 
 {
 public:
@@ -119,8 +110,8 @@ public:
         const engineFloat* d_batchTargetGradX,
         const engineFloat* d_batchTargetGradY,
         // Pass gpuData.d_pixelX + offset / gpuData.d_pixelY + offset here, same
-        // convention as d_batchInputAct -- the varying pointer, not a fixed one.
-        // TrainBatchGPU copies it into the fixed mailbox internally.
+        // convention as d_batchInputAct the varying pointer, not a fixed one
+        // TrainBatchGPU copies it into the fixed mailbox internally
         const engineFloat* d_batchPixelXSrc,
         const engineFloat* d_batchPixelYSrc,
         engineFloat spatialLossWeight,
@@ -138,8 +129,8 @@ public:
     // Pre-allocate required VRAM
     // useGridEncoding: if true, Layer 0's numNeurons MUST already equal
     // GridEncoding::Config::NumLevels * FeaturesPerLevel on the CPU side (see the
-    // NeuralImageRecreator.hpp note) -- the grid encoder produces Layer 0's
-    // activations every batch instead of them being a static copy-in.
+    // NeuralImageRecreator.hpp note) the grid encoder produces Layer 0's
+    // activations every batch instead of them being a static copy-in
     GpuNetwork(const Network& cpuNetwork, int batchSize, bool useGridEncoding);
     ~GpuNetwork();
 

@@ -15,10 +15,10 @@ public:
     void UploadData(
         const std::vector<engineFloat>& inputAct, const std::vector<engineFloat>& inputGradX, const std::vector<engineFloat>& inputGradY,
         const std::vector<engineFloat>& targetAct, const std::vector<engineFloat>& targetGradX, const std::vector<engineFloat>& targetGradY,
-        // Raw normalized [0,1] pixel coordinates, one entry per pixel -- this is what
+        // Raw normalized [0,1] pixel coordinates, one entry per pixel , this is what
         // feeds the grid encoder. Separate from inputAct/GradX/GradY (those are still
-        // whatever the CPU coordMapper produces, e.g. PE features, if you're using one
-        // alongside the grid encoder rather than in place of it).
+        // whatever the CPU coordMapper produces, e.g. PE features, if using one
+        // alongside the grid encoder rather than in place of it)
         const std::vector<engineFloat>& pixelX, const std::vector<engineFloat>& pixelY
     );
 

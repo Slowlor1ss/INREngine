@@ -7,7 +7,7 @@
 #include "Gemini/BMPParser.h"
 
 // Encoded inputs/targets ready for training, plus whichever raw pixel coordinates line up
-// with them (identity order, or shuffled order -- see BuildSpatialDataset).
+// with them (identity order, or shuffled order see BuildSpatialDataset).
 struct SpatialDataset
 {
 	std::vector<ImageUtils::SpatialData> inputs;

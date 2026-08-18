@@ -40,8 +40,8 @@ namespace SharedAct
 
         // FINER (variable-periodic sine): sin(w0 * (|x|+1) * x)
         constexpr engineFloat Finer_w0 = 5.f; // 30.0f;
-        // Bias init range for FINER -- this is what actually gives it its extra
-        // frequency range over SIREN, see GenerateInitialBiases below.
+        // Bias init range for FINER, this is what actually gives it its extra
+        // frequency range over SIREN, see GenerateInitialBiases below
         constexpr engineFloat Finer_bias_k = 0.5f;//2.5f;
 
         constexpr engineFloat Hybrid_mix = 0.20f;

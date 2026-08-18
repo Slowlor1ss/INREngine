@@ -52,6 +52,8 @@ ImageWindow::~ImageWindow() {
 }
 
 void ImageWindow::Update(const std::vector<engineFloat>& rgbData) {
+    if (!m_hwnd) return; // Connot update a window we dont have (happens when we use pyViz)
+    
     for (int i = 0; i < m_width * m_height; ++i) {
         engineFloat r = rgbData[i * 3 + 0];
         engineFloat g = rgbData[i * 3 + 1];

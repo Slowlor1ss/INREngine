@@ -436,6 +436,7 @@
     <ClInclude Include="Gemini\HDRParser.h" />
     <ClInclude Include="Gemini\IImageParser.h" />
     <ClInclude Include="Gemini\ImageParser.h" />
+    <ClCompile Include="PythonVisualizerBridge.cpp" />
     <ClCompile Include="TrainingDataset.cpp" />
     <ClCompile Include="TrainingMetricsReporter.cpp" />
     <ClCompile Include="TrainingThreadPool.cpp" />
@@ -474,12 +475,14 @@
     <ClInclude Include="Network.h" />
     <ClInclude Include="NeuralImageRecreator.h" />
     <ClInclude Include="Parameters.h" />
+    <ClInclude Include="PythonVisualizerBridge.h" />
     <ClInclude Include="Serializable.h" />
     <ClInclude Include="TrainingDataset.h" />
     <ClInclude Include="TrainingMetricsReporter.h" />
     <ClInclude Include="TrainingThreadPool.h" />
     <ClInclude Include="TrainingUserActions.h" />
     <ClInclude Include="Types.h" />
+    <ClInclude Include="VizProtocol.h" />
     <ClInclude Include="WindowRenderer.h" />
   </ItemGroup>
   <ItemGroup>

@@ -397,7 +397,7 @@ namespace ActFunc
 		virtual engineFloat GetLearningRateMultiplier() const override { return 0.005f; }
 	};
 
-	// https://arxiv.org/abs/2312.02434 -- FINER: variable-periodic sine activation
+	// https://arxiv.org/abs/2312.02434 FINER: variable-periodic sine activation
 	// Same weight init as Siren, but the bias is initialized over a wider range
 	// which is what unlocks the extra frequency range vs plain Siren
 	class Finer : public Base
@@ -428,8 +428,8 @@ namespace ActFunc
 
 		virtual engineFloat GenerateInitialWeight(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) const override
 		{
-			// Same weight init as Siren -- FINER's paper keeps SIREN's weight
-			// scheme and only changes the bias initialization.
+			// Same weight init as Siren, FINER's paper keeps SIREN's weight
+			// scheme and only changes the bias initialization
 			const engineFloat bound = (layerIndex == 1
 				                    ? 1.0f / static_cast<engineFloat>(fanIn)
 				                    : std::sqrt(6.0f / static_cast<engineFloat>(fanIn)) / SharedAct::Config::Finer_w0);
@@ -438,11 +438,10 @@ namespace ActFunc
 			return distribution(generator);
 		}
 
-		// This is the important bit: FINER's extra frequency range comes from
+		// FINER's extra frequency range comes from
 		// initializing biases over a wide range instead of 0, so different
-		// neurons start on different "cycles" of sin((|x|+1)x). Leaving this at
-		// the Base class default of 0 throws away most of FINER's benefit over
-		// plain Siren.
+		// neurons start on different "cycles" of sin((|x|+1)x), leaving this at
+		// the Base class default of 0 throws away most of FINER's benefit over Siren
 		virtual engineFloat GenerateInitialBiases(std::mt19937& generator, size_t fanIn, size_t fanOut, size_t layerIndex) override
 		{
 			std::uniform_real_distribution<engineFloat> distribution(-SharedAct::Config::Finer_bias_k, SharedAct::Config::Finer_bias_k);

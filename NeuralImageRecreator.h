@@ -12,20 +12,8 @@
 #include "ImageUtils.h"
 #include "TrainingDataset.h"
 #include "GpuTrainingPipeline.h"
+#include "PythonVisualizerBridge.h"
 
-// Top-level orchestrator for a training run: loads the target image, builds the dataset
-// and network, then runs the interactive training loop (CPU or GPU path, live viewer,
-// checkpointing, and -- if config::benchmark_enabled -- metrics/frame logging) until the
-// user quits or config::max_epochs is reached.
-//
-// This replaces the old free function `NeuralImageRecreator()`, which lived in a header
-// that was #included into exactly one .cpp rather than compiled as its own translation
-// unit -- that pattern doesn't scale past one .cpp and encouraged everything to pile up as
-// loosely related global functions. This class + its sibling files (TrainingDataset,
-// GpuTrainingPipeline, TrainingMetricsReporter, TrainingUserActions, CheckpointUtils) split
-// that pile up along fairly natural seams: dataset building, GPU state ownership, reporting,
-// user input, and checkpoint I/O each get their own small header/source pair, and this class
-// wires them together.
 class NeuralImageRecreator
 {
 public:
@@ -34,9 +22,6 @@ public:
 	void Run();
 
 private:
-	// Everything that needs to exist before the Network can be constructed (its layer dims
-	// depend on the loaded image + coordinate mapper), bundled so it can all be built in one
-	// shot in the member-initializer list, ahead of m_network.
 	struct InitData
 	{
 		ImgParser::ImageParsedData data;
@@ -58,8 +43,9 @@ private:
 	InitData m_init;
 	Network m_network;
 	TrainingThreadPool m_threadPool;
-	std::unique_ptr<GpuTrainingPipeline> m_gpu;
-	std::unique_ptr<ImageWindow> m_window;
+	std::unique_ptr<GpuTrainingPipeline> m_gpu = nullptr;
+	std::unique_ptr<ImageWindow> m_window = nullptr;
+	std::unique_ptr<PythonVisualizerBridge> m_pyViz = nullptr; // optional, null-safe
 
 	size_t m_inChan = 0;
 	size_t m_tarChan = 0;

@@ -51,10 +51,10 @@ GpuTrainingPipeline::GpuTrainingPipeline(Network& cpuNetwork, const SpatialDatas
 	std::cout << "Flattening dataset for VRAM transfer...\n";
 	std::vector<engineFloat> flatInAct(m_paddedPixels * inChan), flatInGradX(m_paddedPixels * inChan), flatInGradY(m_paddedPixels * inChan);
 	std::vector<engineFloat> flatTarAct(m_paddedPixels * tarChan), flatTarGradX(m_paddedPixels * tarChan), flatTarGradY(m_paddedPixels * tarChan);
-	// Raw normalized [0,1] pixel coordinates for the grid encoder. dataset.pixelX/Y are
-	// assumed already in the coordMapper's input space -- if that space isn't [0,1],
+	// Raw normalized [0,1] pixel coordinates for the grid encoder, dataset.pixelX/Y are
+	// assumed already in the coordMapper's input space if that space isn't [0,1],
 	// normalize here (GridEncoding::FindCell clamps to [0,1], so anything outside it just
-	// clamps to an edge cell silently).
+	// clamps to an edge cell silently)
 	std::vector<engineFloat> flatPixelX(m_paddedPixels), flatPixelY(m_paddedPixels);
 
 	for (size_t i = 0; i < m_paddedPixels; ++i) {
@@ -73,7 +73,7 @@ GpuTrainingPipeline::GpuTrainingPipeline(Network& cpuNetwork, const SpatialDatas
 			flatTarGradX[i * tarChan + c] = dataset.targets[srcIdx].gradX[c];
 			flatTarGradY[i * tarChan + c] = dataset.targets[srcIdx].gradY[c];
 		}
-		flatPixelX[i] = dataset.pixelX[srcIdx]; // Now correctly matches the shuffled target colors!
+		flatPixelX[i] = dataset.pixelX[srcIdx];
 		flatPixelY[i] = dataset.pixelY[srcIdx];
 	}
 
@@ -175,7 +175,7 @@ engineFloat GpuTrainingPipeline::RunEpoch(size_t& currentImageIdx, size_t printE
 		
 		// TODO: we need to fix this as our batchsize is not divisable by the total pixes (often at least)
 		// we need to wrap around or do something; Maybe we can allocate a d_pixelIndices buffer containing 
-		// numbers 0 to m_totalPixels, shuffle it randomly every epoch, and have the GPU pull random pixels for every batch.
+		// numbers 0 to m_totalPixels, shuffle it randomly every epoch, and have the GPU pull random pixels for every batch
 		//
 		// For now well just move back a bit e.g. if batchsize=30 totalPx=100 we do 0-29, 30-59, 60-89, (move back) 70-99
 		currentImageIdx += batchSize;

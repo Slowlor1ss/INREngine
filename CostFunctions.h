@@ -69,8 +69,8 @@ namespace CostFunc
 	public:
 		static constexpr const char* k_name{ "Charbonnier" };
 		virtual GpuCostType GetGpuType() const override { return GpuCostType::Charbonnier; }
-		// Small epsilon in normalized [0,1] pixel space -- big enough to keep the
-		// gradient well-behaved near zero error, small enough to stay close to L1.
+		// Small epsilon in normalized [0,1] pixel space, big enough to keep the
+		// gradient well-behaved near zero error, small enough to stay close to L1
 		//static constexpr engineFloat k_epsilon{ 1e-3f };
 		//static constexpr engineFloat k_epsilonSquared{ k_epsilon * k_epsilon };
 

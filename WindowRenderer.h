@@ -15,12 +15,12 @@ public:
     void Update(const std::vector<engineFloat>& rgbData);
     
     // Call this in your main loop so the window doesn't freeze
-    void ProcessMessages(); 
+    static void ProcessMessages(); 
 
 private:
-    HWND m_hwnd;
-    int m_width;
-    int m_height;
+    HWND m_hwnd = nullptr;
+    int m_width = 0;
+    int m_height = 0;
     std::vector<uint8_t> m_displayBuffer;
     BITMAPINFO m_bmi;
 };

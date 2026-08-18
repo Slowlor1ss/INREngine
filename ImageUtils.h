@@ -35,15 +35,10 @@ public:
         int channels = 3); // Defaulting to RGB);
 
     // Expands a coordinate (x, y) into multiple frequency bands with decay, along with the
-    // analytic derivatives of each band w.r.t. x and y.
+    // analytic derivatives of each band w.r.t. x and y
     static SpatialData PositionalEncodeWithDerivatives(engineFloat x, engineFloat y, int numFrequencies);
 
-    // Fixed random Fourier feature encoder ("Gaussian" positional encoding). Usage:
-    //   ImageUtils::GaussianPositionalEncoder encoder(64, 10.0f);
-    //   ImageUtils::SpatialData d = encoder(x, y);
-    // Kept as a nested class (rather than a free function) specifically so it can still be
-    // used as a callable via operator() -- e.g. handed straight to a std::function like the
-    // coordinate mapper in TrainingDataset.cpp.
+    // Fixed random Fourier feature encoder ("Gaussian" positional encoding)
     class GaussianPositionalEncoder
     {
     public:

@@ -20,8 +20,8 @@ namespace SharedCost
     // Hyperparameters
     namespace Config
     {
-        // Small epsilon in normalized [0,1] pixel space -- big enough to keep the
-        // gradient well-behaved near zero error, small enough to stay close to L1.
+        // Small epsilon in normalized [0,1] pixel space, big enough to keep the
+        // gradient well-behaved near zero error, small enough to stay close to L1
         constexpr engineFloat Charbonnier_eps = 1e-3f;
         constexpr engineFloat Charbonnier_eps_sqrd = Charbonnier_eps * Charbonnier_eps ;
     }

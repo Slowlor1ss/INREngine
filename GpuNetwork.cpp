@@ -71,15 +71,7 @@ void GpuNetwork::TrainBatchGPU(
     CUDA_CHECK(cudaMemcpyAsync(d_fixedTargetGradX, d_batchTargetGradX, outBytes, cudaMemcpyDeviceToDevice, m_stream));
     CUDA_CHECK(cudaMemcpyAsync(d_fixedTargetGradY, d_batchTargetGradY, outBytes, cudaMemcpyDeviceToDevice, m_stream));
 
-    // Stage this batch's pixel coordinates for the grid encoder into its FIXED
-    // mailbox. Same reasoning as the input/target copies above: d_batchPixelXSrc
-    // is gpuData.d_pixelX + offset, a DIFFERENT pointer value every batch. If a
-    // captured graph node read that varying pointer directly, every replay after
-    // the first would silently keep re-reading whatever offset was current at
-    // capture time. Copying into a fixed address here (queued fresh on the stream
-    // every single call, same as the LR/input/target copies above) is what makes
-    // it safe for the graph-captured RunGridEncodeForwardGPU/BackwardGPU calls
-    // inside ForwardPass()/BackwardPass() to always see the current batch.
+    // Fixed mailbox like explained above
     if (m_useGridEncoding) {
         size_t pixelBytes = m_batchSize * sizeof(engineFloat);
         CUDA_CHECK(cudaMemcpyAsync(m_gridEncoder.d_batchPixelX, d_batchPixelXSrc, pixelBytes, cudaMemcpyDeviceToDevice, m_stream));
@@ -446,9 +438,9 @@ void GpuNetwork::AllocateGridEncoderMemory(int batchSize)
     CUDA_CHECK(cudaMalloc(&m_gridEncoder.d_v, paramBytes));
     CUDA_CHECK(cudaMemset(m_gridEncoder.d_v, 0, paramBytes));
 
-    // Small random init (Instant-NGP inits near 0 -- these features get refined
+    // Small random init (Instant-NGP inits near 0, these features get refined
     // fast, and starting large risks the first few batches producing noisy,
-    // high-magnitude activations into the MLP before anything has trained).
+    // high-magnitude activations into the MLP before anything has trained)
     std::vector<engineFloat> hostInit(m_gridEncoder.totalParams);
     std::mt19937 gen(1337);
     std::uniform_real_distribution<engineFloat> dist(-1e-4f, 1e-4f);
@@ -649,8 +641,8 @@ void GpuNetwork::BackwardPass(
 
     // The loop above, at i=1, already computed prev = m_layers[0]'s
     // d_colorError/d_errorGradX/d_errorGradY (zeroed then GEMM-accumulated into,
-    // same as every other layer -- layer 0 already has these buffers allocated).
-    // Scatter that error into the grid's parameter gradients.
+    // same as every other layer, layer 0 already has these buffers allocated)
+    // Scatter that error into the grid's parameter gradients
     if (m_useGridEncoding) {
         GpuLayer& inputLayer = m_layers[0];
         PROFILE_PUSH_COLOR("GridEncodeBackward", 0xFFFFE1BA);
@@ -707,11 +699,11 @@ void GpuNetwork::ApplyGradientsGPU(engineFloat baseLearningRate)
     }
 
     if (m_useGridEncoding) {
-        // One time step for the whole encoder (not per-level -- all levels train
+        // One time step for the whole encoder (not per-level all levels train
         // together every batch, so they should share the same Adam bias-correction
         // schedule). Each level gets its own RunAdamOptimizerGPU call over its own
         // slice of the concatenated buffers, exactly like weights vs weightsScale
-        // above are two separate calls into the same conceptual "layer".
+        // above are two separate calls into the same conceptual "layer"
         m_gridEncoder.adam_t += 1;
         using namespace GridEncoding;
         int offset = 0;

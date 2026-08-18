@@ -91,7 +91,27 @@ NeuralImageRecreator::NeuralImageRecreator()
 		                                              m_renderWidth, m_renderHeight, m_init.coordMapper);
 	}
 
-	m_window = std::make_unique<ImageWindow>(m_renderWidth, m_renderHeight);
+	if (!config::use_py_viz)
+	{
+		m_window = std::make_unique<ImageWindow>(m_renderWidth, m_renderHeight);
+	}
+	else
+	{
+		// Shared-memory bridge to the Python live viewer (non blocking)
+		// Tag defaults to the output filename stem so we can have concurrent runs without collisions (TODO: possibly need something more granualr, e.g. hidden layers name and size, or hash of all settings added up?)
+		m_pyViz = std::make_unique<PythonVisualizerBridge>(
+			m_renderWidth, m_renderHeight, m_init.data.width, m_init.data.height,
+			static_cast<int>(m_tarChan), true, fs::path(config::output_filename).stem().string());
+		
+		// Render training input if theres no HD Target
+		if (m_init.flatHDImage.empty())
+			m_pyViz->PushReferenceFrame(m_init.flatTargetImage);
+		else
+			m_pyViz->PushReferenceFrame(m_init.flatHDImage);
+		
+		// Auto spawn py viewer
+		m_pyViz->LaunchViewerProcess();
+	}
 
 	m_learningRate = config::initial_learning_rate;
 	m_liveUpdateWindow = config::initial_live_update_state;
@@ -144,7 +164,8 @@ void NeuralImageRecreator::SaveFinalOutputs(GpuNetwork* gpuNet)
 	std::vector<engineFloat> finalReconstructedImage = GenerateReconstructedImage(
 		m_network, m_renderWidth, m_renderHeight, m_init.coordMapper, config::render_mode, m_threadPool);
 
-	m_window->Update(finalReconstructedImage);
+	// No point really
+	// m_window->Update(finalReconstructedImage);
 
 	if (!config::benchmark_enabled)
 	{
@@ -182,7 +203,7 @@ void NeuralImageRecreator::Run()
 	while (true)
 	{
 		// Pump Windows messages so the viewer window stays responsive
-		m_window->ProcessMessages();
+		ImageWindow::ProcessMessages();
 
 		// Handle non-blocking user input
 		if (!HandleUserAction(PollUserAction(), m_network, gpuNet, m_init.data, m_init.weightsFile,
@@ -211,10 +232,14 @@ void NeuralImageRecreator::Run()
 		if (m_liveUpdateWindow)
 		{
 			std::vector<engineFloat> rgbImage = RenderLiveFrame(m_renderWidth * m_renderHeight, m_tarChan);
-			m_window->Update(rgbImage);
+			if (!config::use_py_viz) {
+				m_window->Update(rgbImage);
+			}
+			else {
+				m_pyViz->PushLiveFrame(rgbImage, m_currentEpoch, cost, m_learningRate);
+			}
 
 			ReportProgress(cost, m_learningRate, rgbImage, m_init.flatTargetImage, m_init.flatHDImage);
-
 		}
 		
 		if (config::benchmark_enabled && m_currentEpoch >= config::max_epochs)

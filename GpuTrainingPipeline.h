@@ -11,16 +11,11 @@ class GpuNetwork;
 class GpuDataset;
 struct SpatialDataset;
 
-// Owns everything GPU-side for a training run: the mirrored GpuNetwork, the uploaded
-// GpuDataset, and the scratch buffers used to render preview/export frames. Replaces the
-// old free-function pair (SetupGpuTraining/SetupGpuRenderBuffers) plus raw cudaMalloc'd
-// pointers that used to live directly inside NeuralImageRecreator() -- those buffers were
-// never freed until the process exited. This frees them in its destructor instead.
 class GpuTrainingPipeline
 {
 public:
 	// Uploads `dataset` (padded to a multiple of config::batch_size) and allocates the
-	// render buffers used for live-preview/export frames at renderWidth x renderHeight.
+	// render buffers used for live-preview/export frames at renderWidth x renderHeight
 	GpuTrainingPipeline(Network& cpuNetwork, const SpatialDataset& dataset, size_t inChan, size_t tarChan,
 	                    int renderWidth, int renderHeight,
 	                    const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordMapper);
@@ -30,13 +25,11 @@ public:
 	GpuTrainingPipeline& operator=(const GpuTrainingPipeline&) = delete;
 
 	GpuNetwork& GetNetwork() { return *m_net; }
-
-	// Runs printEveryNBatches batches, advancing currentImageIdx/learningRate/currentEpoch
-	// exactly like the CPU path (NeuralImageRecreator::RunCpuEpoch) does.
+	
 	engineFloat RunEpoch(size_t& currentImageIdx, size_t printEveryNBatches, size_t batchSize,
 	                     engineFloat& learningRate, size_t& currentEpoch);
 
-	// Runs inference across the whole render buffer and returns a flat RGB image.
+	// Runs inference across the whole render buffer and returns a flat RGB image
 	std::vector<engineFloat> RenderFrame(int totalRenderPixels, size_t tarChan) const;
 
 private:
@@ -47,7 +40,7 @@ private:
 	size_t m_totalPixels = 0;
 	size_t m_paddedPixels = 0;
 
-	// Render buffers (owned; freed in the destructor)
+	// Render buffers (owned)
 	engineFloat* d_renderPixelX = nullptr;
 	engineFloat* d_renderPixelY = nullptr;
 	engineFloat* d_renderInputs = nullptr; // Fallback buffer for standard PE (non grid-encoding) rendering

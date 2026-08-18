@@ -12,29 +12,33 @@ namespace config
 	inline bool use_gpu = true;
 	inline bool benchmark_enabled = false;
 
+	// I/O settings
 	inline std::string target_image_file = "Training_Data/DIV2K_train_LR_mild/0064x4m.png"; //"Training_Data/DIV2K_train_LR_mild/0064x4m.bmp";// "Training_Data/0064_x4.bmp";
 	// A high res version to compare to used in MetricsReporter
 	inline std::string hd_image_file = "Training_Data/DIV2K_train_HR/0064.png";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
+	// Render settings
+	inline bool use_py_viz = true; // Swap rendering between using the windows version in C++ and out Python version
 	inline engineFloat output_image_scale = 4.f;
+	inline RenderMode render_mode = RenderMode::StandardRGB;
+	inline bool initial_live_update_state = true;
+
+	// Layer settings
 	inline std::vector<size_t> custom_layer_dims = { 128, 128, 3 };
 	inline std::vector<ActFunc::Base*> custom_activations = {
 		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::Wire>(),
 		ActFunc::DataBase::FindActFunc<ActFunc::None>()
 	};
-
-	inline RenderMode render_mode = RenderMode::StandardRGB;
-
+	
+	// Input Encoding
 	inline bool use_grid_encoding = true;
 	inline bool use_positional_encoding = false;
 	inline int pe_num_frequencies = 10; // Positional encode
 	inline bool use_gaussian_pe = false;
-
-	inline bool initial_live_update_state = true;
-
+	
 	// Hyperparameters & Training State
 	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)
 	inline size_t batch_size = 256ull*256ull;//510 * 338; // 256ull*256ull;//8192;//65536;//8192;//32;
