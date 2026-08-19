@@ -1,7 +1,3 @@
-"""
-Beyond-Compare-style comparison view; 2 synced images on top
-(current / target), and on the bottom a diff row (tolerance + ghost mode), with a pixel inspector
-"""
 from typing import Optional
 
 import numpy as np

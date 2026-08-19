@@ -1,7 +1,6 @@
 """
-Beyond Compare based pixel inspector: two 9x9 close-up grids (one per image)
-centered on whatever pixel the mouse is over in CompareView, plus X/Y and
-RGB readouts for both
+Pixel inspector: two 9x9 close-up grids (one per image) centered on whatever pixel the mouse is over in CompareView, 
+plus X/Y and RGB readouts for both
 """
 from typing import Optional
 
@@ -15,7 +14,6 @@ CELL_PX = 14
 
 
 def extract_patch(arr: Optional[np.ndarray], x: int, y: int, n: int = GRID_N) -> np.ndarray:
-    """n x n neighbourhood centered on (x, y), zero-padded past the image edge"""
     patch = np.zeros((n, n, 3), dtype=np.float32)
     if arr is None:
         return patch
@@ -94,8 +92,7 @@ class PixelInspector(QWidget):
         root.addStretch()
 
     def update_pixel(self, x: int, y: int, current: Optional[np.ndarray], target: Optional[np.ndarray]):
-        """Called continuously on every pixel_hovered signal from any of the
-        three synced canvases in CompareView"""
+        """Update hovered pixel info for the 9x9 grid"""
         self.coord_label.setText(f"X={x}   Y={y}")
         self.grid_left.set_patch(extract_patch(current, x, y))
         self.grid_right.set_patch(extract_patch(target, x, y))
@@ -105,6 +102,6 @@ class PixelInspector(QWidget):
 
 def _rgb_text(arr: Optional[np.ndarray], x: int, y: int) -> str:
     if arr is None or not (0 <= y < arr.shape[0] and 0 <= x < arr.shape[1]):
-        return "R=-  G=-  B=-"
+        return "R=-NaN  G=-NaN  B=-NaN"
     r, g, b = arr[y, x]
     return f"R={r:.3f}  G={g:.3f}  B={b:.3f}"

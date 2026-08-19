@@ -144,10 +144,6 @@ GpuTrainingPipeline::~GpuTrainingPipeline()
 engineFloat GpuTrainingPipeline::RunEpoch(size_t& currentImageIdx, size_t printEveryNBatches, size_t batchSize,
                                           engineFloat& learningRate, size_t& currentEpoch)
 {
-	// When randering at same resolution 0 (disabled) seems to work best, but when upscaling this can help with noise reduction
-	// A hyperparameter to balance how much the network cares about slopes vs colors.
-	constexpr engineFloat spatialLossWeight = 0.0000f; // Adjust this if you want spatial gradients enabled
-
 	for (size_t j = 0; j < printEveryNBatches; j++)
 	{
 		// Calculate the flat array offsets for this specific batch
@@ -165,7 +161,7 @@ engineFloat GpuTrainingPipeline::RunEpoch(size_t& currentImageIdx, size_t printE
 			m_data->d_targetGradY + tarOffset,
 			m_data->d_pixelX + currentImageIdx,
 			m_data->d_pixelY + currentImageIdx,
-			spatialLossWeight,
+			config::spatialLossWeight,
 			learningRate
 		);
 		PROFILE_POP();

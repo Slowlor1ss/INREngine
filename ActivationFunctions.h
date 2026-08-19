@@ -69,8 +69,6 @@ namespace ActFunc
 		
 		virtual engineFloat ExecuteSecondDerivative(engineFloat x) const override
 		{
-			// The first derivative of f(x)=x is 1.0. 
-			// The derivative of a constant 1.0 is 0.0.
 			return SharedAct::NoneSecondDeriv(x); 
 		}
 

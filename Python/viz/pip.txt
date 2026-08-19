@@ -1,2 +1,4 @@
-pip install PySide6 (V 6.6)
-pip install numpy (V 1.24)
+pip install PySide6==6.6
+pip install numpy==1.24
+pip install scikit-image==0.22
+pip install pyqtgraph==0.13.7

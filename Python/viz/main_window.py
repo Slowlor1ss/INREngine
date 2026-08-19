@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from frame_source import FrameSource
 from image_canvas import ImageCanvas
 from compare_view import CompareView
+from metrics_controller import MetricsController
 
 MODE_FULL, MODE_COMPARE = range(2)
 
@@ -28,6 +29,11 @@ class MainWindow(QMainWindow):
         self.source.target_ready.connect(self._on_target)
         self.source.stats_updated.connect(self._on_stats)
         self.source.producer_lost.connect(self._on_producer_lost)
+
+        self.metrics = MetricsController(self)
+        self.source.frame_ready.connect(self.metrics.set_current_frame)
+        self.source.target_ready.connect(self.metrics.set_target_frame)
+        self.source.stats_updated.connect(lambda s: self.metrics.set_stats(s.epoch, s.cost))
 
         self._build_ui()
 
@@ -49,10 +55,13 @@ class MainWindow(QMainWindow):
         top_row.addStretch()
         fit_btn = QPushButton("Fit to window")
         actual_btn = QPushButton("Actual size (100%)")
+        metrics_btn = QPushButton("Metrics...")
         fit_btn.clicked.connect(self._fit_all)
         actual_btn.clicked.connect(self._actual_all)
+        metrics_btn.clicked.connect(lambda: self.metrics.show_window(self))
         top_row.addWidget(fit_btn)
         top_row.addWidget(actual_btn)
+        top_row.addWidget(metrics_btn)
         root.addLayout(top_row)
 
         self.stack = QStackedWidget()

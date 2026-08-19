@@ -96,23 +96,25 @@ NeuralImageRecreator::NeuralImageRecreator()
 	}
 	else
 	{
+		ImgParser::ImageParsedData* data;
+		std::vector<engineFloat>* image;
 		// Render training input if theres no HD Target
 		if (m_init.flatHDImage.empty())
 		{
-			m_pyViz = std::make_unique<PythonVisualizerBridge>(
-				m_renderWidth, m_renderHeight, m_init.data.width, m_init.data.height,
-				static_cast<int>(m_tarChan), true, fs::path(config::output_filename).stem().string());
-			
-			m_pyViz->PushReferenceFrame(m_init.flatTargetImage);
+			data = &m_init.data;
+			image = &m_init.flatTargetImage;
 		}
 		else
 		{
-			m_pyViz = std::make_unique<PythonVisualizerBridge>(
-			m_renderWidth, m_renderHeight, m_init.hdData.width, m_init.hdData.height,
-			static_cast<int>(m_tarChan), true, fs::path(config::output_filename).stem().string());
-			
-			m_pyViz->PushReferenceFrame(m_init.flatHDImage);
+			data = &m_init.hdData;
+			image = &m_init.flatHDImage;
 		}
+		
+		m_pyViz = std::make_unique<PythonVisualizerBridge>(
+		m_renderWidth, m_renderHeight, data->width, data->height,
+		static_cast<int>(m_tarChan), config::autoclose_py_viz, fs::path(config::output_filename).stem().string());
+		
+		m_pyViz->PushReferenceFrame(*image);
 		
 		// Auto spawn py viewer
 		m_pyViz->LaunchViewerProcess();
@@ -251,7 +253,7 @@ void NeuralImageRecreator::Run()
 			ReportProgress(cost, m_learningRate, rgbImage, m_init.flatTargetImage, m_init.flatHDImage);
 		}
 		
-		if (config::benchmark_enabled && m_currentEpoch >= config::max_epochs)
+		if ( (config::benchmark_enabled || config::quit_after_max_epochs) && m_currentEpoch >= config::max_epochs )
 		{
 			std::cout << "Max epochs reached! Auto-quitting for benchmark pipeline...\n";
 			break;

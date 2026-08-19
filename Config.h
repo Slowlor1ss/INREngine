@@ -22,6 +22,7 @@ namespace config
 
 	// Render settings
 	inline bool use_py_viz = true; // Swap rendering between using the windows version in C++ and out Python version
+	inline bool autoclose_py_viz = false && use_py_viz;
 	inline engineFloat output_image_scale = 4.f;
 	inline RenderMode render_mode = RenderMode::StandardRGB;
 	inline bool initial_live_update_state = true;
@@ -47,9 +48,10 @@ namespace config
 	inline size_t print_every_n_batches = 100;
 	//inline float initial_learning_rate = 0.0001f;
 	inline engineFloat initial_learning_rate = 0.1f;//0.005f;//0.005f;//WIRE //0.000025f; Siren
-	inline size_t max_epochs = 40'000; // From the PyTorch script niters = 2000
+	inline size_t max_epochs = 3'500; // From the PyTorch script niters = 2000
+	inline bool quit_after_max_epochs = true || benchmark_enabled; // We always quite after max epochs if benchmark is enabled
 
 	// Hyperparameter to balance how much the network cares about slopes vs colors
 	// used by spatial gradient (use 0 to turn spatial gradient off)
-	//inline engineFloat spatialLossWeight = 0.f; // TODO: make a utils file so we can use this
+	inline engineFloat spatialLossWeight = 0.0000f;
 }
