@@ -46,7 +46,7 @@ class TrainingStats:
 class SharedMemoryBridge:
     """Opens the named mappings a running C++ trainer created and lets you
     poll for the latest frame. Safe to construct before the C++ side has
-    started call wait_for_producer() or retry connect() yourself."""
+    started call wait_for_producer() or retry connect() yourself"""
 
     def __init__(self, tag: str = "INR_Default"):
         self.tag = tag
@@ -64,7 +64,7 @@ class SharedMemoryBridge:
 
     def connect(self) -> bool:
         """Try to open the mappings. Returns False if the C++ side hasn't
-        created them yet caller should retry (see wait_for_producer)."""
+        created them yet caller should retry (see wait_for_producer)"""
         try:
             self._header_mmap = mmap.mmap(-1, ctypes.sizeof(VizSharedHeader),
                                            tagname=f"Local\\{self.tag}_Header")
@@ -119,7 +119,7 @@ class SharedMemoryBridge:
         """Seqlock read: retries a bounded number of times if a write was in
         progress mid-read. Returns an (H, W, C) float32 array, or None if the
         producer is (unusually) mid-write on every attempt caller should
-        just keep showing the last good frame and try again next poll."""
+        just keep showing the last good frame and try again next poll"""
         if not self.connected:
             return None
         for _ in range(8):

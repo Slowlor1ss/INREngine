@@ -2,12 +2,20 @@
 Generic zoomable, pannable image display widget built on QGraphicsView.
 """
 import numpy as np
-from PySide6.QtCore import Qt, QRectF
-from PySide6.QtGui import QImage, QPixmap, QPainter, QWheelEvent
+from PySide6.QtCore import Qt, QRectF, Signal
+from PySide6.QtGui import QImage, QPixmap, QPainter, QWheelEvent, QMouseEvent
 from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem
 
 
 class ImageCanvas(QGraphicsView):
+    # Emitted (self) whenever this canvas's zoom or pan changes, so a
+    # ViewSyncGroup can mirror it onto linked canvases.
+    view_changed = Signal(object)
+
+    # Emitted with the (possibly out-of-bounds) scene-space pixel coordinate
+    # under the mouse, on every mouse move (used for the pixel inspector)
+    pixel_hovered = Signal(int, int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._scene = QGraphicsScene(self)
@@ -20,8 +28,12 @@ class ImageCanvas(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)  # zoom centers on cursor
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
         self.setBackgroundBrush(Qt.darkGray)
+        self.setMouseTracking(True)  # so pixel_hovered fires without a button held
 
         self._fit_mode = True  # True = "fit to window", False = free zoom / actual size
+
+        self.horizontalScrollBar().valueChanged.connect(lambda _: self.view_changed.emit(self))
+        self.verticalScrollBar().valueChanged.connect(lambda _: self.view_changed.emit(self))
 
     def set_frame(self, rgb_float: np.ndarray):
         """rgb_float: (H, W, 3) float32, values expected roughly in [0,1]."""
@@ -29,21 +41,31 @@ class ImageCanvas(QGraphicsView):
         clipped = np.clip(rgb_float, 0.0, 1.0)
         rgb8 = np.ascontiguousarray((clipped * 255.0).astype(np.uint8))
         qimg = QImage(rgb8.data, w, h, w * 3, QImage.Format_RGB888)
-        # .copy() so the QImage/QPixmap owns its own buffer -- rgb8 is a local
-        # temporary that would otherwise get garbage collected out from under it.
+        # .copy() so the QImage/QPixmap owns its own buffer, rgb8 is a local
+        # temporary that would otherwise get garbage collected out from under it
         self._pixmap_item.setPixmap(QPixmap.fromImage(qimg.copy()))
         self._scene.setSceneRect(QRectF(0, 0, w, h))
         if self._fit_mode:
             self.fit_to_window()
 
+    def is_fit_mode(self) -> bool:
+        return self._fit_mode
+
+    def set_fit_mode(self, fit: bool):
+        # Setter without side effects, used by ViewSyncGroup to mirror state without
+        # re-triggering a fit/transform reset on the receiving canvas
+        self._fit_mode = fit
+
     def fit_to_window(self):
         self._fit_mode = True
         if not self._scene.sceneRect().isEmpty():
             self.fitInView(self._scene.sceneRect(), Qt.KeepAspectRatio)
+        self.view_changed.emit(self)
 
     def actual_size(self):
         self._fit_mode = False
         self.resetTransform()
+        self.view_changed.emit(self)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -54,3 +76,12 @@ class ImageCanvas(QGraphicsView):
         self._fit_mode = False
         factor = 1.25 if event.angleDelta().y() > 0 else 0.8
         self.scale(factor, factor)
+        self.view_changed.emit(self)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        super().mouseMoveEvent(event)  # keep ScrollHandDrag panning working
+        scene_pos = self.mapToScene(event.pos())
+        # Floor rather than round/int() so we land on the pixel the cursor is actually over
+        x = int(np.floor(scene_pos.x()))
+        y = int(np.floor(scene_pos.y()))
+        self.pixel_hovered.emit(x, y)

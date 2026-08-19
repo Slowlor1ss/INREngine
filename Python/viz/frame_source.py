@@ -23,7 +23,7 @@ class FrameSource(QObject):
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
-        self._timer.start(poll_ms)  # ~30Hz; plenty for a training preview, cheap on CPU
+        self._timer.start(poll_ms)  # ~30Hz; plety for our training preview - cheap on the CPU
 
     def _poll(self):
         if not self.bridge.connected:

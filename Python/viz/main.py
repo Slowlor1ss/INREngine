@@ -20,9 +20,9 @@ from main_window import MainWindow
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Live viewer for the INR training engine.")
+    parser = argparse.ArgumentParser(description="Live viewer for the INR training engine")
     parser.add_argument("--tag", default="INR_Default",
-                         help="Shared memory namespace, must match the C++ side's tag.")
+                         help="Shared memory namespace, must match the C++ side's tag")
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
