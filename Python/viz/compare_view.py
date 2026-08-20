@@ -16,6 +16,10 @@ class CompareView(QWidget):
         self._current_frame: Optional[np.ndarray] = None
         self._target_frame: Optional[np.ndarray] = None
 
+        # Resized versions so we can display images at same size when they differ in resolution
+        self._disp_current: Optional[np.ndarray] = None
+        self._disp_target: Optional[np.ndarray] = None
+
         root = QVBoxLayout(self)
 
         # Top: left (current) / right (target)
@@ -81,13 +85,15 @@ class CompareView(QWidget):
     # Data in
     def set_current_frame(self, frame: np.ndarray):
         self._current_frame = frame
-        self.canvas_left.set_frame(frame)
-        self._refresh_diff()
+        self._update_display_frames()
+        #self.canvas_left.set_frame(frame)
+        #self._refresh_diff()
 
     def set_target_frame(self, frame: np.ndarray):
         self._target_frame = frame
-        self.canvas_right.set_frame(frame)
-        self._refresh_diff()
+        self._update_display_frames()
+        #self.canvas_right.set_frame(frame)
+        #self._refresh_diff()
 
     def fit_all(self):
         for c in (self.canvas_left, self.canvas_right, self.canvas_diff):
@@ -99,14 +105,48 @@ class CompareView(QWidget):
 
 
     # Internal
+    def _update_display_frames(self):
+        self._disp_current = self._current_frame
+
+        if self._current_frame is not None and self._target_frame is not None:
+            h_c, w_c = self._current_frame.shape[:2]
+            h_t, w_t = self._target_frame.shape[:2]
+
+            max_h = max(h_c, h_t)
+            max_w = max(w_c, w_t)
+
+            # Resize the live frame (TODO: this is kinda slow)
+            if h_c < max_h or w_c < max_w:
+                self._disp_current = nearest_resize(self._current_frame, max_w, max_h)
+
+            # Resize the target frame ( not as slow as we do it once :D )
+            if self._disp_target is None or self._disp_target.shape[:2] != (max_h, max_w):
+                if h_t < max_h or w_t < max_w:
+                    self._disp_target = nearest_resize(self._target_frame, max_w, max_h)
+                else:
+                    self._disp_target = self._target_frame
+        else:
+            self._disp_target = self._target_frame
+
+        # Update the left and right canvases with the size-matched frames
+        if self._disp_current is not None:
+            self.canvas_left.set_frame(self._disp_current)
+        if self._disp_target is not None:
+            self.canvas_right.set_frame(self._disp_target)
+
+        self._refresh_diff()
+
     def _refresh_diff(self):
         if self._current_frame is None or self._target_frame is None:
             return
 
-        current = self._current_frame
-        target = self._target_frame
-        if current.shape != target.shape:
-            target = nearest_resize(target, current.shape[1], current.shape[0])
+        # current = self._current_frame
+        # target = self._target_frame
+        # if current.shape != target.shape:
+        #     target = nearest_resize(target, current.shape[1], current.shape[0])
+        
+        current = self._disp_current
+        target = self._disp_target
 
         tolerance = self.tolerance_slider.value() / 100.0
         heatmap = compute_diff_heatmap(current, target, tolerance)
@@ -118,4 +158,4 @@ class CompareView(QWidget):
         self.canvas_diff.set_frame(heatmap)
 
     def _on_pixel_hovered(self, x: int, y: int):
-        self.inspector.update_pixel(x, y, self._current_frame, self._target_frame)
+        self.inspector.update_pixel(x, y, self._disp_current, self._disp_target)
