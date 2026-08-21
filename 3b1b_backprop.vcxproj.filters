@@ -18,180 +18,189 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="3b1b_backprop.cpp">
+    <ClCompile Include="Code\C++\3b1b_backprop.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ImageGenerator.cpp">
+    <ClCompile Include="Code\C++\ImageGenerator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Layer.cpp">
+    <ClCompile Include="Code\C++\Layer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Network.cpp">
+    <ClCompile Include="Code\C++\Network.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Parameters.cpp">
+    <ClCompile Include="Code\C++\Parameters.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ActFuncDataBase.cpp">
+    <ClCompile Include="Code\C++\ActFuncDataBase.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="CostFuncDataBase.cpp">
+    <ClCompile Include="Code\C++\CostFuncDataBase.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ImageUtils.cpp">
+    <ClCompile Include="Code\C++\ImageUtils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="TrainingThreadPool.cpp">
+    <ClCompile Include="Code\C++\TrainingThreadPool.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="WindowRenderer.cpp">
+    <ClCompile Include="Code\C++\WindowRenderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GpuDataset.cpp">
+    <ClCompile Include="Code\C++\GpuDataset.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GpuNetwork.cpp">
+    <ClCompile Include="Code\C++\GpuNetwork.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="CheckpointUtils.cpp">
+    <ClCompile Include="Code\C++\CheckpointUtils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GpuTrainingPipeline.cpp">
+    <ClCompile Include="Code\C++\GpuTrainingPipeline.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="NeuralImageRecreator.cpp">
+    <ClCompile Include="Code\C++\NeuralImageRecreator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="TrainingDataset.cpp">
+    <ClCompile Include="Code\C++\TrainingDataset.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="TrainingMetricsReporter.cpp">
+    <ClCompile Include="Code\C++\TrainingMetricsReporter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="TrainingUserActions.cpp">
+    <ClCompile Include="Code\C++\TrainingUserActions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Gemini\STBImplementation.cpp">
+    <ClCompile Include="Code\C++\Gemini\STBImplementation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Code\C++\PythonVisualizerBridge.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="CostFunctions.h">
+    <ClInclude Include="Code\C++\CostFunctions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CostFuncDataBase.h">
+    <ClInclude Include="Code\C++\CostFuncDataBase.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ImageGenerator.h">
+    <ClInclude Include="Code\C++\ImageGenerator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Layer.h">
+    <ClInclude Include="Code\C++\Layer.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="ActivationFunctions.h">
+    <ClInclude Include="Code\C++\ActivationFunctions.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="Network.h">
+    <ClInclude Include="Code\C++\Network.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="Parameters.h">
+    <ClInclude Include="Code\C++\Parameters.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="Serializable.h">
+    <ClInclude Include="Code\C++\Serializable.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="ActFuncDataBase.h">
+    <ClInclude Include="Code\C++\ActFuncDataBase.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\MNISTReader.h">
+    <ClInclude Include="Code\C++\Gemini\MNISTReader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\CustomFileReader.h">
+    <ClInclude Include="Code\C++\Gemini\CustomFileReader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ImageUtils.h">
+    <ClInclude Include="Code\C++\ImageUtils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="TrainingThreadPool.h">
+    <ClInclude Include="Code\C++\TrainingThreadPool.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Types.h">
+    <ClInclude Include="Code\C++\Types.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="WindowRenderer.h">
+    <ClInclude Include="Code\C++\WindowRenderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="cublas_utils.h">
+    <ClInclude Include="Code\C++\cublas_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GpuDataset.h">
+    <ClInclude Include="Code\C++\GpuDataset.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GpuNetwork.h">
+    <ClInclude Include="Code\C++\GpuNetwork.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CheckpointUtils.h">
+    <ClInclude Include="Code\C++\CheckpointUtils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Config.h">
+    <ClInclude Include="Code\C++\Config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GpuTrainingPipeline.h">
+    <ClInclude Include="Code\C++\GpuTrainingPipeline.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="NeuralImageRecreator.h">
+    <ClInclude Include="Code\C++\NeuralImageRecreator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="TrainingDataset.h">
+    <ClInclude Include="Code\C++\TrainingDataset.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="TrainingMetricsReporter.h">
+    <ClInclude Include="Code\C++\TrainingMetricsReporter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="TrainingUserActions.h">
+    <ClInclude Include="Code\C++\TrainingUserActions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\stb_image_write.h">
+    <ClInclude Include="Code\C++\Gemini\stb_image_write.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\TGAParser.h">
+    <ClInclude Include="Code\C++\Gemini\TGAParser.h">
       <Filter>ParserFiles</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\stb_image.h">
+    <ClInclude Include="Code\C++\Gemini\stb_image.h">
       <Filter>ParserFiles</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\BMPParser.h">
+    <ClInclude Include="Code\C++\Gemini\BMPParser.h">
       <Filter>ParserFiles</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\HDRParser.h">
+    <ClInclude Include="Code\C++\Gemini\HDRParser.h">
       <Filter>ParserFiles</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\IImageParser.h">
+    <ClInclude Include="Code\C++\Gemini\IImageParser.h">
       <Filter>ParserFiles</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\ImageParser.h">
+    <ClInclude Include="Code\C++\Gemini\ImageParser.h">
       <Filter>ParserFiles</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\JPEGParser.h">
+    <ClInclude Include="Code\C++\Gemini\JPEGParser.h">
       <Filter>ParserFiles</Filter>
     </ClInclude>
-    <ClInclude Include="Gemini\PngParser.h">
+    <ClInclude Include="Code\C++\Gemini\PngParser.h">
       <Filter>ParserFiles</Filter>
+    </ClInclude>
+    <ClInclude Include="Code\C++\PythonVisualizerBridge.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Code\C++\VizProtocol.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="ForwardPass.cu" />
-    <CudaCompile Include="CudaManager.cuh" />
-    <CudaCompile Include="ForwardPass.cuh" />
-    <CudaCompile Include="GpuActivations.cuh" />
-    <CudaCompile Include="GpuBuffer.cuh" />
-    <CudaCompile Include="BackwardPass.cu" />
-    <CudaCompile Include="AdamOptimizer.cu" />
-    <CudaCompile Include="BackwardPass.cuh" />
-    <CudaCompile Include="AdamOptimizer.cuh" />
-    <CudaCompile Include="GpuCostFunctions.cuh" />
-    <CudaCompile Include="GridEncoding.cu" />
-    <CudaCompile Include="GridEncoding.cuh" />
+    <CudaCompile Include="Code\cuda\ForwardPass.cu" />
+    <CudaCompile Include="Code\cuda\CudaManager.cuh" />
+    <CudaCompile Include="Code\cuda\ForwardPass.cuh" />
+    <CudaCompile Include="Code\cuda\GpuActivations.cuh" />
+    <CudaCompile Include="Code\cuda\GpuBuffer.cuh" />
+    <CudaCompile Include="Code\cuda\BackwardPass.cu" />
+    <CudaCompile Include="Code\cuda\AdamOptimizer.cu" />
+    <CudaCompile Include="Code\cuda\BackwardPass.cuh" />
+    <CudaCompile Include="Code\cuda\AdamOptimizer.cuh" />
+    <CudaCompile Include="Code\cuda\GpuCostFunctions.cuh" />
+    <CudaCompile Include="Code\cuda\GridEncoding.cu" />
+    <CudaCompile Include="Code\cuda\GridEncoding.cuh" />
   </ItemGroup>
 </Project>

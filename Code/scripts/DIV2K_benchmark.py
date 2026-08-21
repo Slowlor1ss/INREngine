@@ -122,13 +122,11 @@ def plot_run_metrics(df, out_path):
     ax1.set_ylabel('SSIM', color='tab:red')
     ax1.invert_yaxis()
     
-    # --- 1. The Middle-Ground Scale ---
     # linthresh=300 means epochs 0 to 300 are plotted normally (preserving the curve),
     # while everything after 300 gets compressed logarithmically.
     ax1.set_xscale('symlog', linthresh=300) 
     ax1.set_xticks([0, 25, 50, 75, 100, 135, 175, 225, 275, 350, 500, 750, 1250, 2000, 3500])
     
-    # --- 2. Fix the 10^x formatting ---
     formatter = ScalarFormatter()
     formatter.set_scientific(False) # Forces plain numbers like 10, 100, 1000
     ax1.xaxis.set_major_formatter(formatter)
@@ -143,4 +141,4 @@ def plot_run_metrics(df, out_path):
     plt.close()
 
 if __name__ == "__main__":
-    run_div2k_suite("../Training_Data", "../x64/Training/3b1b_backprop.exe", "../Portfolio_Output")
+    run_div2k_suite("../../Training_Data", "../../x64/Training/3b1b_backprop.exe", "../../OUT/Portfolio_Output")
