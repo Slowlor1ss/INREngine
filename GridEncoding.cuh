@@ -44,14 +44,14 @@ namespace GridEncoding
         // How many separate feature grids are stacked together
         constexpr int NumLevels = 12; 
         // Size of the very first, coarsest grid
-        constexpr int BaseResolution = 16; 
+        constexpr int BaseResolution = 16; // note to self: 16 seems good
         // Number of trainable floating-point values (features) stored at every single intersection (corner) of the grid; 
         // total output channel count fed into the neural network is NumLevels * FeaturesPerLevel
         constexpr int FeaturesPerLevel = 16; 
         // Resolution of the final, most detailed grid
         // at FinestResolution 'R', pixels-per-cell is 719/R vertically and 1277/R horizontally
-        // (smallest side / 1.4 seems to work well)
-        constexpr int FinestResolution =  339 / 2.6; // set to just under the training res (grid is of size FinestResolution x FinestResolution)
+        // (smallest side / 2.6 seems to work well)
+        constexpr int FinestResolution =  2039 / 2.6; // set to just under the training res (grid is of size FinestResolution x FinestResolution)
     }
 
     // Level resolutions form a geometric progression from BaseResolution to
@@ -144,7 +144,7 @@ namespace GridEncoding
             outDy[f] = scale * ((1.0f - tx) * (f01 - f00) + tx * (f11 - f10));
         }
     }
-
+    
     // BACKWARD: scatter this level's share of the upstream error into the 4
     // corner feature vectors read on the forward pass. Interpolation is linear in
     // the stored features, so each of the three upstream errors (color, dx, dy)
@@ -197,3 +197,9 @@ namespace GridEncoding
         }
     }
 }
+
+void RunJitterPixelCoordsGPU(
+    const engineFloat* d_srcX, const engineFloat* d_srcY,
+    engineFloat* d_dstX, engineFloat* d_dstY,
+    int batchSize, engineFloat jitterAmpX, engineFloat jitterAmpY,
+    unsigned int seed, cudaStream_t stream);

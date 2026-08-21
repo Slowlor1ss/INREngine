@@ -18,6 +18,7 @@ public:
 	// render buffers used for live-preview/export frames at renderWidth x renderHeight
 	GpuTrainingPipeline(Network& cpuNetwork, const SpatialDataset& dataset, size_t inChan, size_t tarChan,
 	                    int renderWidth, int renderHeight,
+	                    int sourceWidth, int sourceHeight,
 	                    const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordMapper);
 	~GpuTrainingPipeline();
 
@@ -45,4 +46,7 @@ private:
 	engineFloat* d_renderPixelY = nullptr;
 	engineFloat* d_renderInputs = nullptr; // Fallback buffer for standard PE (non grid-encoding) rendering
 	engineFloat* d_renderColors = nullptr;
+	
+	int m_sourceWidth = 0;
+	int m_sourceHeight = 0;
 };

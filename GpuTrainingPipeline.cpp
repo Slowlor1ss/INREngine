@@ -35,8 +35,9 @@ namespace
 
 GpuTrainingPipeline::GpuTrainingPipeline(Network& cpuNetwork, const SpatialDataset& dataset, size_t inChan, size_t tarChan,
                                          int renderWidth, int renderHeight,
+                                         int sourceWidth, int sourceHeight,
                                          const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordMapper)
-	: m_inChan(inChan), m_tarChan(tarChan), m_totalPixels(dataset.inputs.size())
+	: m_inChan(inChan), m_tarChan(tarChan), m_totalPixels(dataset.inputs.size()), m_sourceWidth(sourceWidth), m_sourceHeight(sourceHeight)
 {
 	PrintCudaDeviceInfo();
 
@@ -150,6 +151,9 @@ engineFloat GpuTrainingPipeline::RunEpoch(size_t& currentImageIdx, size_t printE
 		int inOffset = static_cast<int>(currentImageIdx * m_inChan);
 		int tarOffset = static_cast<int>(currentImageIdx * m_tarChan);
 
+		engineFloat jitterAmpX = config::denoise_jitter_strength * (2.0f / static_cast<engineFloat>(m_sourceWidth));
+		engineFloat jitterAmpY = config::denoise_jitter_strength * (2.0f / static_cast<engineFloat>(m_sourceHeight));
+		
 		PROFILE_PUSH_FMT("GPU Batch %zu", currentEpoch);
 		// Execute purely on the GPU (No PCIe transfer!)
 		m_net->TrainBatchGPU(
@@ -162,7 +166,10 @@ engineFloat GpuTrainingPipeline::RunEpoch(size_t& currentImageIdx, size_t printE
 			m_data->d_pixelX + currentImageIdx,
 			m_data->d_pixelY + currentImageIdx,
 			config::spatialLossWeight,
-			learningRate
+			learningRate,
+			config::use_denoise_jitter,
+			jitterAmpX,
+			jitterAmpY
 		);
 		PROFILE_POP();
 

@@ -109,13 +109,13 @@ public:
         const engineFloat* d_batchTargetAct,
         const engineFloat* d_batchTargetGradX,
         const engineFloat* d_batchTargetGradY,
-        // Pass gpuData.d_pixelX + offset / gpuData.d_pixelY + offset here, same
-        // convention as d_batchInputAct the varying pointer, not a fixed one
-        // TrainBatchGPU copies it into the fixed mailbox internally
         const engineFloat* d_batchPixelXSrc,
         const engineFloat* d_batchPixelYSrc,
         engineFloat spatialLossWeight,
-        engineFloat learningRate
+        engineFloat learningRate,
+        bool enableCoordJitter,
+        engineFloat jitterAmpX, // roughly one pixel-spacing * strength
+        engineFloat jitterAmpY
     );
     
     void DownloadParametersToCPU(Network& cpuNetwork);
@@ -178,4 +178,7 @@ private:
     GpuGridEncoder m_gridEncoder;
     
     engineFloat* d_totalCost;
+    
+    // Dynamic Graph Parameters
+    unsigned int m_jitterSeedCounter = 0;
 };

@@ -105,3 +105,48 @@ void RunGridEncodeBackwardGPU(
         d_levelResolutions, d_levelParamOffsets, d_gridGrad,
         d_pixelX, d_pixelY, d_nextColorError, d_nextErrorGradX, d_nextErrorGradY);
 }
+
+// Stateless per-thread hash RNG, no nvidia cuRAND state to persist across launches
+// deterministic given (idx, seed), reseeded every batch via counter
+__GRID_FUNC__ void HashJitter2D(unsigned int idx, unsigned int seed, float& outA, float& outB)
+{
+    unsigned int h = idx * 747796405u + seed * 2891336453u + 1u;
+    h = (h ^ (h >> 16)) * 2246822519u;
+    unsigned int h2 = (h ^ (h >> 13)) * 3266489917u;
+    h ^= h >> 16;
+    h2 ^= h2 >> 16;
+
+    outA = (static_cast<float>(h  & 0x00FFFFFFu) / static_cast<float>(0x00FFFFFFu)) * 2.0f - 1.0f;
+    outB = (static_cast<float>(h2 & 0x00FFFFFFu) / static_cast<float>(0x00FFFFFFu)) * 2.0f - 1.0f;
+}
+
+// Writes jittered pixel coordinates into the grid-encoder mailbox, same
+// role as the plain cudaMemcpyAsync we had, only the query location moves, so the
+// network is asked to hit the same noisy value from a slightly different
+// coordinate every batch, the least-loss solution becomes the local average
+__global__ void JitterPixelCoordsKernel(
+    const engineFloat* __restrict__ srcX, const engineFloat* __restrict__ srcY,
+    engineFloat* __restrict__ dstX, engineFloat* __restrict__ dstY,
+    int batchSize, engineFloat jitterAmpX, engineFloat jitterAmpY, unsigned int seed)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= batchSize) return;
+
+    float jx, jy;
+    HashJitter2D(static_cast<unsigned int>(idx), seed, jx, jy);
+
+    dstX[idx] = srcX[idx] + jx * jitterAmpX;
+    dstY[idx] = srcY[idx] + jy * jitterAmpY;
+}
+
+void RunJitterPixelCoordsGPU(
+    const engineFloat* d_srcX, const engineFloat* d_srcY,
+    engineFloat* d_dstX, engineFloat* d_dstY,
+    int batchSize, engineFloat jitterAmpX, engineFloat jitterAmpY,
+    unsigned int seed, cudaStream_t stream)
+{
+    constexpr int threads = 256;
+    int blocks = (batchSize + threads - 1) / threads;
+    JitterPixelCoordsKernel<<<blocks, threads, 0, stream>>>(
+        d_srcX, d_srcY, d_dstX, d_dstY, batchSize, jitterAmpX, jitterAmpY, seed);
+}

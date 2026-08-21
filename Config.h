@@ -14,16 +14,16 @@ namespace config
 	inline bool save_on_close = false;
 
 	// I/O settings
-	inline std::string target_image_file = "Training_Data/0064_x4.png"; //"Training_Data/DIV2K_train_LR_mild/0064x4m.png";// "Training_Data/0064_x4.png";
+	inline std::string target_image_file = "Training_Data/DIV2K_train_HR/0003.png"; //"Training_Data/DIV2K_train_LR_mild/0064x4m.png";// "Training_Data/0064_x4.png";
 	// A high res version to compare to used in MetricsReporter
-	inline std::string hd_image_file = "Training_Data/DIV2K_train_HR/0064.png";
+	inline std::string hd_image_file = "Training_Data/DIV2K_train_HR/0003.png";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 
 	// Render settings
 	inline bool use_py_viz = true; // Swap rendering between using the windows version in C++ and out Python version
 	inline bool autoclose_py_viz = false && use_py_viz;
-	inline engineFloat output_image_scale = 4.f;
+	inline engineFloat output_image_scale = 1.f;
 	inline RenderMode render_mode = RenderMode::StandardRGB;
 	inline bool initial_live_update_state = true;
 
@@ -41,6 +41,9 @@ namespace config
 	inline int pe_num_frequencies = 10; // Positional encode
 	inline bool use_gaussian_pe = false;
 	
+	inline bool use_denoise_jitter = false;
+	inline engineFloat denoise_jitter_strength = 0.75f; // 0.75; // fraction of one source pixel; like 0.5-1.5
+	
 	// Hyperparameters & Training State
 	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)
 	inline size_t batch_size = 256ull*256ull;//510 * 338; // 256ull*256ull;//8192;//65536;//8192;//32;
@@ -53,5 +56,5 @@ namespace config
 
 	// Hyperparameter to balance how much the network cares about slopes vs colors
 	// used by spatial gradient (use 0 to turn spatial gradient off)
-	inline engineFloat spatialLossWeight = 0.0000f;
+	inline engineFloat spatialLossWeight = 0.0001f;
 }

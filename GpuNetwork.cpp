@@ -19,7 +19,10 @@ void GpuNetwork::TrainBatchGPU(
     const engineFloat* d_batchPixelXSrc,
     const engineFloat* d_batchPixelYSrc,
     engineFloat spatialLossWeight,
-    engineFloat learningRate)
+    engineFloat learningRate, 
+    bool enableCoordJitter, 
+    engineFloat jitterAmpX, 
+    engineFloat jitterAmpY)
 {
 #ifndef _TRAINING
     {
@@ -74,8 +77,16 @@ void GpuNetwork::TrainBatchGPU(
     // Fixed mailbox like explained above
     if (m_useGridEncoding) {
         size_t pixelBytes = m_batchSize * sizeof(engineFloat);
-        CUDA_CHECK(cudaMemcpyAsync(m_gridEncoder.d_batchPixelX, d_batchPixelXSrc, pixelBytes, cudaMemcpyDeviceToDevice, m_stream));
-        CUDA_CHECK(cudaMemcpyAsync(m_gridEncoder.d_batchPixelY, d_batchPixelYSrc, pixelBytes, cudaMemcpyDeviceToDevice, m_stream));
+        if (enableCoordJitter) {
+            RunJitterPixelCoordsGPU(
+                d_batchPixelXSrc, d_batchPixelYSrc,
+                m_gridEncoder.d_batchPixelX, m_gridEncoder.d_batchPixelY,
+                m_batchSize, jitterAmpX, jitterAmpY,
+                m_jitterSeedCounter++, m_stream);
+        } else {
+            CUDA_CHECK(cudaMemcpyAsync(m_gridEncoder.d_batchPixelX, d_batchPixelXSrc, pixelBytes, cudaMemcpyDeviceToDevice, m_stream));
+            CUDA_CHECK(cudaMemcpyAsync(m_gridEncoder.d_batchPixelY, d_batchPixelYSrc, pixelBytes, cudaMemcpyDeviceToDevice, m_stream));
+        }
     }
     
     if (!m_graphCaptured)

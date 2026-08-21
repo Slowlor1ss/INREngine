@@ -58,9 +58,13 @@ static int ParseCommandLine(const int argc, char** argv)
 				"  {:<14} | {}\n"
 				"  {:<14} | {}\n"
 				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
+				"  {:<14} | {}\n"
 				"==================================================================================================\n",
 				"--i",			"Set input filename",
 				"--o",			"Set output path (can specify file as well e.g. weights_biases.csv)",	
+				"--HDin",		"Set path to HD reference image",	
 				"--gpu",		"Enable CUDA",
 				"--benchmark",	"Enable Benchmarking",
 				"--layers",		"Set the layers e.g. --layers 128 128 3",
@@ -71,7 +75,9 @@ static int ParseCommandLine(const int argc, char** argv)
 				"--set-gaussian-pe 0/1", "Set Gaussian Positional Encoding (does NOT use --freq)",
 				"--batch",		"Set batch Size",
 				"--lr",			"Set the learning Rate",
-				"--set-live 0/1", "Disable live viewer on start; Note: this can be re-enabled during runtime using 'v'"
+				"--scale",		"Set the resize scale",
+				"--set-live 0/1", "Disable live viewer on start; Note: this can be re-enabled during runtime using 'v'",
+				"--denoise 0/1", "Weather or not we use denoise jitter"
 			);
 			return 0;
 		}
@@ -145,13 +151,17 @@ static int ParseCommandLine(const int argc, char** argv)
 				config::output_filename = config::target_image_file;
 			}
 		}
+		else if (arg == "--HDin")
+		{
+			config::hd_image_file = argv[++i];
+		}
 		else if (arg == "--set-pe")
 		{
 			config::use_positional_encoding = std::stoi(argv[++i]);
 		}
 		else if (arg == "--freq" && i + 1 < argc)
 		{
-			config::pe_num_frequencies = std::stoi(argv[++i]); // Read next arg as int
+			config::pe_num_frequencies = std::stoi(argv[++i]);
 		}
 		else if (arg == "--set-gaussian-pe" && i + 1 < argc)
 		{
@@ -159,20 +169,27 @@ static int ParseCommandLine(const int argc, char** argv)
 		}
 		else if (arg == "--batch" && i + 1 < argc)
 		{
-			config::batch_size = std::stoull(argv[++i]); // Read next arg as size_t
+			config::batch_size = std::stoull(argv[++i]);
 		}
 		else if (arg == "--lr" && i + 1 < argc)
 		{
-			config::initial_learning_rate = std::stof(argv[++i]); // Read next arg as float
+			config::initial_learning_rate = std::stof(argv[++i]);
+		}
+		else if (arg == "--scale" && i + 1 < argc)
+		{
+			config::output_image_scale = std::stof(argv[++i]);
 		}
 		else if (arg == "--set-live")
 		{
 			config::initial_live_update_state = std::stoi(argv[++i]);
 		}
+		else if (arg == "--denoise")
+		{
+			config::use_denoise_jitter = std::stoi(argv[++i]);
+		}
 		else
 		{
 			std::cout << "Unknown or incomplete argument: " << arg << "\n";
-			//std::exit(127);
 		}
 	}
 	
@@ -212,6 +229,7 @@ static int ParseCommandLine(const int argc, char** argv)
 	   "=== Launch Configuration ===\n"
 	   " Input file          : {}\n"
 	   " Output path         : {}\n"
+	   " HD reference path   : {}\n"
 	   " Use GPU             : {}\n"
 	   " Benchmark           : {}\n"
 	   " Topology (Layers)   : {}\n"
@@ -221,10 +239,13 @@ static int ParseCommandLine(const int argc, char** argv)
 	   " Gaussian PE         : {}\n"
 	   " Batch Size          : {}\n"
 	   " Learning Rate       : {:.4f}\n"
+	   " Resize Scale        : {}\n"
 	   " Live Viewer         : {}\n"
+	   " Denoise Jitter      : {}\n"
 	   "============================\n",
 	   config::target_image_file,
 	   (fs::path(config::output_path) / config::output_filename).string(),
+	   config::hd_image_file,
 	   config::use_gpu ? "ON" : "OFF",
 	   config::benchmark_enabled ? "ON" : "OFF",
 	   customLayersStr,
@@ -234,7 +255,9 @@ static int ParseCommandLine(const int argc, char** argv)
 	   config::use_gaussian_pe ? "ON" : "OFF",
 	   config::batch_size,
 	   config::initial_learning_rate,
-	   config::initial_live_update_state ? "ON" : "OFF"
+	   config::output_image_scale,
+	   config::initial_live_update_state ? "ON" : "OFF",
+	   config::use_denoise_jitter ? "ON" : "OFF"
 	);
 	
 	return 1;
