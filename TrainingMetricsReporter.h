@@ -24,3 +24,5 @@ void ReportProgress(engineFloat cost, engineFloat learningRate, const std::vecto
 void RunBenchmarkStep(Network& network, const std::function<ImageUtils::SpatialData(engineFloat, engineFloat)>& coordMapper,
                       TrainingThreadPool& threadPool, const ImgParser::ImageParsedData& data,
                       const std::vector<engineFloat>& flatTargetImage, size_t currentEpoch, engineFloat cost);
+
+void MakeBenchmarkDirs();

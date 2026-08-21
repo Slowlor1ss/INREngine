@@ -83,14 +83,20 @@ NeuralImageRecreator::NeuralImageRecreator()
 	{
 		LoadCheckpoint(m_network, m_init.weightsFile);
 	}
+	else
+	{
+		// Ensure benchmark dirs exist
+		// MakeBenchmarkDirs(); // TODO: reenable
+	}
 
 	if (config::use_gpu)
 	{
 		m_gpu = std::make_unique<GpuTrainingPipeline>(m_network, m_init.dataset, m_inChan, m_tarChan,
-		                                              m_renderWidth, m_renderHeight, m_init.coordMapper);
+		                                              m_renderWidth, m_renderHeight,
+		                                              m_init.data.width, m_init.data.height, m_init.coordMapper);
 	}
 
-	if (!config::use_py_viz)
+	if (!config::use_py_viz && !config::benchmark_enabled) // for benchmark we want to still push info to shared mem to read in py
 	{
 		m_window = std::make_unique<ImageWindow>(m_renderWidth, m_renderHeight);
 	}
@@ -116,8 +122,11 @@ NeuralImageRecreator::NeuralImageRecreator()
 		
 		m_pyViz->PushReferenceFrame(*image);
 		
-		// Auto spawn py viewer
-		m_pyViz->LaunchViewerProcess();
+		if ( !config::benchmark_enabled ) // we run headless in benchmark mode
+		{
+			// Auto spawn py viewer
+			m_pyViz->LaunchViewerProcess();
+		}
 	}
 
 	m_learningRate = config::initial_learning_rate;
@@ -167,20 +176,21 @@ std::vector<engineFloat> NeuralImageRecreator::RenderLiveFrame(int totalRenderPi
 void NeuralImageRecreator::SaveFinalOutputs(GpuNetwork* gpuNet)
 {
 	std::cout << "Generating final output image from network state...\n";
-
-	std::vector<engineFloat> finalReconstructedImage = GenerateReconstructedImage(
-		m_network, m_renderWidth, m_renderHeight, m_init.coordMapper, config::render_mode, m_threadPool);
-
+	
 	// No point really
 	// m_window->Update(finalReconstructedImage);
 
-	if (!config::benchmark_enabled && config::save_on_close)
+	if (!config::benchmark_enabled && config::save_on_close && !config::use_gpu)
 	{
-		ImageParser::Save("network_output.bmp", m_init.data.width, m_init.data.height, finalReconstructedImage);
-		std::cout << "Successfully saved network_output.bmp!\n";
+		std::vector<engineFloat> finalReconstructedImage = GenerateReconstructedImage(
+			m_network, m_renderWidth, m_renderHeight, m_init.coordMapper, config::render_mode, m_threadPool);
+		
+		ImageParser::Save("network_output.png", m_init.data.width, m_init.data.height, finalReconstructedImage);
+		std::cout << "Successfully saved network_output.png!\n";
 	}
 
-	if (config::benchmark_enabled)
+	//if (config::benchmark_enabled)
+	if (false) // TODO: reenable
 	{
 		// Ensure the output directories exist
 		std::string stem = fs::path(config::output_filename).stem().string();
@@ -210,6 +220,11 @@ void NeuralImageRecreator::Run()
 	// In case we do not use the gpu version we need to make sure we dont dereference a nullptr
 	GpuNetwork* gpuNet = m_gpu ? &m_gpu->GetNetwork() : nullptr;
 
+	if (config::benchmark_enabled)
+	{
+		config::print_every_n_batches = 1;
+	}
+	
 	// Main Training & UI Loop
 	while (true)
 	{
@@ -221,6 +236,15 @@ void NeuralImageRecreator::Run()
 		                      m_liveUpdateWindow, m_init.coordMapper, m_threadPool))
 		{
 			break;
+		}
+		
+		if (config::benchmark_enabled)
+		{
+			// Grow the interval by roughly 10% each time. 
+			// The '+ 1' ensures it always grows even when the interval is small (e.g., 1 / 10 = 0 in integer math)
+			config::print_every_n_batches = config::print_every_n_batches + (config::print_every_n_batches / 10) + 1;
+			// Cap max
+			config::print_every_n_batches = std::min<size_t>(config::print_every_n_batches, 150);
 		}
 
 		// Perform batch training step
@@ -234,16 +258,17 @@ void NeuralImageRecreator::Run()
 			cost = RunCpuEpoch(m_currentImage, config::print_every_n_batches, config::batch_size, m_learningRate);
 		}
 
-		if (config::benchmark_enabled)
-		{
-			RunBenchmarkStep(m_network, m_init.coordMapper, m_threadPool, m_init.data, m_init.flatTargetImage, m_currentEpoch, cost);
-		}
+		// if (config::benchmark_enabled)
+		// {
+		// 	RunBenchmarkStep(m_network, m_init.coordMapper, m_threadPool, m_init.data, m_init.flatTargetImage, m_currentEpoch, cost);
+		// }
 
 		// Live viewer update
 		if (m_liveUpdateWindow)
 		{
 			std::vector<engineFloat> rgbImage = RenderLiveFrame(m_renderWidth * m_renderHeight, m_tarChan);
-			if (!config::use_py_viz) {
+			// For benchmark we want to still push info to shared mem to read in py
+			if (!config::use_py_viz && !config::benchmark_enabled) { 
 				m_window->Update(rgbImage);
 			}
 			else {

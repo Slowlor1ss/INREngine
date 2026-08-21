@@ -68,8 +68,40 @@ void RunBenchmarkStep(Network& network, const std::function<ImageUtils::SpatialD
                       const std::vector<engineFloat>& flatTargetImage, size_t currentEpoch, engineFloat cost)
 {
 	auto rgbFrame = GenerateReconstructedImage(network, data.width, data.height, coordMapper, RenderMode::StandardRGB, threadPool);
-	ImageUtils::ImageMetrics metrics = ImageUtils::CalculateFullImageMetrics(rgbFrame, flatTargetImage);
+	// ImageUtils::ImageMetrics metrics = ImageUtils::CalculateFullImageMetrics(rgbFrame, flatTargetImage);
 
+	// Ensure the output directories exist
+	std::string stem = fs::path(config::output_filename).stem().string();
+	fs::path basePath(config::output_path);
+	auto benchFolder = basePath / ("benchmark_" + stem);
+	// TODO: make some benchmark init thats called outside of the main loop  
+	if (currentEpoch == 0)
+	{
+		fs::create_directories(benchFolder);
+		fs::create_directories(benchFolder / "rgb");
+		fs::create_directories(benchFolder / "grad");
+	}
+	
+	// We now log metrics from python so we can have a more accurate SSIM
+	// Log Metrics to CSV
+	// std::string csvPath = (benchFolder / "metrics.csv").string();
+	// LogTrainingMetrics(csvPath, currentEpoch, cost, metrics.psnr);
+
+	// Save only last image as saving the whole div2k lib takes up too much space lol
+	if (currentEpoch == config::max_epochs)
+	{
+		// Save Image Frames
+		std::string rgbPath = std::format("{}/rgb/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
+		ImageParser::Save(rgbPath, data.width, data.height, rgbFrame);
+
+		auto gradFrame = GenerateReconstructedImage(network, data.width, data.height, coordMapper, RenderMode::SpatialGradient, threadPool);
+		std::string gradPath = std::format("{}/grad/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
+		ImageParser::Save(gradPath, data.width, data.height, gradFrame);
+	}
+}
+
+void MakeBenchmarkDirs()
+{
 	// Ensure the output directories exist
 	std::string stem = fs::path(config::output_filename).stem().string();
 	fs::path basePath(config::output_path);
@@ -77,16 +109,4 @@ void RunBenchmarkStep(Network& network, const std::function<ImageUtils::SpatialD
 	fs::create_directories(benchFolder);
 	fs::create_directories(benchFolder / "rgb");
 	fs::create_directories(benchFolder / "grad");
-
-	// Log Metrics to CSV
-	std::string csvPath = (benchFolder / "metrics.csv").string();
-	LogTrainingMetrics(csvPath, currentEpoch, cost, metrics.psnr);
-
-	// Save Image Frames
-	std::string rgbPath = std::format("{}/rgb/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
-	ImageParser::Save(rgbPath, data.width, data.height, rgbFrame);
-
-	auto gradFrame = GenerateReconstructedImage(network, data.width, data.height, coordMapper, RenderMode::SpatialGradient, threadPool);
-	std::string gradPath = std::format("{}/grad/step_{:05d}.bmp", benchFolder.string(), currentEpoch);
-	ImageParser::Save(gradPath, data.width, data.height, gradFrame);
 }
