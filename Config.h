@@ -42,7 +42,7 @@ namespace config
 	inline bool use_gaussian_pe = false;
 	
 	inline bool use_denoise_jitter = false;
-	inline engineFloat denoise_jitter_strength = 0.75f; // 0.75; // fraction of one source pixel; like 0.5-1.5
+	inline engineFloat denoise_jitter_strength = 1.00f; // 0.75; // fraction of one source pixel; like 0.5-1.5
 	
 	// Hyperparameters & Training State
 	// Note if we drop this below out thread count we will run singlethreaded (which should be fine)

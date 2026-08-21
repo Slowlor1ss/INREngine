@@ -5,11 +5,11 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg') # Run in headless mode
 import matplotlib.pyplot as plt
-from pathlib import Path
 import numpy as np
-
 import sys
+
 from pathlib import Path
+from matplotlib.ticker import ScalarFormatter
 
 # Dynamically resolve the absolute path
 viz_dir = Path(__file__).parent / "viz"
@@ -27,13 +27,13 @@ def run_div2k_suite(div2k_base: str, exe_path: str, output_base: str):
     out_path.mkdir(parents=True, exist_ok=True)
     
     # Directories to scan
-    sub_dirs = ["DIV2K_train_HR", "DIV2K_train_LR_difficult", "DIV2K_train_LR_mild"]
+    sub_dirs = ["DIV2K_train_HR", "DIV2K_train_LR", "DIV2K_train_LR_mild"]
     
     for sub in sub_dirs:
         dir_path = base_path / sub
         if not dir_path.exists(): continue
             
-        for img_file in sorted(dir_path.glob("*.png"))[:3]:
+        for img_file in sorted(dir_path.glob("*.png")):#[:3]:
             run_name = f"{sub}_{img_file.stem}"
             run_out = out_path / run_name
             run_out.mkdir(exist_ok=True)
@@ -47,14 +47,14 @@ def run_div2k_suite(div2k_base: str, exe_path: str, output_base: str):
                 "--HDin", str(hr_path), 
                 "--set-live", "1",
                 "--benchmark", "1",
-                "--denoise", "1" if sub != "DIV2K_train_HR" else "0",
+                "--denoise", "1" if sub != "DIV2K_train_HR" and sub != "DIV2K_train_LR" else "0",
                 "--scale", "4.0" if sub != "DIV2K_train_HR" else "1.0"
             ]
             proc = subprocess.Popen(cmd)
             
             # Hook into Shared Memory
             bridge = SharedMemoryBridge(img_file.stem) # "INR_Default"
-            if not bridge.wait_for_producer(timeout_s=15.0):
+            if not bridge.wait_for_producer(timeout_s=15.0, poll_s=0.0001):
                 print(f"Failed to connect to {run_name}")
                 proc.terminate()
                 continue
@@ -77,6 +77,7 @@ def run_div2k_suite(div2k_base: str, exe_path: str, output_base: str):
                     stats = bridge.read_stats()
                     
                     if frame is not None and target is not None:
+                        print(f"Caught: {current_frame_count}")
                         # Calculate metrics dynamically
                         mets = compute_image_metrics(frame, target, stats.epoch, stats.cost)
                         history.append(mets)
@@ -90,7 +91,7 @@ def run_div2k_suite(div2k_base: str, exe_path: str, output_base: str):
                         # Update our tracker so we don't process this frame again
                         last_seen_frame = current_frame_count
                         
-                time.sleep(0.5) 
+                #time.sleep(0.5) 
             
             proc.wait()
 
@@ -115,10 +116,22 @@ def run_div2k_suite(div2k_base: str, exe_path: str, output_base: str):
 
 def plot_run_metrics(df, out_path):
     fig, ax1 = plt.subplots(figsize=(10, 5))
+    
     ax1.plot(df['epoch'], df['ssim'], color='tab:red', label='SSIM')
-    ax1.set_xlabel('Epoch')
+    ax1.set_xlabel('Epoch (Linear-Log Blend)')
     ax1.set_ylabel('SSIM', color='tab:red')
     ax1.invert_yaxis()
+    
+    # --- 1. The Middle-Ground Scale ---
+    # linthresh=300 means epochs 0 to 300 are plotted normally (preserving the curve),
+    # while everything after 300 gets compressed logarithmically.
+    ax1.set_xscale('symlog', linthresh=300) 
+    ax1.set_xticks([0, 25, 50, 75, 100, 135, 175, 225, 275, 350, 500, 750, 1250, 2000, 3500])
+    
+    # --- 2. Fix the 10^x formatting ---
+    formatter = ScalarFormatter()
+    formatter.set_scientific(False) # Forces plain numbers like 10, 100, 1000
+    ax1.xaxis.set_major_formatter(formatter)
     
     ax2 = ax1.twinx()
     ax2.plot(df['epoch'], df['psnr'], color='tab:blue', label='PSNR')

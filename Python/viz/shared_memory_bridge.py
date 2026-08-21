@@ -124,7 +124,7 @@ class SharedMemoryBridge:
             self._read_header()
             c1 = self._header.frame_counter
             if c1 % 2 != 0:  # odd == write in progress
-                time.sleep(0.001)
+                time.sleep(0.0001)
                 continue
             self._current_mmap.seek(0)
             raw = self._current_mmap.read()
