@@ -2,8 +2,8 @@
 #include "Types.h"
 #include "Network.h"
 #include "Layer.h"
-#include "GpuActivations.cuh"
-#include "GpuCostFunctions.cuh"
+#include "../cuda/GpuActivations.cuh"
+#include "../cuda/GpuCostFunctions.cuh"
 #include <cublas_v2.h>
 #include <vector>
 
