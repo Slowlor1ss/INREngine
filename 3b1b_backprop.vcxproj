@@ -452,7 +452,7 @@
     <ClInclude Include="Code\C++\Config.h" />
     <ClInclude Include="Code\C++\CostFuncDataBase.h" />
     <ClInclude Include="Code\C++\CostFunctions.h" />
-    <ClInclude Include="Code\C++\cublas_utils.h" />
+    <ClInclude Include="Code\cuda\cublas_utils.h" />
     <CudaCompile Include="Code\cuda\CudaManager.cuh" />
     <CudaCompile Include="Code\cuda\ForwardPass.cuh" />
     <ClInclude Include="Code\C++\Gemini\BMPParser.h" />

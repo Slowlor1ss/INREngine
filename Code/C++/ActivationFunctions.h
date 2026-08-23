@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <random>
 
-#include "GpuActivations.cuh"
+#include "../cuda/GpuActivations.cuh"
 #include "Types.h"
 
 // See GpuActivations.cuh for implementations and hyperparameters

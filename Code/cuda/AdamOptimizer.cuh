@@ -1,5 +1,6 @@
 #pragma once
-#include "Types.h"
+#include "CudaManager.cuh"
+#include "../C++/Types.h"
 
 void RunAdamOptimizerGPU(
     cudaStream_t stream,

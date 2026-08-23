@@ -3,7 +3,7 @@
 #include <cmath>
 #include <algorithm>
 
-#include "GpuCostFunctions.cuh"
+#include "../cuda/GpuCostFunctions.cuh"
 #include "Types.h"
 
 namespace CostFunc

@@ -5,8 +5,8 @@
 #include "Network.h"
 #include "GpuNetwork.h"
 #include "GpuDataset.h"
-#include "GridEncoding.cuh"
-#include "CudaManager.cuh"
+#include "../cuda/GridEncoding.cuh"
+#include "../cuda/CudaManager.cuh"
 
 #include <algorithm>
 #include <cmath>

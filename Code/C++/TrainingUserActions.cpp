@@ -1,7 +1,7 @@
 #include "TrainingUserActions.h"
 #include "Config.h"
 #include "CheckpointUtils.h"
-#include "CudaManager.cuh"
+#include "../cuda/CudaManager.cuh"
 #include "ImageGenerator.h"
 
 #include <conio.h> // For _kbhit() and _getch()

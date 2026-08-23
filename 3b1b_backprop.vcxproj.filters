@@ -125,7 +125,7 @@
     <ClInclude Include="Code\C++\WindowRenderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Code\C++\cublas_utils.h">
+    <ClInclude Include="Code\cuda\cublas_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Code\C++\GpuDataset.h">

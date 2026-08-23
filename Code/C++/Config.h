@@ -14,9 +14,9 @@ namespace config
 	inline bool save_on_close = false;
 
 	// I/O settings
-	inline std::string target_image_file = "Training_Data/DIV2K_train_HR/0003.png"; //"Training_Data/DIV2K_train_LR_mild/0064x4m.png";// "Training_Data/0064_x4.png";
+	inline std::string target_image_file = "Training_Data/DIV2K_train_HR/0010.png"; //"Training_Data/DIV2K_train_LR_mild/0064x4m.png";// "Training_Data/0064_x4.png";
 	// A high res version to compare to used in MetricsReporter
-	inline std::string hd_image_file = "Training_Data/DIV2K_train_HR/0003.png";
+	inline std::string hd_image_file = "Training_Data/DIV2K_train_HR/0010.png";
 	inline std::string output_path = "";
 	inline std::string output_filename = target_image_file;
 

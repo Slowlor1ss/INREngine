@@ -1,5 +1,5 @@
 #pragma once
-#include "Types.h"
+#include "../C++/Types.h"
 #include <cublas_v2.h>
 
 #include "GpuActivations.cuh"

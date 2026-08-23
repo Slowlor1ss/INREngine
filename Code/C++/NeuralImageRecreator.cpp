@@ -5,7 +5,7 @@
 #include "TrainingMetricsReporter.h"
 #include "CostFuncDataBase.h"
 #include "ImageGenerator.h"
-#include "GridEncoding.cuh"
+#include "../cuda/GridEncoding.cuh"
 
 #include <algorithm>
 #include <cmath>

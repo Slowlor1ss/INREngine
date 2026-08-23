@@ -28,7 +28,7 @@ public:
     void PushLiveFrame(const std::vector<engineFloat>& rgbData, size_t epoch, engineFloat cost, engineFloat learningRate);
 
     // Can skip and launch py process manually
-    bool LaunchViewerProcess(const std::wstring& pythonExe = L"python", const std::wstring& scriptPath = L"python/viz/main.py");
+    bool LaunchViewerProcess(const std::wstring& pythonExe = L"python", const std::wstring& scriptPath = L"Code/scripts/viz/main.py");
 
     bool IsValid() const { return m_header != nullptr && m_currentFrame != nullptr; }
 

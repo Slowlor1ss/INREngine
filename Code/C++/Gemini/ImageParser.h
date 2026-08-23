@@ -56,6 +56,9 @@ public:
     static bool ParseData(const std::string& filename, ImgParser::ImageParsedData& outData) {
         auto parser = getParserForFile(filename);
         if (parser) return parser->parseData(filename, outData);
+#ifndef _TRAINING
+            __debugbreak(); // This is fatal
+#endif
         return false;
     }
 

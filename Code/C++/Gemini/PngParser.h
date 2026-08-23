@@ -18,6 +18,9 @@ public:
 
         if (!raw_data) {
             std::cerr << "Error: Could not load PNG file " << filename << "\n";
+#ifndef _TRAINING   // TODO: set up some proper handeling or unit testing here
+            __debugbreak(); // This is fatal
+#endif
             return img;
         }
 

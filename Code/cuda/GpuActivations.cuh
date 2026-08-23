@@ -1,6 +1,6 @@
 #pragma once
 #include <algorithm>
-#include "Types.h"
+#include "../C++/Types.h"
 #include <cuda_runtime.h>
 #include <cmath>
 

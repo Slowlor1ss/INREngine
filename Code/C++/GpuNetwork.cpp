@@ -1,11 +1,11 @@
 #include "GpuNetwork.h"
-#include "cublas_utils.h"
+#include "../cuda/cublas_utils.h"
 #include <iostream>
 
-#include "AdamOptimizer.cuh"
-#include "BackwardPass.cuh"
-#include "ForwardPass.cuh"
-#include "GridEncoding.cuh"
+#include "../cuda/AdamOptimizer.cuh"
+#include "../cuda/BackwardPass.cuh"
+#include "../cuda/ForwardPass.cuh"
+#include "../cuda/GridEncoding.cuh"
 #include <random>
 
 // Main wrapper: Executes one full batch entirely on the GPU

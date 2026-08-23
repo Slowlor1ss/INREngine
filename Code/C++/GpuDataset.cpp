@@ -1,5 +1,5 @@
 #include "GpuDataset.h"
-#include "cublas_utils.h"
+#include "../cuda/cublas_utils.h"
 
 GpuDataset::GpuDataset(size_t totalPixels, size_t inputChannels, size_t targetChannels)
 {

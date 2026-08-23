@@ -1,5 +1,5 @@
 #pragma once
-#include "Types.h"
+#include "../C++/Types.h"
 #include <cuda_runtime.h>
 #include <cmath>
 

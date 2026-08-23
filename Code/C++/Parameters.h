@@ -2,7 +2,7 @@
 #include <vector>
 #include "Serializable.h"
 #include "ActFuncDataBase.h"
-#include "GpuBuffer.cuh"
+#include "../cuda/GpuBuffer.cuh"
 #include "Types.h"
 
 struct Parameters : public Serializable

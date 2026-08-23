@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-#include "CudaManager.cuh"
+#include "../cuda/CudaManager.cuh"
 #include "GpuNetwork.h"
 
 namespace fs = std::filesystem;
