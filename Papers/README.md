@@ -1,0 +1,2 @@
+# Note:
+I never expected this project to get this much out of controll and turn in to a ful personal research project, so this is a very rough list of some of the many many sources and papers i used to get this working.
