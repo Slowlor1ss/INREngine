@@ -51,7 +51,7 @@ namespace GridEncoding
         // Resolution of the final, most detailed grid
         // at FinestResolution 'R', pixels-per-cell is 719/R vertically and 1277/R horizontally
         // (smallest side / 2.6 seems to work well)
-        constexpr int FinestResolution =  2039 / 2.6; // set to just under the training res (grid is of size FinestResolution x FinestResolution)
+        inline int FinestResolution; // set to just under the training res (grid is of size FinestResolution x FinestResolution)
     }
 
     // Level resolutions form a geometric progression from BaseResolution to
