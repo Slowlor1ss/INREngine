@@ -201,6 +201,7 @@
     </Link>
     <CudaCompile>
       <CodeGeneration>compute_89,sm_89;compute_75,sm_75;%(CodeGeneration)</CodeGeneration>
+      <AdditionalOptions>--std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -222,6 +223,7 @@
     </Link>
     <CudaCompile>
       <CodeGeneration>compute_89,sm_89;compute_75,sm_75;%(CodeGeneration)</CodeGeneration>
+      <AdditionalOptions>--std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseNoOpt|Win32'">
@@ -248,6 +250,7 @@
     </Link>
     <CudaCompile>
       <CodeGeneration>compute_89,sm_89;compute_75,sm_75;%(CodeGeneration)</CodeGeneration>
+      <AdditionalOptions>--std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Training|Win32'">
@@ -270,6 +273,7 @@
     </Link>
     <CudaCompile>
       <CodeGeneration>compute_89,sm_89;compute_75,sm_75;%(CodeGeneration)</CodeGeneration>
+      <AdditionalOptions>--std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Training_Profile|Win32'">
@@ -292,6 +296,7 @@
     </Link>
     <CudaCompile>
       <CodeGeneration>compute_89,sm_89;compute_75,sm_75;%(CodeGeneration)</CodeGeneration>
+      <AdditionalOptions>--std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -311,6 +316,7 @@
     </Link>
     <CudaCompile>
       <CodeGeneration>compute_89,sm_89;compute_75,sm_75;%(CodeGeneration)</CodeGeneration>
+      <AdditionalOptions>--std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -332,6 +338,7 @@
     </Link>
     <CudaCompile>
       <CodeGeneration>compute_89,sm_89;compute_75,sm_75;%(CodeGeneration)</CodeGeneration>
+      <AdditionalOptions>--std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseNoOpt|x64'">
@@ -359,6 +366,7 @@
     </Link>
     <CudaCompile>
       <CodeGeneration>compute_89,sm_89;compute_75,sm_75;%(CodeGeneration)</CodeGeneration>
+      <AdditionalOptions>--std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Training|x64'">
@@ -385,6 +393,7 @@
     <CudaCompile />
     <CudaCompile>
       <CodeGeneration>compute_89,sm_89;compute_75,sm_75;%(CodeGeneration)</CodeGeneration>
+      <AdditionalOptions>--std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Training_Profile|x64'">
@@ -411,6 +420,7 @@
     <CudaCompile />
     <CudaCompile>
       <CodeGeneration>compute_89,sm_89;compute_75,sm_75;%(CodeGeneration)</CodeGeneration>
+      <AdditionalOptions>--std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
