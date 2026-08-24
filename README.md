@@ -80,4 +80,4 @@ Usage:
 
 ## Thanks
 
-Thanks to @Jan300100 for getting me in to this project and who was a huge help with the start of this project.
+Thanks to [@Jan300100] (https://www.github.com/Jan300100) for getting me in to this project and who was a huge help with the start of this project.
