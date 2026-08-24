@@ -50,37 +50,8 @@ GpuTrainingPipeline::GpuTrainingPipeline(Network& cpuNetwork, const SpatialDatas
 	m_data = std::make_unique<GpuDataset>(m_paddedPixels, inChan, tarChan);
 
 	std::cout << "Flattening dataset for VRAM transfer...\n";
-	std::vector<engineFloat> flatInAct(m_paddedPixels * inChan), flatInGradX(m_paddedPixels * inChan), flatInGradY(m_paddedPixels * inChan);
-	std::vector<engineFloat> flatTarAct(m_paddedPixels * tarChan), flatTarGradX(m_paddedPixels * tarChan), flatTarGradY(m_paddedPixels * tarChan);
-	// Raw normalized [0,1] pixel coordinates for the grid encoder, dataset.pixelX/Y are
-	// assumed already in the coordMapper's input space if that space isn't [0,1],
-	// normalize here (GridEncoding::FindCell clamps to [0,1], so anything outside it just
-	// clamps to an edge cell silently)
-	std::vector<engineFloat> flatPixelX(m_paddedPixels), flatPixelY(m_paddedPixels);
-
-	for (size_t i = 0; i < m_paddedPixels; ++i) {
-		// Wrap around to the start of the image if we need extra pixels to fill the final batch
-		size_t srcIdx = i % m_totalPixels;
-
-		for (size_t c = 0; c < inChan; ++c) {
-			// We check if we actually have anything if nto we just input 0 as our inputs layer 0 is not supposed to match the grid's 16 values
-			bool haveSrc = c < dataset.inputs[srcIdx].values.size();
-			flatInAct[i * inChan + c] = haveSrc ? dataset.inputs[srcIdx].values[c] : 0.0f;
-			flatInGradX[i * inChan + c] = haveSrc ? dataset.inputs[srcIdx].gradX[c] : 0.0f;
-			flatInGradY[i * inChan + c] = haveSrc ? dataset.inputs[srcIdx].gradY[c] : 0.0f;
-		}
-		for (size_t c = 0; c < tarChan; ++c) {
-			flatTarAct[i * tarChan + c] = dataset.targets[srcIdx].values[c];
-			flatTarGradX[i * tarChan + c] = dataset.targets[srcIdx].gradX[c];
-			flatTarGradY[i * tarChan + c] = dataset.targets[srcIdx].gradY[c];
-		}
-		flatPixelX[i] = dataset.pixelX[srcIdx];
-		flatPixelY[i] = dataset.pixelY[srcIdx];
-	}
-
-	m_data->UploadData(flatInAct, flatInGradX, flatInGradY, flatTarAct, flatTarGradX, flatTarGradY, flatPixelX, flatPixelY);
+	FlattenAndUploadDataset(inChan, tarChan, dataset);
 	std::cout << "GPU Dataset Uploaded.\n";
-
 	// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 	// Render buffer setup, used for the live viewer + final/export frames
 	int totalRenderPixels = renderWidth * renderHeight;
@@ -224,4 +195,129 @@ std::vector<engineFloat> GpuTrainingPipeline::RenderFrame(int totalRenderPixels,
 		}
 	}
 	return rgbImage;
+}
+
+#ifdef _WIN32
+#include <windows.h> // For checking host ram size
+#endif
+
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+//	Note: The flattening of big images runs increadibly slow on my old laptop, after some profiling I found out that it's due to having a low about of ram
+//		  I made a seperate funtion thats optimized for memory useage, which makes rendering big images actually feasble on my laptop, but the code is a bit ugly
+//		  and therefore banished to this bottom section, by all means this is horrible.
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+void GpuTrainingPipeline::FlattenAndUploadDataset(size_t inChan, size_t tarChan, const SpatialDataset& dataset)
+{
+	unsigned long long totalRamGB = 0;
+	// Get sys RAM
+#ifdef _WIN32
+    MEMORYSTATUSEX memInfo;
+    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+    if (GlobalMemoryStatusEx(&memInfo)) {
+        totalRamGB = memInfo.ullTotalPhys / (1024ull * 1024ull * 1024ull);
+    }
+#endif
+
+    std::cout << "Detected System RAM: " << totalRamGB << " GB.\n";
+
+    if (totalRamGB > 16) {
+        std::cout << "Using bulk dataset upload...\n";
+        FlattenAndUploadDatasetBluk(inChan, tarChan, dataset);
+    } else {
+        std::cout << "Using chunked dataset upload (due to low RAM :D)...\n";
+        FlattenAndUploadDatasetChunked(inChan, tarChan, dataset);
+    }
+}
+
+void GpuTrainingPipeline::FlattenAndUploadDatasetBluk(size_t inChan, size_t tarChan, const SpatialDataset& dataset)
+{
+	std::vector<engineFloat> flatInAct(m_paddedPixels * inChan), flatInGradX(m_paddedPixels * inChan), flatInGradY(m_paddedPixels * inChan);
+	std::vector<engineFloat> flatTarAct(m_paddedPixels * tarChan), flatTarGradX(m_paddedPixels * tarChan), flatTarGradY(m_paddedPixels * tarChan);
+	// Raw normalized [0,1] pixel coordinates for the grid encoder, dataset.pixelX/Y are
+	// assumed already in the coordMapper's input space if that space isn't [0,1],
+	// normalize here (GridEncoding::FindCell clamps to [0,1], so anything outside it just
+	// clamps to an edge cell silently)
+	std::vector<engineFloat> flatPixelX(m_paddedPixels), flatPixelY(m_paddedPixels);
+
+	for (int i = 0; i < (int)m_paddedPixels; ++i) {
+		// Wrap around to the start of the image if we need extra pixels to fill the final batch
+		size_t srcIdx = i % m_totalPixels;
+
+		const auto& [inValues, inGradX, inGradY] = dataset.inputs[srcIdx];
+		const auto& [tarValues, tarGradX, tarGradY] = dataset.targets[srcIdx];
+
+		// We check if we actually have anything if not we just input 0 as our inputs layer 0 is not supposed to match the grid's 16 values
+		size_t availableChans = inValues.size();
+		size_t copyChans = (availableChans < inChan) ? availableChans : inChan;
+		size_t inBytes = copyChans * sizeof(engineFloat);
+
+		std::memcpy(&flatInAct[i * inChan], inValues.data(), inBytes);
+		std::memcpy(&flatInGradX[i * inChan], inGradX.data(), inBytes);
+		std::memcpy(&flatInGradY[i * inChan], inGradY.data(), inBytes);
+
+		size_t tarBytes = tarChan * sizeof(engineFloat);
+		std::memcpy(&flatTarAct[i * tarChan], tarValues.data(), tarBytes);
+		std::memcpy(&flatTarGradX[i * tarChan], tarGradX.data(), tarBytes);
+		std::memcpy(&flatTarGradY[i * tarChan], tarGradY.data(), tarBytes);
+
+		flatPixelX[i] = dataset.pixelX[srcIdx];
+		flatPixelY[i] = dataset.pixelY[srcIdx];
+	}
+
+	m_data->UploadData(flatInAct, flatInGradX, flatInGradY, flatTarAct, flatTarGradX, flatTarGradY, flatPixelX, flatPixelY);
+}
+
+void GpuTrainingPipeline::FlattenAndUploadDatasetChunked(size_t inChan, size_t tarChan, const SpatialDataset& dataset)
+{
+	// Reuseable Buffer (we use biggest img as upper bound)
+    std::vector<engineFloat> buffer(m_paddedPixels * std::max(inChan, tarChan));
+
+	// Helpers
+    auto UploadInputChunk = [&](engineFloat* d_dest, auto extractVec) {
+        for (int i = 0; i < (int)m_paddedPixels; ++i) {
+			// Wrap around to the start of the image if we need extra pixels to fill the final batch
+			size_t srcIdx = i % m_totalPixels;
+            const auto& vec = extractVec(srcIdx);
+			// We check if we actually have anything if not we just input 0 as our inputs layer 0 is not supposed to match the grid's 16 values
+            const size_t copyChans = (vec.size() < inChan) ? vec.size() : inChan;
+            
+            // Zero the memory slot first, then copy the available floats
+            std::memset(&buffer[i * inChan], 0, inChan * sizeof(engineFloat));
+            std::memcpy(&buffer[i * inChan], vec.data(), copyChans * sizeof(engineFloat));
+        }
+        CUDA_CHECK(cudaMemcpy(d_dest, buffer.data(), m_paddedPixels * inChan * sizeof(engineFloat), cudaMemcpyHostToDevice));
+    };
+
+    auto UploadTargetChunk = [&](engineFloat* d_dest, size_t chanCount, auto extractData) {
+	    const size_t bytes = chanCount * sizeof(engineFloat);
+        for (int i = 0; i < (int)m_paddedPixels; ++i) {
+        	// Wrap around to the start of the image if we need extra pixels to fill the final batch
+			size_t srcIdx = i % m_totalPixels;
+            std::memcpy(&buffer[i * chanCount], extractData(srcIdx), bytes);
+        }
+        CUDA_CHECK(cudaMemcpy(d_dest, buffer.data(), m_paddedPixels * bytes, cudaMemcpyHostToDevice));
+    };
+
+    auto UploadPixelChunk = [&](engineFloat* d_dest, auto extractVal) {
+        for (int i = 0; i < (int)m_paddedPixels; ++i) {
+        	// Wrap around to the start of the image if we need extra pixels to fill the final batch
+			size_t srcIdx = i % m_totalPixels;
+            buffer[i] = extractVal(srcIdx);
+        }
+        CUDA_CHECK(cudaMemcpy(d_dest, buffer.data(), m_paddedPixels * sizeof(engineFloat), cudaMemcpyHostToDevice));
+    };
+
+    // Upload Inputs
+    UploadInputChunk(m_data->d_inputAct,   [&](size_t idx) -> const auto& { return dataset.inputs[idx].values; });
+    UploadInputChunk(m_data->d_inputGradX, [&](size_t idx) -> const auto& { return dataset.inputs[idx].gradX; });
+    UploadInputChunk(m_data->d_inputGradY, [&](size_t idx) -> const auto& { return dataset.inputs[idx].gradY; });
+
+    // Upload Targets
+    UploadTargetChunk(m_data->d_targetAct,   tarChan, [&](size_t idx) { return dataset.targets[idx].values.data(); });
+    UploadTargetChunk(m_data->d_targetGradX, tarChan, [&](size_t idx) { return dataset.targets[idx].gradX.data(); });
+    UploadTargetChunk(m_data->d_targetGradY, tarChan, [&](size_t idx) { return dataset.targets[idx].gradY.data(); });
+
+    // Upload Pixels
+    UploadPixelChunk(m_data->d_pixelX, [&](size_t idx) { return dataset.pixelX[idx]; });
+    UploadPixelChunk(m_data->d_pixelY, [&](size_t idx) { return dataset.pixelY[idx]; });
 }

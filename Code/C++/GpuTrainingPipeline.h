@@ -34,6 +34,12 @@ public:
 	std::vector<engineFloat> RenderFrame(int totalRenderPixels, size_t tarChan) const;
 
 private:
+    void FlattenAndUploadDataset(size_t inChan, size_t tarChan, const SpatialDataset& dataset);
+	// v Called from FlattenAndUploadDataset v
+	void FlattenAndUploadDatasetBluk(size_t inChan, size_t tarChan, const SpatialDataset& dataset);
+    void FlattenAndUploadDatasetChunked(size_t inChan, size_t tarChan, const SpatialDataset& dataset);
+	//
+
 	std::unique_ptr<GpuNetwork> m_net;
 	std::unique_ptr<GpuDataset> m_data;
 	size_t m_inChan = 0;
