@@ -203,7 +203,7 @@ engineFloat GpuTrainingPipeline::RunEpoch(size_t& currentImageIdx, size_t printE
 std::vector<engineFloat> GpuTrainingPipeline::RenderFrame(int totalRenderPixels, size_t tarChan) const
 {
 	// Run inference completely on the GPU using the chunked PredictGPU
-	m_net->PredictGPU(d_renderPixelX, d_renderPixelY, nullptr, d_renderColors, totalRenderPixels);
+	m_net->PredictGPU(d_renderPixelX, d_renderPixelY, d_renderInputs, d_renderColors, totalRenderPixels);
 
 	// Download only the final image colors
 	std::vector<engineFloat> h_colors(totalRenderPixels * tarChan);
