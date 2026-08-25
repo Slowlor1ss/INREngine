@@ -38,7 +38,7 @@ These are the results of the DIV2K benchmark
     <th style="width: 33.33%;">Mild degradation 4x Downscale (LR Mild)</th>
   </tr>
   <tr>
-    <td><img src="../Training_Data/DIV2K_train_HR/0507.png" alt="HR/0507" style="width: 25%;"></td>
+    <td><img src="../Training_Data/DIV2K_train_HR/0507.png" alt="HR/0507" style="width: 75%; align-items: center;"></td>
     <td><img src="../Training_Data/DIV2K_train_LR/0507x4.png" alt="LR/0507x4" style="width: 100%;"></td>
     <td><img src="../Training_Data/DIV2K_train_LR_mild/0507x4m.png" alt="LR_mild/0507x4m" style="width: 100%;"></td>
   </tr>
