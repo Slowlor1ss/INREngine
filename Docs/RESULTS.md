@@ -23,12 +23,17 @@ These are the results of the DIV2K benchmark
 (In this case specifically `image 0507` which was one of the best onces we had)
 | Graph | Output Image |
 | :---: | :---: |
-| Remake at 2K | PSNR: 52.4809 \| SSIM: 0.9977 |
+| Remake at 2K (HR) | PSNR: 52.4809 \| SSIM: 0.9977 |
 | <img src="../DATA/Metrics/DIV2K_train_HR_0507/DIV2K_train_HR_0507_graph.png" alt="test" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_HR_0507/DIV2K_train_HR_0507_final.png" alt="test" width="50%" justify-content="center"> |
-| 4x upscale | PSNR: 33.1656 \| SSIM: 0.9327 |
+| 4x upscale (LR) | PSNR: 33.1656 \| SSIM: 0.9327 |
 | <img src="../DATA/Metrics/DIV2K_train_LR_0507x4/DIV2K_train_LR_0507x4_graph.png" alt="test" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_LR_0507x4/DIV2K_train_LR_0507x4_final.png" alt="test" width="50%" justify-content="center"> |
-| mild degradation 4x Upscale | PSNR: 25.9767 \| SSIM: 0.8730 |
+| mild degradation 4x Upscale (LR Mild) | PSNR: 25.9767 \| SSIM: 0.8730 |
 | <img src="../DATA/Metrics/DIV2K_train_LR_mild_0507x4m/DIV2K_train_LR_mild_0507x4m_graph.png" alt="test" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_LR_mild_0507x4m/DIV2K_train_LR_mild_0507x4m_final.png" alt="test" width="50%" justify-content="center"> |
+
+## Input images
+| Ground truth (HR) | 4x downscale (LR) | Mild degradation 4x Downscale (LR Mild) |
+| :---: | :---: | :---: |
+| <img src="..\Training_Data\DIV2K_train_HR\0507.png" alt="test" width="25%" justify-content="center"> | <img src="..\Training_Data\DIV2K_train_LR\0507x4.png" alt="test" width="100%" justify-content="center"> | <img src="..\Training_Data\DIV2K_train_LR_mild\0507x4m.png" alt="test" width="100%" justify-content="center"> |
 
 ### Metrics
 
