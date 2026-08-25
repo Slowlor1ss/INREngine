@@ -347,10 +347,6 @@ void GpuNetwork::AllocateLayerMemory(GpuLayer& layer, int batchSize)
     CUDA_CHECK(cudaMemset(layer.d_v_biases, 0, biasBytes));
 
     if (layer.hasDualWeights) {
-        CUDA_CHECK(cudaMalloc(&layer.d_biasesScale, biasBytes));
-        CUDA_CHECK(cudaMalloc(&layer.d_deltaBiasesScale, biasBytes));
-        CUDA_CHECK(cudaMemset(layer.d_deltaBiasesScale, 0, biasBytes));
-        
         // Adam States (Biases Scale)
         CUDA_CHECK(cudaMalloc(&layer.d_m_biasesScale, biasBytes));
         CUDA_CHECK(cudaMemset(layer.d_m_biasesScale, 0, biasBytes));

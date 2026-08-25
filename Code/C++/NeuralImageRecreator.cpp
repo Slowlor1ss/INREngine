@@ -45,7 +45,7 @@ NeuralImageRecreator::InitData NeuralImageRecreator::LoadInitData()
 		: init.coordMapper(0.0f, 0.0f).values.size();
 
 	if ( config::use_grid_encoding )
-		GridEncoding::Config::FinestResolution = int( ( std::min( init.data.height, init.data.width ) / 2.6 ) * config::output_image_scale );
+		GridEncoding::Config::FinestResolution = int( std::min( init.data.height, init.data.width ) / 2.6 );
 
 	return init;
 }
