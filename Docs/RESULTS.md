@@ -24,16 +24,16 @@ These are the results of the DIV2K benchmark
 | Graph | Output Image |
 | :---: | :---: |
 | Remake at 2K (HR) | PSNR: 52.4809 \| SSIM: 0.9977 |
-| <img src="../DATA/Metrics/DIV2K_train_HR_0507/DIV2K_train_HR_0507_graph.png" alt="test" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_HR_0507/DIV2K_train_HR_0507_final.png" alt="test" width="50%" justify-content="center"> |
+| <img src="../DATA/Metrics/DIV2K_train_HR_0507/DIV2K_train_HR_0507_graph.png" alt="0507_graph" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_HR_0507/DIV2K_train_HR_0507_final.png" alt="0507_final" width="50%" justify-content="center"> |
 | 4x upscale (LR) | PSNR: 33.1656 \| SSIM: 0.9327 |
-| <img src="../DATA/Metrics/DIV2K_train_LR_0507x4/DIV2K_train_LR_0507x4_graph.png" alt="test" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_LR_0507x4/DIV2K_train_LR_0507x4_final.png" alt="test" width="50%" justify-content="center"> |
+| <img src="../DATA/Metrics/DIV2K_train_LR_0507x4/DIV2K_train_LR_0507x4_graph.png" alt="0507x4_graph" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_LR_0507x4/DIV2K_train_LR_0507x4_final.png" alt="0507x4_final" width="50%" justify-content="center"> |
 | mild degradation 4x Upscale (LR Mild) | PSNR: 25.9767 \| SSIM: 0.8730 |
-| <img src="../DATA/Metrics/DIV2K_train_LR_mild_0507x4m/DIV2K_train_LR_mild_0507x4m_graph.png" alt="test" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_LR_mild_0507x4m/DIV2K_train_LR_mild_0507x4m_final.png" alt="test" width="50%" justify-content="center"> |
+| <img src="../DATA/Metrics/DIV2K_train_LR_mild_0507x4m/DIV2K_train_LR_mild_0507x4m_graph.png" alt="0507x4m_graph" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_LR_mild_0507x4m/DIV2K_train_LR_mild_0507x4m_final.png" alt="0507x4m" width="50%" justify-content="center"> |
 
 ## Input images
 | Ground truth (HR) | 4x downscale (LR) | Mild degradation 4x Downscale (LR Mild) |
 | :---: | :---: | :---: |
-| <img src="..\Training_Data\DIV2K_train_HR\0507.png" alt="test" width="50%" max-width="50%" justify-content="center"> | <img src="..\Training_Data\DIV2K_train_LR\0507x4.png" alt="test" width="200%" max-width="200%" justify-content="center"> | <img src="..\Training_Data\DIV2K_train_LR_mild\0507x4m.png" alt="test" max-width="200%" width="200%" justify-content="center"> |
+| <img src="../Training_Data/DIV2K_train_HR/0507.png" alt="HR/0507" style="width: 50%; max-width: 50%;"> | <img src="../Training_Data/DIV2K_train_LR/0507x4.png" alt="LR/0507x4" style="width: 200%; max-width: 200%;"> | <img src="../Training_Data/DIV2K_train_LR_mild/0507x4m.png" alt="LR_mild/0507x4m" style="width: 200%; max-width: 200%;"> |
 
 ### Metrics
 
@@ -43,7 +43,7 @@ These are the results of the DIV2K benchmark
 | DIV2K_train_LR | 23.936268            | 0.685806       | 0.005407 | 0.258389 |
 | DIV2K_train_LR_mild | 18.012891       | 0.515335       | 0.019583 | 0.225078 |
 
-<img src="../DATA/Metrics/div2k_summary_barplot.png" alt="test" width="50%" justify-content="center">
+<img src="../DATA/Metrics/div2k_summary_barplot.png" alt="Summary Barplot" width="50%" justify-content="center">
 
 A complete CSV of all metrics for the DIV2K library can be found [here.](../DATA/Metrics/all_images_detailed.csv)
 
