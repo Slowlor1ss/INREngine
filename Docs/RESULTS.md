@@ -38,7 +38,7 @@ These are the results of the DIV2K benchmark
 | DIV2K_train_LR | 23.936268            | 0.685806       | 0.005407 | 0.258389 |
 | DIV2K_train_LR_mild | 18.012891       | 0.515335       | 0.019583 | 0.225078 |
 
-<img src="../DATA/Metrics/div2k_summary_barplot.png" alt="test" width="50%" justify-content="center">
+<img src=../DATA/Metrics/div2k_summary_barplot.png alt="test" width="50%" justify-content="center">
 
 A complete CSV of all metrics for the DIV2K library can be found [here.]("..\DATA\Metrics\all_images_detailed.csv")
 
