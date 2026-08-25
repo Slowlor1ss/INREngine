@@ -33,7 +33,7 @@ These are the results of the DIV2K benchmark
 ## Input images
 | Ground truth (HR) | 4x downscale (LR) | Mild degradation 4x Downscale (LR Mild) |
 | :---: | :---: | :---: |
-| <img src="../Training_Data/DIV2K_train_HR/0507.png" alt="HR/0507" style="width: 50%; max-width: 50%;"> | <img src="../Training_Data/DIV2K_train_LR/0507x4.png" alt="LR/0507x4" style="width: 200%; max-width: 200%;"> | <img src="../Training_Data/DIV2K_train_LR_mild/0507x4m.png" alt="LR_mild/0507x4m" style="width: 200%; max-width: 200%;"> |
+| <img src="../Training_Data/DIV2K_train_HR/0507.png" alt="HR/0507" style="width: 25%; max-width: 50%;"> | <img src="../Training_Data/DIV2K_train_LR/0507x4.png" alt="LR/0507x4" style="width: 100%; max-width: 200%;"> | <img src="../Training_Data/DIV2K_train_LR_mild/0507x4m.png" alt="LR_mild/0507x4m" style="width: 100%; max-width: 200%;"> |
 
 ### Metrics
 
