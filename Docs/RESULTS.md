@@ -30,7 +30,7 @@ These are the results of the DIV2K benchmark
 | mild degradation 4x Upscale (LR Mild) | PSNR: 25.9767 \| SSIM: 0.8730 |
 | <img src="../DATA/Metrics/DIV2K_train_LR_mild_0507x4m/DIV2K_train_LR_mild_0507x4m_graph.png" alt="0507x4m_graph" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_LR_mild_0507x4m/DIV2K_train_LR_mild_0507x4m_final.png" alt="0507x4m" width="50%" justify-content="center"> |
 
-## Input images
+## Input images (aka: the originals)
 <table style="width: 100%; text-align: center;">
   <tr>
     <th style="width: 33.33%;">Ground truth (HR)</th>
