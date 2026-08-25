@@ -31,9 +31,18 @@ These are the results of the DIV2K benchmark
 | <img src="../DATA/Metrics/DIV2K_train_LR_mild_0507x4m/DIV2K_train_LR_mild_0507x4m_graph.png" alt="0507x4m_graph" width="100%" justify-content="center"> | <img src="../DATA/Metrics/DIV2K_train_LR_mild_0507x4m/DIV2K_train_LR_mild_0507x4m_final.png" alt="0507x4m" width="50%" justify-content="center"> |
 
 ## Input images
-| Ground truth (HR) | 4x downscale (LR) | Mild degradation 4x Downscale (LR Mild) |
-| :---: | :---: | :---: |
-| <img src="../Training_Data/DIV2K_train_HR/0507.png" alt="HR/0507" style="width: 25%; max-width: 50%;"> | <img src="../Training_Data/DIV2K_train_LR/0507x4.png" alt="LR/0507x4" style="width: 100%; max-width: 200%;"> | <img src="../Training_Data/DIV2K_train_LR_mild/0507x4m.png" alt="LR_mild/0507x4m" style="width: 100%; max-width: 200%;"> |
+<table style="width: 100%; text-align: center;">
+  <tr>
+    <th style="width: 33.33%;">Ground truth (HR)</th>
+    <th style="width: 33.33%;">4x downscale (LR)</th>
+    <th style="width: 33.33%;">Mild degradation 4x Downscale (LR Mild)</th>
+  </tr>
+  <tr>
+    <td><img src="../Training_Data/DIV2K_train_HR/0507.png" alt="HR/0507" style="width: 100%;"></td>
+    <td><img src="../Training_Data/DIV2K_train_LR/0507x4.png" alt="LR/0507x4" style="width: 100%;"></td>
+    <td><img src="../Training_Data/DIV2K_train_LR_mild/0507x4m.png" alt="LR_mild/0507x4m" style="width: 100%;"></td>
+  </tr>
+</table>
 
 ### Metrics
 
