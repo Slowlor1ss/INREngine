@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <print>
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -65,5 +66,11 @@ public:
     static void Save(const std::string& filename, int width, int height, const std::vector<engineFloat>& data) {
         auto parser = getParserForFile(filename);
         if (parser) parser->save(filename, width, height, data);
+        
+        if (errno != 0) {
+            char err_msg[256];
+            strerror_s(err_msg, sizeof(err_msg), errno);
+            std::println(stderr, "File system error: {}", err_msg);
+        }
     }
 };
