@@ -6,6 +6,7 @@
 
 #include "Config.h"
 #include "NeuralImageRecreator.h"
+#include "ArgParser.h"
 
 #include <chrono>
 #include <cmath>
@@ -34,165 +35,12 @@ namespace
 // ============================================================================
 // Helper Functions
 // ============================================================================
-	
-// MAKE SURE TO ADD TO THE PRINT AT THE BOTTOM WHEN ADDING ARGS!
-static int ParseCommandLine(const int argc, char** argv)
-{
-	for (int i = 1; i < argc; ++i) // Start at 1 because argv[0] is the program name
-	{
-		std::string arg = argv[i];
-		if (arg == "--help" || arg == "--h" || arg == "-h" || arg == "help")
-		{
-			std::cout << std::format(
-				"Usage:\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"  {:<14} | {}\n"
-				"==================================================================================================\n",
-				"--i",			"Set input filename",
-				"--o",			"Set output path (can specify file as well e.g. weights_biases.csv)",	
-				"--HDin",		"Set path to HD reference image",	
-				"--gpu",		"Enable CUDA",
-				"--benchmark",	"Enable Benchmarking",
-				"--layers",		"Set the layers e.g. --layers 128 128 3",
-				"--act",		"Set the activation function(s) e.g. --act Wire Siren None",
-				"",				"Valid options are: " + ActFunc::DataBase::GetAllActNames(),
-				"--set-pe 0/ 1", "Enable positional encoding",
-				"--freq",		"Set positional encoding Frequencies",
-				"--set-gaussian-pe 0/1", "Set Gaussian Positional Encoding (does NOT use --freq)",
-				"--batch",		"Set batch Size",
-				"--lr",			"Set the learning Rate",
-				"--scale",		"Set the resize scale",
-				"--set-live 0/1", "Disable live viewer on start; Note: this can be re-enabled during runtime using 'v'",
-				"--denoise 0/1", "Weather or not we use denoise jitter"
-			);
-			return 0;
-		}
-		else if (arg == "--gpu" && i + 1 < argc)
-		{
-			config::use_gpu = std::stoi(argv[++i]);
-		}
-		else if (arg == "--benchmark" && i + 1 < argc)
-		{
-			config::benchmark_enabled = std::stoi(argv[++i]);
-		}
-		else if (arg == "--layers") 
-		{
-			config::custom_layer_dims.clear();
-			// Keep reading the next arguments as long as they don't start with '-'
-			while (i + 1 < argc && argv[i + 1][0] != '-') {
-				try {
-					// Convert the string argument to an unsigned long integer (size_t)
-					config::custom_layer_dims.push_back(std::stoul(argv[i + 1]));
-				} catch (const std::exception& e) {
-					std::cerr << "Error parsing layer dimension: " << argv[i + 1] << "Error: " << e.what() << "\n";
-					// TODO maybe return -1;
-				}
-				i++; // Advance the loop
-			}
-		}
-		else if (arg == "--act")
-		{
-			config::custom_activations.clear();
-			// Keep reading the next arguments as long as they don't start with '-'
-			while (i + 1 < argc && argv[i + 1][0] != '-') {
-				try {
-					// Convert the string argument to an unsigned long integer (size_t)
-					config::custom_activations.push_back( ActFunc::DataBase::FindActFunc(argv[i + 1]) );
-				} catch (const std::exception& e) {
-					std::cerr << "Error parsing layer activation: " << argv[i + 1] << "Error: " << e.what() << "\n";
-				}
-				i++; // Advance the loop
-			}
-		}
-		else if (arg == "--i")
-		{
-			// Make sure we always have a output path set or if its set to be the same ans input updat e it alongside
-			if (config::output_filename.empty() || config::output_filename == config::target_image_file)
-			{
-				config::output_filename = argv[++i];
-				config::target_image_file = config::output_filename;
-			}
-			else
-			{
-				config::target_image_file = argv[++i];
-			}
-		}
-		else if (arg == "--o" && i + 1 < argc)
-		{
-			fs::path providedPath(argv[++i]);
 
-			// If the path has an extension it's a file
-			if (providedPath.has_extension())
-			{
-				// .parent_path() grabs everything BEFORE the filename (can be empty)
-				config::output_path = providedPath.parent_path().string();
-             
-				// .filename() grabs just the file and its extension
-				config::output_filename = providedPath.filename().string();
-			}
-			else
-			{
-				// If there's no extension, assume it's just a directory
-				config::output_path = providedPath.string();
-				config::output_filename = config::target_image_file;
-			}
-		}
-		else if (arg == "--HDin")
-		{
-			config::hd_image_file = argv[++i];
-		}
-		else if (arg == "--set-pe")
-		{
-			config::use_positional_encoding = std::stoi(argv[++i]);
-		}
-		else if (arg == "--freq" && i + 1 < argc)
-		{
-			config::pe_num_frequencies = std::stoi(argv[++i]);
-		}
-		else if (arg == "--set-gaussian-pe" && i + 1 < argc)
-		{
-			config::use_gaussian_pe = std::stoi(argv[++i]);
-		}
-		else if (arg == "--batch" && i + 1 < argc)
-		{
-			config::batch_size = std::stoull(argv[++i]);
-		}
-		else if (arg == "--lr" && i + 1 < argc)
-		{
-			config::initial_learning_rate = std::stof(argv[++i]);
-		}
-		else if (arg == "--scale" && i + 1 < argc)
-		{
-			config::output_image_scale = std::stof(argv[++i]);
-		}
-		else if (arg == "--set-live")
-		{
-			config::initial_live_update_state = std::stoi(argv[++i]);
-		}
-		else if (arg == "--denoise")
-		{
-			config::use_denoise_jitter = std::stoi(argv[++i]);
-		}
-		else
-		{
-			std::cout << "Unknown or incomplete argument: " << arg << "\n";
-		}
-	}
-	
+// TODO: replace this aswell with some automated ArgParser function
+// Prints the final resolved configuration once all arguments have been applied.
+// Runs as ArgParser's post-parse hook, so it's skipped entirely when --help is requested.
+static void PrintLaunchConfig()
+{
 	// C++23 Native Range Formatting doesnt work for some dammed reason
 	// std::string customLayersStr = config::custom_layer_dims.empty() 
 	// 	? "Default" 
@@ -212,7 +60,7 @@ static int ParseCommandLine(const int argc, char** argv)
 		}
 		customLayersStr += "]";
 	}
-	
+
 	std::string customActsStr = "Default";
 	if (!config::custom_activations.empty()) {
 		customActsStr = "[";
@@ -223,7 +71,7 @@ static int ParseCommandLine(const int argc, char** argv)
 		}
 		customActsStr += "]";
 	}
-	
+
 	// Print the final configuration state
 	std::cout << std::format(
 	   "=== Launch Configuration ===\n"
@@ -259,8 +107,100 @@ static int ParseCommandLine(const int argc, char** argv)
 	   config::initial_live_update_state ? "ON" : "OFF",
 	   config::use_denoise_jitter ? "ON" : "OFF"
 	);
+}
 	
-	return 1;
+// Hyperparameters arguments
+static void ParseAtivationConfig(ArgParser& parser)
+{
+	parser.AddArgument<float>("--Siren_w0", "", SharedAct::Config::Siren_w0);
+	
+	parser.AddArgument<float>("--Wire_w0", "", SharedAct::Config::Wire_w0);
+	parser.AddArgument<float>("--Wire_s", "", SharedAct::Config::Wire_s);
+	parser.AddHelpNote("We suggest omega0 = 4 and sigma0 = 4 for denoising, and omega0=20, sigma0=30 for image representation");
+	
+	parser.AddArgument<float>("--LeakyReLU_slope", "", SharedAct::Config::LeakyReLU_slope);
+	
+	parser.AddArgument<float>("--Finer_w0", "", SharedAct::Config::Finer_w0);
+	parser.AddArgument<float>("--Finer_bias_k", "Bias init range for FINER, "
+					"this is what actually gives it its extra", SharedAct::Config::Finer_bias_k);
+	parser.AddHelpNote("frequency range over SIREN");
+}
+	
+static void ParseINRConfig(ArgParser& parser)
+{
+	parser.AddAction("--i", "Set input filename",
+	[](int& i, int argc, char** argv)
+	{
+		if (i + 1 >= argc) return;
+		std::string val = argv[++i];
+		// Make sure we always have a output path set, or if its set to be the same as input, update it alongside
+		if (config::output_filename.empty() || config::output_filename == config::target_image_file)
+		{
+			config::output_filename = val;
+			config::target_image_file = val;
+		}
+		else
+		{
+			config::target_image_file = val;
+		}
+	});
+
+	parser.AddAction("--o", "Set output path (can specify file as well e.g. weights_biases.csv)",
+		[](int& i, int argc, char** argv)
+		{
+			if (i + 1 >= argc) return;
+			fs::path providedPath(argv[++i]);
+
+			// If the path has an extension it's a file
+			if (providedPath.has_extension())
+			{
+				// .parent_path() grabs everything BEFORE the filename (can be empty)
+				config::output_path = providedPath.parent_path().string();
+				// .filename() grabs just the file and its extension
+				config::output_filename = providedPath.filename().string();
+			}
+			else
+			{
+				// If there's no extension, assume it's just a directory
+				config::output_path = providedPath.string();
+				config::output_filename = config::target_image_file;
+			}
+		});
+	
+	parser.AddArgument<std::string>("--HDin", "Set path to HD reference image", config::hd_image_file);
+	parser.AddArgument<bool>("--gpu", "Enable CUDA", config::use_gpu);
+	parser.AddArgument<bool>("--benchmark", "Enable Benchmarking", config::benchmark_enabled);
+	parser.AddMultiValue<size_t>("--layers", "Set the layers e.g. --layers 128 128 3", config::custom_layer_dims);
+
+	parser.AddMultiValue<ActFunc::Base*>("--act", "Set the activation function(s) e.g. --act Wire Siren None", config::custom_activations,
+		[](const std::string& s) { return ActFunc::DataBase::FindActFunc(s.c_str()); });
+	parser.AddHelpNote("Valid options are: " + ActFunc::DataBase::GetAllActNames());
+
+	parser.AddArgument<bool>("--set-pe", "0/1 Enable positional encoding", config::use_positional_encoding);
+	parser.AddArgument<int>("--freq", "Set positional encoding Frequencies", config::pe_num_frequencies);
+	parser.AddArgument<bool>("--set-gaussian-pe", "0/1 Set Gaussian Positional Encoding (does NOT use --freq)", config::use_gaussian_pe);
+	parser.AddArgument<size_t>("--batch", "Set batch Size", config::batch_size);
+	parser.AddArgument<float>("--lr", "Set the learning Rate", config::initial_learning_rate);
+	parser.AddArgument<float>("--scale", "Set the resize scale", config::output_image_scale);
+	parser.AddArgument<bool>("--set-live", "0/1 Disable live viewer on start; Note: this can be re-enabled during runtime using 'v'", config::initial_live_update_state);
+	parser.AddArgument<bool>("--denoise", "0/1 Weather or not we use denoise jitter", config::use_denoise_jitter);
+
+}
+	
+// MAKE SURE TO ADD TO THE PRINT AT THE BOTTOM WHEN ADDING ARGS!
+// Adding a new flag is now just one AddArgument/AddMultiValue/AddAction call below -
+// help text, value parsing, and index-advancing are all handled by ArgParser itself.
+static int ParseCommandLine(const int argc, char** argv)
+{
+	ArgParser parser(R"(A (no libraries) custom made C++/CUDA framework for Implicit Neural Representations (INRs). Using CUDA to run the network on the GPU.
+)");
+	
+	ParseINRConfig(parser);
+	ParseAtivationConfig(parser);
+	
+	parser.SetPostParseHook(PrintLaunchConfig);
+
+	return parser.Parse(argc, argv);
 }
 }
 

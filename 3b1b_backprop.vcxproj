@@ -443,6 +443,7 @@
     <ClCompile Include="Code\C++\Network.cpp" />
     <ClCompile Include="Code\C++\NeuralImageRecreator.cpp" />
     <ClCompile Include="Code\C++\Parameters.cpp" />
+    <ClInclude Include="Code\C++\ArgParser.h" />
     <ClInclude Include="Code\C++\Gemini\HDRParser.h" />
     <ClInclude Include="Code\C++\Gemini\IImageParser.h" />
     <ClInclude Include="Code\C++\Gemini\ImageParser.h" />
