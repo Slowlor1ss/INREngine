@@ -112,18 +112,18 @@ static void PrintLaunchConfig()
 // Hyperparameters arguments
 static void ParseAtivationConfig(ArgParser& parser)
 {
-	parser.AddArgument<float>("--Siren_w0", "", SharedAct::Config::Siren_w0);
-	
-	parser.AddArgument<float>("--Wire_w0", "", SharedAct::Config::Wire_w0);
-	parser.AddArgument<float>("--Wire_s", "", SharedAct::Config::Wire_s);
-	parser.AddHelpNote("We suggest omega0 = 4 and sigma0 = 4 for denoising, and omega0=20, sigma0=30 for image representation");
-	
-	parser.AddArgument<float>("--LeakyReLU_slope", "", SharedAct::Config::LeakyReLU_slope);
-	
-	parser.AddArgument<float>("--Finer_w0", "", SharedAct::Config::Finer_w0);
-	parser.AddArgument<float>("--Finer_bias_k", "Bias init range for FINER, "
-					"this is what actually gives it its extra", SharedAct::Config::Finer_bias_k);
-	parser.AddHelpNote("frequency range over SIREN");
+	//parser.AddArgument<float>("--Siren_w0", "", SharedAct::Config::Siren_w0);
+	//
+	//parser.AddArgument<float>("--Wire_w0", "", SharedAct::Config::Wire_w0);
+	//parser.AddArgument<float>("--Wire_s", "", SharedAct::Config::Wire_s);
+	//parser.AddHelpNote("We suggest omega0 = 4 and sigma0 = 4 for denoising, and omega0=20, sigma0=30 for image representation");
+	//
+	//parser.AddArgument<float>("--LeakyReLU_slope", "", SharedAct::Config::LeakyReLU_slope);
+	//
+	//parser.AddArgument<float>("--Finer_w0", "", SharedAct::Config::Finer_w0);
+	//parser.AddArgument<float>("--Finer_bias_k", "Bias init range for FINER, "
+	//				"this is what actually gives it its extra", SharedAct::Config::Finer_bias_k);
+	//parser.AddHelpNote("frequency range over SIREN");
 }
 	
 static void ParseINRConfig(ArgParser& parser)
